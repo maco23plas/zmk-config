@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="デモ画像：オフィスの内観イメージ">
+  <defs>
+    <linearGradient id="o1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1c1c24"/><stop offset="100%" stop-color="#08080a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#o1)"/>
+  <g stroke="#bfa06a" stroke-opacity="0.14" fill="none">
+    <line x1="0" y1="300" x2="1600" y2="300"/>
+    <line x1="0" y1="600" x2="1600" y2="600"/>
+    <line x1="400" y1="0" x2="400" y2="900"/>
+    <line x1="800" y1="0" x2="800" y2="900"/>
+    <line x1="1200" y1="0" x2="1200" y2="900"/>
+  </g>
+  <g fill="#bfa06a" fill-opacity="0.35">
+    <rect x="430" y="120" width="120" height="80"/>
+    <rect x="850" y="120" width="120" height="80"/>
+  </g>
+</svg>

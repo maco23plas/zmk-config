@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="デモ画像：YouTubeコンサルティング">
+  <defs>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1b1b22"/><stop offset="100%" stop-color="#0a0a0c"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#g3)"/>
+  <g fill="none" stroke="#bfa06a" stroke-opacity="0.7" stroke-width="2">
+    <polyline points="300,360 360,300 420,330 500,250"/>
+  </g>
+  <g fill="#bfa06a" fill-opacity="0.9">
+    <circle cx="300" cy="360" r="6"/><circle cx="360" cy="300" r="6"/>
+    <circle cx="420" cy="330" r="6"/><circle cx="500" cy="250" r="6"/>
+  </g>
+  <path d="M500,250 l-22,4 l14,16 Z" fill="#bfa06a" fill-opacity="0.9"/>
+  <g stroke="#bfa06a" stroke-opacity="0.12">
+    <line x1="0" y1="120" x2="800" y2="120"/><line x1="0" y1="480" x2="800" y2="480"/>
+  </g>
+</svg>

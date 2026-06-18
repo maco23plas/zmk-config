@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="デモ画像：代表のポートレート">
+  <defs>
+    <linearGradient id="p1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#23232b"/><stop offset="100%" stop-color="#0a0a0c"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#p1)"/>
+  <!-- シルエット -->
+  <g fill="#000000" opacity="0.55">
+    <circle cx="300" cy="320" r="120"/>
+    <path d="M120,800 C120,560 220,470 300,470 C380,470 480,560 480,800 Z"/>
+  </g>
+  <g fill="none" stroke="#bfa06a" stroke-opacity="0.5" stroke-width="1.5">
+    <circle cx="300" cy="320" r="120"/>
+  </g>
+  <text x="300" y="760" text-anchor="middle" fill="#8c8b90" font-family="serif" font-size="22" letter-spacing="4">PORTRAIT</text>
+</svg>
