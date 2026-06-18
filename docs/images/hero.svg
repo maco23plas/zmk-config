@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" role="img" aria-label="デモ画像：港の夜景イメージ">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a22"/>
+      <stop offset="55%" stop-color="#101015"/>
+      <stop offset="100%" stop-color="#070709"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="68%" cy="34%" r="55%">
+      <stop offset="0%" stop-color="#3a3320" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#0b0b0d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <rect width="1920" height="1080" fill="url(#glow)"/>
+  <!-- 水平線 -->
+  <line x1="0" y1="640" x2="1920" y2="640" stroke="#bfa06a" stroke-opacity="0.18" stroke-width="1"/>
+  <!-- 遠景の港の灯り -->
+  <g fill="#bfa06a" opacity="0.5">
+    <circle cx="420" cy="628" r="2.5"/><circle cx="500" cy="632" r="2"/>
+    <circle cx="610" cy="626" r="2.5"/><circle cx="720" cy="630" r="2"/>
+    <circle cx="980" cy="628" r="2.5"/><circle cx="1120" cy="632" r="2"/>
+    <circle cx="1280" cy="626" r="2.5"/><circle cx="1440" cy="630" r="2"/>
+    <circle cx="1560" cy="628" r="2"/><circle cx="1700" cy="632" r="2.5"/>
+  </g>
+  <!-- 反射する波の線 -->
+  <g stroke="#bfa06a" stroke-opacity="0.08" fill="none">
+    <path d="M0,720 C480,700 960,760 1920,720"/>
+    <path d="M0,800 C520,780 1000,840 1920,800"/>
+    <path d="M0,890 C600,870 1100,930 1920,890"/>
+  </g>
+  <!-- 桟橋シルエット -->
+  <g fill="#000000" opacity="0.85">
+    <rect x="0" y="900" width="1920" height="180"/>
+    <rect x="140" y="700" width="14" height="210"/>
+    <rect x="320" y="730" width="14" height="180"/>
+    <rect x="1600" y="710" width="14" height="200"/>
+  </g>
+</svg>
