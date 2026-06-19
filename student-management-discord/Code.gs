@@ -169,7 +169,7 @@ function testDiscord() {
       timestamp: new Date().toISOString(),
     }],
   });
-  SpreadsheetApp.getActiveSpreadsheet().toast('Discordにテストメッセージを送信しました', '✅', 5);
+  toast_('Discordにテストメッセージを送信しました', '✅', 5);
 }
 
 
@@ -262,6 +262,7 @@ function buildColumnMap_(sheet, headerRow) {
     reportNote: find(h => h.indexOf('報告事項') >= 0),
     lastRevenue:find(h => h.indexOf('先月') >= 0 && h.indexOf('収益') >= 0),
     maxRevenue: find(h => h.indexOf('最大') >= 0 && h.indexOf('収益') >= 0),
+    meetingUrl: find(h => h.indexOf('FMTG') >= 0 || h.indexOf('REC') >= 0),
     note:       find(h => h.indexOf('説明') >= 0),
   };
 }
@@ -302,6 +303,7 @@ function readStudents_() {
       reportNote: String(get(row, col.reportNote) || '').trim(),
       lastRevenue: parseYen_(get(row, col.lastRevenue)),
       maxRevenue: parseYen_(get(row, col.maxRevenue)),
+      meetingUrl: String(get(row, col.meetingUrl) || '').trim(),
       note: String(get(row, col.note) || '').trim(),
     });
   }
@@ -358,6 +360,11 @@ function addDays_(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDa
 function daysBetween_(a, b) { return Math.round((stripTime_(b) - stripTime_(a)) / 86400000); }
 function fmtMD_(d) { return d ? Utilities.formatDate(d, CONFIG.timezone, 'M/d') : '-'; }
 function fmtYen_(n) { return (n == null) ? '-' : '¥' + Math.round(n).toLocaleString('ja-JP'); }
+
+// トースト表示（ウェブアプリ実行時など、アクティブUIが無い場合は無視する）
+function toast_(msg, title, sec) {
+  try { SpreadsheetApp.getActiveSpreadsheet().toast(msg, title, sec); } catch (e) {}
+}
 
 
 /* ===================== アラート生成 ===================== */
@@ -465,7 +472,7 @@ function sendReminders() {
       username: '生徒管理Bot',
       embeds: [{ title: '🔔 要対応リマインド（' + dateStr + '）', description: '✅ 本日の要対応はありません。順調です！', color: COLOR.green, timestamp: new Date().toISOString() }],
     });
-    SpreadsheetApp.getActiveSpreadsheet().toast('要対応なし。Discordに通知しました', '🔔', 5);
+    toast_('要対応なし。Discordに通知しました', '🔔', 5);
     return;
   }
 
@@ -494,7 +501,7 @@ function sendReminders() {
     if (embeds.length > 10) sendEmbedsChunked_(hook, embeds.slice(10));
   });
 
-  SpreadsheetApp.getActiveSpreadsheet().toast(totalAlerts + '件の要対応を講師メンション付きで送信しました', '🔔', 5);
+  toast_(totalAlerts + '件の要対応を講師メンション付きで送信しました', '🔔', 5);
 }
 
 function buildInstructorEmbeds_(instructor, items) {
@@ -589,7 +596,7 @@ function sendWeeklySummary() {
   const suggestEmbeds = chunkLinesToEmbeds_('💡 今週の改善提案', suggestions, COLOR.purple);
 
   sendEmbedsChunked_(webhook, [summaryEmbed].concat(suggestEmbeds));
-  SpreadsheetApp.getActiveSpreadsheet().toast('週次サマリー＋提案をDiscordに送信しました', '📊', 5);
+  toast_('週次サマリー＋提案をDiscordに送信しました', '📊', 5);
 }
 
 function generateSuggestions_(students, today) {
@@ -693,7 +700,7 @@ function refreshAlertColumn() {
     }
     sheet.getRange(s.rowIndex, colIdx).setValue(text);
   });
-  SpreadsheetApp.getActiveSpreadsheet().toast('アラート列を更新しました', '🚨', 4);
+  toast_('アラート列を更新しました', '🚨', 4);
 }
 
 
@@ -823,7 +830,7 @@ function formatStudentSheet() {
   // ---- 名前列の固定（結合セルがあると失敗するので最後に試行）----
   try { if (col.name > 0) sheet.setFrozenColumns(col.name); } catch (e) {}
 
-  SpreadsheetApp.getActiveSpreadsheet().toast('コーポレート・ブルーで再デザインしました（データは変更なし）', '🎨', 6);
+  toast_('コーポレート・ブルーで再デザインしました（データは変更なし）', '🎨', 6);
 }
 
 
@@ -883,7 +890,82 @@ function refreshDashboard() {
   sh.getRange(7, 1, 1, 4).setFontWeight('bold');
   sh.setColumnWidths(1, 4, 160);
   sh.setFrozenRows(1);
-  SpreadsheetApp.getActiveSpreadsheet().toast('ダッシュボードを更新しました', '📈', 4);
+  toast_('ダッシュボードを更新しました', '📈', 4);
+}
+
+
+/* ===================== ウェブアプリ（管理サイト） ===================== */
+// デプロイ → ウェブアプリ で公開すると、生徒管理サイトとして開ける。
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('生徒管理ダッシュボード')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// 画面表示用のデータ（JSONで返す）。シートの値は変更しない。
+function getAppData() {
+  const today = stripTime_(new Date());
+  const data = readStudents_();
+  const students = data.students;
+
+  const byStatus = {}, byStage = {}, byInstructor = {}, byInstructorAlerts = {};
+  let revenues = [], kpiAchieved = 0, alertStudents = 0;
+
+  const out = students.map(function (s) {
+    const alerts = alertsForStudent_(s, today);
+    if (alerts.length) {
+      alertStudents++;
+      byInstructorAlerts[s.instructor] = (byInstructorAlerts[s.instructor] || 0) + 1;
+    }
+    byStatus[s.status] = (byStatus[s.status] || 0) + 1;
+    byStage[s.stage] = (byStage[s.stage] || 0) + 1;
+    byInstructor[s.instructor] = (byInstructor[s.instructor] || 0) + 1;
+    if (s.maxRevenue != null && s.maxRevenue > 0) revenues.push(s.maxRevenue);
+    const k = CONFIG.kpi[s.stage];
+    if (k && k.revenue > 0 && s.maxRevenue != null && s.maxRevenue >= k.revenue) kpiAchieved++;
+
+    return {
+      name: s.name, status: s.status, stage: s.stage, instructor: s.instructor,
+      workType: s.workType, source: s.source,
+      joinDate: fmtMD_(s.joinDate), gradDate: fmtMD_(s.gradDate), leaveEnd: fmtMD_(s.leaveEnd),
+      daysToGrad: s.gradDate ? daysBetween_(today, s.gradDate) : null,
+      lastRevenue: s.lastRevenue, maxRevenue: s.maxRevenue,
+      reportNote: s.reportNote, note: s.note, meetingUrl: s.meetingUrl || '',
+      kpiExclude: s.kpiExclude,
+      topLevel: alerts.length ? maxSeverityLevel_(alerts) : '',
+      alerts: alerts.map(function (a) { return { level: a.level, cat: a.cat, msg: a.msg.replace(/\*\*/g, '') }; }),
+    };
+  });
+
+  const maxRev = revenues.length ? Math.max.apply(null, revenues) : 0;
+  const avgRev = revenues.length ? Math.round(revenues.reduce((a, b) => a + b, 0) / revenues.length) : 0;
+
+  return {
+    generatedAt: Utilities.formatDate(new Date(), CONFIG.timezone, 'yyyy/MM/dd HH:mm'),
+    totals: {
+      active: students.length, alertStudents: alertStudents,
+      outOfContact: byStatus[CONFIG.outOfContactStatus] || 0,
+      kpiAchieved: kpiAchieved, maxRev: maxRev, avgRev: avgRev,
+    },
+    statusOrder: KNOWN_STATUSES,
+    byStatus: byStatus, byStage: byStage, byInstructor: byInstructor, byInstructorAlerts: byInstructorAlerts,
+    students: out,
+    suggestions: generateSuggestions_(students, today).map(function (x) { return x.replace(/\*\*/g, ''); }),
+  };
+}
+
+// 画面のボタンから実行するアクション（Discord送信 等）。末尾_なしで google.script.run から呼べる名前にする。
+function runAction(name) {
+  try {
+    if (name === 'reminders') sendReminders();
+    else if (name === 'summary') sendWeeklySummary();
+    else if (name === 'refreshSheet') { refreshAlertColumn(); refreshDashboard(); }
+    else return { ok: false, error: '不明なアクション: ' + name };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
 }
 
 
