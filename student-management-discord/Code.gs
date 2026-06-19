@@ -926,9 +926,11 @@ function getAppData() {
     if (k && k.revenue > 0 && s.maxRevenue != null && s.maxRevenue >= k.revenue) kpiAchieved++;
 
     return {
+      row: s.rowIndex,
       name: s.name, status: s.status, stage: s.stage, instructor: s.instructor,
       workType: s.workType, source: s.source,
-      joinDate: fmtMD_(s.joinDate), gradDate: fmtMD_(s.gradDate), leaveEnd: fmtMD_(s.leaveEnd),
+      joinDate: fmtMD_(s.joinDate), gradDate: fmtMD_(s.gradDate),
+      promoteDate: fmtMD_(s.promoteDate), leaveStart: fmtMD_(s.leaveStart), leaveEnd: fmtMD_(s.leaveEnd),
       daysToGrad: s.gradDate ? daysBetween_(today, s.gradDate) : null,
       lastRevenue: s.lastRevenue, maxRevenue: s.maxRevenue,
       reportNote: s.reportNote, note: s.note, meetingUrl: s.meetingUrl || '',
@@ -950,6 +952,11 @@ function getAppData() {
     },
     statusOrder: KNOWN_STATUSES,
     byStatus: byStatus, byStage: byStage, byInstructor: byInstructor, byInstructorAlerts: byInstructorAlerts,
+    options: {
+      status: KNOWN_STATUSES,
+      stage: ['ゼロイチ', '初心者', 'アドバンス', 'マスター', '卒業'],
+      instructor: Object.keys(byInstructor).sort(),
+    },
     students: out,
     suggestions: generateSuggestions_(students, today).map(function (x) { return x.replace(/\*\*/g, ''); }),
   };
@@ -963,6 +970,80 @@ function runAction(name) {
     else if (name === 'refreshSheet') { refreshAlertColumn(); refreshDashboard(); }
     else return { ok: false, error: '不明なアクション: ' + name };
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+// 指定行に、payload で渡された項目だけ書き込む（未指定の項目は触らない）
+function writeFields_(sheet, col, row, f) {
+  const set = function (c, val) { if (c > 0) sheet.getRange(row, c).setValue(val); };
+  const has = function (k) { return Object.prototype.hasOwnProperty.call(f, k); };
+  const textMap = {
+    name: 'name', status: 'status', stage: 'stage', instructor: 'instructor',
+    workType: 'workType', source: 'source', joinDate: 'joinDate', gradDate: 'gradDate',
+    promoteDate: 'promoteDate', leaveStart: 'leaveStart', leaveEnd: 'leaveEnd',
+    reportNote: 'reportNote', meetingUrl: 'meetingUrl', note: 'note',
+  };
+  Object.keys(textMap).forEach(function (k) {
+    if (has(k)) set(col[textMap[k]], f[k] == null ? '' : f[k]);
+  });
+  const num = function (v) {
+    if (v === '' || v == null) return '';
+    const n = Number(String(v).replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? '' : n;
+  };
+  if (has('lastRevenue')) set(col.lastRevenue, num(f.lastRevenue));
+  if (has('maxRevenue')) set(col.maxRevenue, num(f.maxRevenue));
+  if (has('kpiExclude')) set(col.kpiExclude, !!f.kpiExclude);
+}
+
+// サイトから生徒情報を更新してシートへ保存
+function saveStudent(p) {
+  try {
+    if (!p || !p.row) return { ok: false, error: '行が指定されていません' };
+    const sheet = findStudentSheet_();
+    const headerRow = findHeaderRow_(sheet);
+    const col = buildColumnMap_(sheet, headerRow);
+    const row = Number(p.row);
+    if (row <= headerRow) return { ok: false, error: '不正な行です' };
+    // 行ズレ防止：現在の名前が想定と一致するか確認
+    if (col.name > 0 && p.expectedName) {
+      const cur = String(sheet.getRange(row, col.name).getValue() || '').trim();
+      if (cur !== String(p.expectedName).trim())
+        return { ok: false, error: 'データがずれています。「🔄更新」してから再度編集してください。' };
+    }
+    writeFields_(sheet, col, row, p.fields || {});
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+// サイトから新規生徒を追加（名前が空のテンプレ行に書き込む）
+function addStudent(p) {
+  try {
+    const f = (p && p.fields) || {};
+    if (!f.name || !String(f.name).trim()) return { ok: false, error: '名前は必須です' };
+    const sheet = findStudentSheet_();
+    const headerRow = findHeaderRow_(sheet);
+    const col = buildColumnMap_(sheet, headerRow);
+    const maxRows = sheet.getMaxRows();
+    const startRow = headerRow + 1;
+    if (col.name <= 0) return { ok: false, error: '名前列が見つかりません' };
+
+    const names = sheet.getRange(startRow, col.name, maxRows - headerRow, 1).getValues();
+    const kpi = col.kpiExclude > 0 ? sheet.getRange(startRow, col.kpiExclude, maxRows - headerRow, 1).getValues() : null;
+    let target = 0;
+    for (let i = 0; i < names.length; i++) {
+      const nm = String(names[i][0] || '').trim();
+      const within = kpi ? String(kpi[i][0]).trim() !== '' : true; // 表の範囲内（テンプレ行）か
+      if (!nm && within) { target = startRow + i; break; }
+    }
+    if (!target) { sheet.appendRow([]); target = sheet.getLastRow(); } // 予備：最終行に追加
+
+    writeFields_(sheet, col, target, f);
+    return { ok: true, row: target };
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e) };
   }

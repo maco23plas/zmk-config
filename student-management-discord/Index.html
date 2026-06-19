@@ -86,6 +86,17 @@
   dl.kv{display:grid;grid-template-columns:96px 1fr;gap:8px 12px;margin:0;font-size:13px}
   dl.kv dt{color:var(--muted);font-weight:600}
   dl.kv dd{margin:0}
+  .editbtn{float:right;margin-right:10px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;color:var(--accent)}
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.form{grid-template-columns:1fr}}
+  .frow{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#374151}
+  .frow.wide{grid-column:1/-1}
+  .frow span{font-weight:600}
+  .frow input,.frow select,.frow textarea{padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;background:#fff;color:var(--ink)}
+  .frow textarea{resize:vertical}
+  .btn2{border:0;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer}
+  .btn2.solid{background:var(--accent);color:#fff}
+  .btn2.ghost{background:#eef0f6;color:#374151}
   /* スナックバー / ローディング */
   #snack{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(80px);background:#1f2937;color:#fff;
     padding:11px 16px;border-radius:10px;font-size:13px;box-shadow:var(--shadow);transition:.25s;z-index:60;opacity:0}
@@ -216,6 +227,7 @@
          <select id="f-stage" onchange="drawStudents()"><option value="">全ステージ</option>${opt(stg)}</select>
          <select id="f-ins" onchange="drawStudents()"><option value="">全講師</option>${opt(ins)}</select>
          <label class="toggle"><input type="checkbox" id="f-alert" onchange="drawStudents()"> 要対応のみ</label>
+         <button class="btn2 solid" style="margin-left:auto" onclick="studentForm(-1)">＋ 新規追加</button>
        </div>
        <div id="student-grid" class="grid cards"></div>`;
     drawStudents();
@@ -269,6 +281,7 @@
     const mtg=s.meetingUrl?`<a href="${esc(s.meetingUrl)}" target="_blank">面談記録を開く ↗</a>`:'<span class="muted">—</span>';
     $('#modal').innerHTML=
       `<div class="mh"><span class="x" onclick="closeModal()">×</span>
+         <button class="editbtn" onclick="studentForm(${i})">✏️ 編集</button>
          <div class="nm">${esc(s.name)}</div>
          <div style="margin-top:8px">
            <span class="badge" style="background:${STATUS_COLORS[s.status]||'#9aa0a6'}">${esc(s.status)}</span>
@@ -291,6 +304,70 @@
   }
   function closeModal(){ $('#overlay').classList.remove('show'); }
   document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModal(); });
+
+  /* ---------- 編集／新規フォーム ---------- */
+  const FIELDS=[
+    {k:'name',label:'名前',type:'text'},
+    {k:'status',label:'ステータス',type:'select',opt:()=>DATA.options.status},
+    {k:'stage',label:'ステージ',type:'select',opt:()=>DATA.options.stage},
+    {k:'instructor',label:'講師',type:'text'},
+    {k:'workType',label:'区分（副業/専業）',type:'text'},
+    {k:'source',label:'流入',type:'text'},
+    {k:'joinDate',label:'入会日 (M/D)',type:'text'},
+    {k:'gradDate',label:'卒業日 (M/D)',type:'text'},
+    {k:'promoteDate',label:'最新進級日 (M/D)',type:'text'},
+    {k:'leaveStart',label:'休会開始 (M/D)',type:'text'},
+    {k:'leaveEnd',label:'休会終了 (M/D)',type:'text'},
+    {k:'lastRevenue',label:'先月収益',type:'number'},
+    {k:'maxRevenue',label:'最大収益',type:'number'},
+    {k:'kpiExclude',label:'KPI対象外',type:'check'},
+    {k:'reportNote',label:'KPI報告事項',type:'text'},
+    {k:'meetingUrl',label:'面談URL',type:'text'},
+    {k:'note',label:'メモ',type:'textarea'},
+  ];
+  function fval(s,k){ let v=s?s[k]:''; if(v==null)v=''; if(v==='-')v=''; return v; }
+  function studentForm(i){
+    const isNew=i<0, s=isNew?{}:DATA.students[i];
+    const field=function(f){
+      const id='fld-'+f.k, cur=fval(s,f.k);
+      if(f.type==='select'){
+        let opts=(f.opt?f.opt():[]).slice();
+        if(cur && opts.indexOf(cur)<0) opts.unshift(cur);
+        return `<select id="${id}"><option value=""></option>${opts.map(o=>`<option ${o===cur?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
+      }
+      if(f.type==='check') return `<label class="toggle"><input type="checkbox" id="${id}" ${cur?'checked':''}> 対象外にする</label>`;
+      if(f.type==='textarea') return `<textarea id="${id}" rows="3">${esc(cur)}</textarea>`;
+      return `<input id="${id}" type="text" value="${esc(cur)}" ${f.type==='number'?'inputmode="numeric"':''}>`;
+    };
+    const rows=FIELDS.map(f=>`<label class="frow${(f.type==='textarea')?' wide':''}"><span>${f.label}</span>${field(f)}</label>`).join('');
+    $('#modal').innerHTML=
+      `<div class="mh"><span class="x" onclick="closeModal()">×</span>
+         <div class="nm">${isNew?'＋ 新規生徒の追加':'✏️ '+esc(s.name)+' を編集'}</div></div>
+       <div class="mb"><div class="form">${rows}</div>
+         <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+           <button class="btn2 ghost" onclick="${isNew?'closeModal()':'openModal('+i+')'}">キャンセル</button>
+           <button class="btn2 solid" onclick="saveForm(${i})">保存</button>
+         </div></div>`;
+    $('#overlay').classList.add('show');
+  }
+  function gatherForm(){
+    const f={};
+    FIELDS.forEach(x=>{ const el=$('#fld-'+x.k); if(!el)return; f[x.k]=(x.type==='check')?el.checked:el.value; });
+    return f;
+  }
+  function saveForm(i){
+    const isNew=i<0, f=gatherForm();
+    if(!f.name||!f.name.trim()){ snack('名前を入力してください'); return; }
+    const r=api(); if(!r){ snack('Webアプリとして開いてください'); return; }
+    show(true);
+    const done=function(res){ show(false);
+      if(res&&res.ok){ snack(isNew?'✅ 追加しました':'✅ 保存しました'); closeModal(); loadData(); }
+      else snack('⚠️ '+((res&&res.error)||'保存に失敗しました')); };
+    const fail=function(e){ show(false); snack('⚠️ '+(e&&e.message||e)); };
+    if(isNew) r.withSuccessHandler(done).withFailureHandler(fail).addStudent({fields:f});
+    else r.withSuccessHandler(done).withFailureHandler(fail)
+          .saveStudent({row:DATA.students[i].row, expectedName:DATA.students[i].name, fields:f});
+  }
 
   /* ---------- 共通 ---------- */
   let snackT;
