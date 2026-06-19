@@ -56,6 +56,20 @@ const CONFIG = {
     '上野': '',
     '土方': '',
   },
+
+  // 講師メンション設定。Discordで講師（または講師ロール）のIDを調べて設定する。
+  //  ・ユーザーをメンション : '<@123456789>'  または  数字IDだけ '123456789'
+  //  ・ロールをメンション   : '<@&123456789>'
+  // 空のままだと、その講師は名前表示のみ（通知ピングなし）になる。
+  instructorMentions: {
+    '砂川': '',
+    '上野': '',
+    '土方': '',
+  },
+
+  // リマインド／状況報告を送る曜日（月=MONDAY 〜）と時刻（24h）
+  scheduleWeekDays: ['MONDAY', 'FRIDAY'],
+  scheduleHour: 8,
 };
 
 // 既知のステータス（生徒行の判定に使用）
@@ -76,10 +90,11 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('📋生徒管理ツール')
     .addItem('① Discord Webhookを設定', 'setWebhook')
-    .addItem('② 自動リマインドをON（トリガー設定）', 'installTriggers')
+    .addItem('② 自動配信をON（月・金 8:00）', 'installTriggers')
     .addSeparator()
-    .addItem('🔔 今すぐリマインドを送信', 'sendReminders')
-    .addItem('📊 週次サマリー＋提案を送信', 'sendWeeklySummary')
+    .addItem('🚀 今すぐ リマインド＋状況報告を送信', 'runScheduledReport')
+    .addItem('🔔 リマインドのみ送信', 'sendReminders')
+    .addItem('📊 状況報告のみ送信', 'sendWeeklySummary')
     .addSeparator()
     .addItem('🚨 アラート列を更新', 'refreshAlertColumn')
     .addItem('📈 ダッシュボードを更新', 'refreshDashboard')
@@ -131,28 +146,33 @@ function testDiscord() {
 /* ===================== トリガー ===================== */
 function installTriggers() {
   removeTriggers();
-  // 毎朝9時（JST）に要対応リマインド
-  ScriptApp.newTrigger('sendReminders').timeBased().atHour(9).everyDays(1)
-    .inTimezone(CONFIG.timezone).create();
-  // 毎週月曜9時（JST）に週次サマリー＋提案
-  ScriptApp.newTrigger('sendWeeklySummary').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY)
-    .atHour(9).inTimezone(CONFIG.timezone).create();
-  // アラート列・ダッシュボードも毎朝更新
-  ScriptApp.newTrigger('refreshAlertColumn').timeBased().atHour(8).everyDays(1)
-    .inTimezone(CONFIG.timezone).create();
-  ScriptApp.newTrigger('refreshDashboard').timeBased().atHour(8).everyDays(1)
-    .inTimezone(CONFIG.timezone).create();
+  // 指定曜日（既定: 月・金）の指定時刻（既定: 8:00 JST）に リマインド＋状況報告
+  CONFIG.scheduleWeekDays.forEach(function (wd) {
+    const day = ScriptApp.WeekDay[wd];
+    if (!day) return;
+    ScriptApp.newTrigger('runScheduledReport').timeBased().onWeekDay(day)
+      .atHour(CONFIG.scheduleHour).inTimezone(CONFIG.timezone).create();
+  });
+  const days = CONFIG.scheduleWeekDays.map(wd => ({ MONDAY: '月', TUESDAY: '火', WEDNESDAY: '水', THURSDAY: '木', FRIDAY: '金', SATURDAY: '土', SUNDAY: '日' }[wd] || wd)).join('・');
   SpreadsheetApp.getUi().alert(
-    '自動リマインドをONにしました。\n\n・毎朝9:00 要対応リマインド\n・毎週月曜9:00 週次サマリー＋提案\n・毎朝8:00 アラート列／ダッシュボード更新');
+    '自動配信をONにしました。\n\n・毎週 ' + days + '曜 ' + CONFIG.scheduleHour + ':00\n　→ アラート列／ダッシュボード更新 → リマインド（講師メンション付き）→ 状況報告');
 }
 
 function removeTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     const fn = t.getHandlerFunction();
-    if (['sendReminders', 'sendWeeklySummary', 'refreshAlertColumn', 'refreshDashboard'].indexOf(fn) >= 0) {
+    if (['runScheduledReport', 'sendReminders', 'sendWeeklySummary', 'refreshAlertColumn', 'refreshDashboard'].indexOf(fn) >= 0) {
       ScriptApp.deleteTrigger(t);
     }
   });
+}
+
+// 定期実行のまとめ役：シート更新 → リマインド → 状況報告 を一括で行う
+function runScheduledReport() {
+  refreshAlertColumn();
+  refreshDashboard();
+  sendReminders();
+  sendWeeklySummary();
 }
 
 
@@ -380,6 +400,17 @@ function maxSeverityLevel_(alerts) {
 
 
 /* ===================== リマインド送信 ===================== */
+// 講師名 → Discordメンション文字列（通知ピングが飛ぶ形）に変換
+function mentionFor_(instructor) {
+  const raw = String(CONFIG.instructorMentions[instructor] || '').trim();
+  if (!raw) return '';
+  if (raw.indexOf('<@') === 0) return raw;        // すでに <@..> / <@&..> 形式
+  if (/^\d+$/.test(raw)) return '<@' + raw + '>'; // 数字IDのみ → ユーザーメンション
+  return raw;
+}
+
+const ALLOWED_MENTIONS = { parse: ['users', 'roles'] }; // @everyone は飛ばさない
+
 function sendReminders() {
   const today = stripTime_(new Date());
   const data = readStudents_();
@@ -387,53 +418,53 @@ function sendReminders() {
 
   // 講師ごとに要対応をまとめる
   const byInstructor = {};
-  let totalAlerts = 0;
+  let totalAlerts = 0, totalStudents = 0;
   data.students.forEach(function (s) {
     const alerts = alertsForStudent_(s, today);
     if (!alerts.length) return;
     totalAlerts += alerts.length;
-    const key = s.instructor;
-    if (!byInstructor[key]) byInstructor[key] = [];
-    byInstructor[key].push({ student: s, alerts: alerts });
+    totalStudents++;
+    if (!byInstructor[s.instructor]) byInstructor[s.instructor] = [];
+    byInstructor[s.instructor].push({ student: s, alerts: alerts });
   });
+
+  const dateStr = Utilities.formatDate(today, CONFIG.timezone, 'yyyy/MM/dd (E)');
 
   if (totalAlerts === 0) {
     postToDiscord_(webhook, {
       username: '生徒管理Bot',
-      embeds: [{ title: '🔔 本日の要対応', description: '✅ 本日の要対応はありません。順調です！', color: COLOR.green, timestamp: new Date().toISOString() }],
+      embeds: [{ title: '🔔 要対応リマインド（' + dateStr + '）', description: '✅ 本日の要対応はありません。順調です！', color: COLOR.green, timestamp: new Date().toISOString() }],
     });
     SpreadsheetApp.getActiveSpreadsheet().toast('要対応なし。Discordに通知しました', '🔔', 5);
     return;
   }
 
-  // ヘッダー埋め込み
-  const dateStr = Utilities.formatDate(today, CONFIG.timezone, 'yyyy/MM/dd (E)');
-  const headerEmbed = {
-    title: '🔔 本日の要対応リマインド（' + dateStr + '）',
-    description: '対応が必要な生徒は **' + Object.keys(byInstructor).reduce((a, k) => a + byInstructor[k].length, 0) + '名**／アラート計 **' + totalAlerts + '件**',
-    color: COLOR.orange,
-    footer: { text: '優先度: 🔴最優先 / 🟠要対応 / 🟡フォロー / 🎓🔄予定' },
-    timestamp: new Date().toISOString(),
-  };
-
-  // 講師別 → メイン or 個別webhook
-  const instructors = Object.keys(byInstructor).sort();
-  // メインへは全講師ぶんをまとめて
-  const mainEmbeds = [headerEmbed];
-  instructors.forEach(function (ins) {
-    const embeds = buildInstructorEmbeds_(ins, byInstructor[ins]);
-    // 個別webhookがあればそちらへ、無ければメインに積む
-    const insHook = CONFIG.instructorWebhooks[ins];
-    if (insHook) {
-      postToDiscord_(insHook, { username: '生徒管理Bot', embeds: [headerEmbed].concat(embeds) });
-    } else {
-      embeds.forEach(e => mainEmbeds.push(e));
-    }
+  // 全体ヘッダー（メンションなし）
+  postToDiscord_(webhook, {
+    username: '生徒管理Bot',
+    embeds: [{
+      title: '🔔 要対応リマインド（' + dateStr + '）',
+      description: '対応が必要な生徒は **' + totalStudents + '名**／アラート計 **' + totalAlerts + '件**\n講師ごとにメンションして以下に展開します。',
+      color: COLOR.orange,
+      footer: { text: '優先度: 🔴最優先 / 🟠要対応 / 🟡フォロー / 🎓🔄予定' },
+      timestamp: new Date().toISOString(),
+    }],
   });
 
-  // Discordは1メッセージ最大10埋め込み。チャンク分割して送信。
-  sendEmbedsChunked_(webhook, mainEmbeds);
-  SpreadsheetApp.getActiveSpreadsheet().toast(totalAlerts + '件の要対応をDiscordに送信しました', '🔔', 5);
+  // 講師ごとに「メンション + 担当生徒の要対応」を送信
+  Object.keys(byInstructor).sort().forEach(function (ins) {
+    const items = byInstructor[ins];
+    const embeds = buildInstructorEmbeds_(ins, items);
+    const hook = CONFIG.instructorWebhooks[ins] || webhook;
+    const mention = mentionFor_(ins);
+    const content = (mention ? mention + ' ' : '') + '📋 【' + ins + '】要対応 ' + items.length + '名 / ' +
+      items.reduce((a, it) => a + it.alerts.length, 0) + '件';
+    // 1通目に content（メンション）を載せ、残りembedは続けて送る
+    postToDiscord_(hook, { username: '生徒管理Bot', content: content, embeds: embeds.slice(0, 10), allowed_mentions: ALLOWED_MENTIONS });
+    if (embeds.length > 10) sendEmbedsChunked_(hook, embeds.slice(10));
+  });
+
+  SpreadsheetApp.getActiveSpreadsheet().toast(totalAlerts + '件の要対応を講師メンション付きで送信しました', '🔔', 5);
 }
 
 function buildInstructorEmbeds_(instructor, items) {
