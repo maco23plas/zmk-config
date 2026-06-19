@@ -96,6 +96,7 @@ function onOpen() {
     .addItem('🔔 リマインドのみ送信', 'sendReminders')
     .addItem('📊 状況報告のみ送信', 'sendWeeklySummary')
     .addSeparator()
+    .addItem('🎨 シートを見やすく整形', 'formatStudentSheet')
     .addItem('🚨 アラート列を更新', 'refreshAlertColumn')
     .addItem('📈 ダッシュボードを更新', 'refreshDashboard')
     .addSeparator()
@@ -664,6 +665,114 @@ function refreshAlertColumn() {
     sheet.getRange(s.rowIndex, colIdx).setValue(text);
   });
   SpreadsheetApp.getActiveSpreadsheet().toast('アラート列を更新しました', '🚨', 4);
+}
+
+
+/* ===================== シート整形（見やすく） ===================== */
+// データは変更せず、色分け・固定・列幅・通貨表示など「見た目」だけを整える。
+// 条件付き書式で入れるので、生徒を追加・編集しても色は自動で追従する。再実行OK。
+function formatStudentSheet() {
+  const sheet = findStudentSheet_();
+  const headerRow = findHeaderRow_(sheet);
+  const col = buildColumnMap_(sheet, headerRow);
+  const lastCol = sheet.getLastColumn();
+  const maxRows = sheet.getMaxRows();
+  const firstDataRow = headerRow + 1;
+  if (maxRows < firstDataRow) { SpreadsheetApp.getUi().alert('整形対象の行が見つかりませんでした。'); return; }
+
+  // アラート列が無ければ見出しだけ作っておく（後で「アラート列を更新」で中身が入る）
+  let headers = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0].map(normalizeHeader_);
+  let alertCol = headers.indexOf(normalizeHeader_(CONFIG.alertColumnHeader)) + 1;
+  if (alertCol === 0) {
+    alertCol = sheet.getLastColumn() + 1;
+    sheet.getRange(headerRow, alertCol).setValue(CONFIG.alertColumnHeader);
+  }
+  const lastColNow = sheet.getLastColumn();
+
+  // ---- 見出し行のスタイル ----
+  const headerRange = sheet.getRange(headerRow, 1, 1, lastColNow);
+  headerRange.setBackground('#1f3864').setFontColor('#FFFFFF').setFontWeight('bold')
+    .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true).setFontSize(10);
+  sheet.setRowHeight(headerRow, 46);
+
+  // ---- 固定（ヘッダー行まで＋名前列まで横スクロール固定）----
+  sheet.setFrozenRows(headerRow);
+  if (col.name > 0) sheet.setFrozenColumns(col.name);
+
+  // ---- データ範囲の基本スタイル ----
+  const dataRange = sheet.getRange(firstDataRow, 1, maxRows - headerRow, lastColNow);
+  dataRange.setVerticalAlignment('middle').setFontSize(10);
+  dataRange.setBorder(true, true, true, true, true, true, '#d9d9d9', SpreadsheetApp.BorderStyle.SOLID);
+  // 既定は中央寄せ、テキスト主体の列は左寄せ
+  dataRange.setHorizontalAlignment('center');
+  [col.name, col.reportNote, col.note].forEach(function (c) {
+    if (c > 0) sheet.getRange(firstDataRow, c, maxRows - headerRow, 1).setHorizontalAlignment('left');
+  });
+
+  // ---- 条件付き書式（色分け）----
+  sheet.clearConditionalFormatRules(); // このシートの既存ルールを置き換え
+  const rules = [];
+  const rng = function (c) { return sheet.getRange(firstDataRow, c, maxRows - headerRow, 1); };
+  const textRule = function (c, text, bg, fontColor, bold) {
+    if (c <= 0) return;
+    let b = SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(text).setBackground(bg);
+    if (fontColor) b = b.setFontColor(fontColor);
+    if (bold) b = b.setBold(true);
+    rules.push(b.setRanges([rng(c)]).build());
+  };
+  const startsWithRule = function (c, prefix, bg) {
+    if (c <= 0) return;
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextStartsWith(prefix).setBackground(bg).setRanges([rng(c)]).build());
+  };
+
+  // ステータス
+  textRule(col.status, '問題無',     '#d9ead3');
+  textRule(col.status, '概ね問題無', '#e6f4d7');
+  textRule(col.status, '経過観察',   '#fff2cc');
+  textRule(col.status, '問題あり',   '#fce5cd', '#b45309', true);
+  textRule(col.status, '音信不通',   '#f4cccc', '#cc0000', true);
+  textRule(col.status, '休学中',     '#efefef', '#666666');
+  textRule(col.status, '休会中',     '#efefef', '#666666');
+
+  // ステージ
+  textRule(col.stage, 'ゼロイチ',   '#fff2cc');
+  textRule(col.stage, '初心者',     '#fce5cd');
+  textRule(col.stage, 'アドバンス', '#d0e0e3');
+  textRule(col.stage, 'マスター',   '#d9d2e9');
+  textRule(col.stage, '卒業',       '#efefef', '#666666');
+
+  // KPI報告事項（何か書いてあれば赤系で目立たせる）
+  if (col.reportNote > 0) {
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenCellNotEmpty()
+      .setBackground('#fde0e0').setFontColor('#cc0000').setBold(true).setRanges([rng(col.reportNote)]).build());
+  }
+
+  // 🚨アラート列（重大度で色分け）
+  startsWithRule(alertCol, '🔴', '#f4cccc');
+  startsWithRule(alertCol, '🟠', '#fce5cd');
+  startsWithRule(alertCol, '🟡', '#fff2cc');
+  startsWithRule(alertCol, '🔵', '#d0e0e3');
+  startsWithRule(alertCol, '🟢', '#d9ead3');
+
+  sheet.setConditionalFormatRules(rules);
+
+  // ---- 通貨表示 ----
+  [col.lastRevenue, col.maxRevenue].forEach(function (c) {
+    if (c > 0) rng(c).setNumberFormat('"¥"#,##0');
+  });
+
+  // ---- 列幅・折り返し ----
+  const w = function (c, width) { if (c > 0) sheet.setColumnWidth(c, width); };
+  w(col.name, 150); w(col.status, 96); w(col.joinDate, 72); w(col.gradDate, 72);
+  w(col.workType, 76); w(col.source, 64); w(col.instructor, 64); w(col.stage, 90);
+  w(col.promoteDate, 72); w(col.leaveStart, 72); w(col.leaveEnd, 72); w(col.kpiExclude, 72);
+  w(col.reportNote, 150); w(col.lastRevenue, 96); w(col.maxRevenue, 96); w(col.note, 300);
+  w(alertCol, 170);
+  [col.reportNote, col.note].forEach(function (c) {
+    if (c > 0) rng(c).setWrap(true);
+  });
+
+  SpreadsheetApp.getActiveSpreadsheet().toast('シートを整形しました（データは変更していません）', '🎨', 5);
 }
 
 
