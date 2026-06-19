@@ -696,8 +696,9 @@ function formatStudentSheet() {
   sheet.setRowHeight(headerRow, 46);
 
   // ---- 固定（ヘッダー行まで＋名前列まで横スクロール固定）----
-  sheet.setFrozenRows(headerRow);
-  if (col.name > 0) sheet.setFrozenColumns(col.name);
+  // 結合セル（月区切り行など）があると固定に失敗することがあるため、失敗しても処理は続行する
+  try { sheet.setFrozenRows(headerRow); } catch (e) {}
+  try { if (col.name > 0) sheet.setFrozenColumns(col.name); } catch (e) {}
 
   // ---- データ範囲の基本スタイル ----
   const dataRange = sheet.getRange(firstDataRow, 1, maxRows - headerRow, lastColNow);
