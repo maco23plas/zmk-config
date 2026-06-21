@@ -82,8 +82,13 @@ function runOnce() {
     try {
       transcript = fetchTranscript(tldvKey, m.id);
     } catch (e) {
-      Logger.log('transcript取得失敗 ' + m.id + ': ' + e); // 次回再試行のためmarkしない
-      return;
+      const msg = String(e);
+      Logger.log('transcript取得失敗 ' + m.id + ': ' + msg);
+      // 無料ユーザー主催などで恒久的に取得不可なものは処理済みにして毎回の再試行を防ぐ
+      if (msg.indexOf('403') !== -1 || msg.indexOf('Forbidden') !== -1) {
+        markProcessed(props, m.id);
+      }
+      return; // それ以外(一時的なエラー)は次回再試行
     }
     if (!transcript) { markProcessed(props, m.id); return; }
 
@@ -253,12 +258,23 @@ function appendRow(sheetId, meeting, j) {
   sheet.getRange(lastDataRow + 1, 1, 1, row.length).setValues([row]);
 }
 
-// 一覧テーブルの最終データ行を返す(No列が連番で埋まっている最後の行)
-function findLastDataRow(sheet) {
+// 見出し行(A列が "No")を探す。タイトルや説明行が上にあっても本物のヘッダーを特定する
+function findHeaderRow(sheet) {
   const maxRow = sheet.getLastRow();
   const colA = sheet.getRange(1, 1, maxRow, 1).getValues();
-  let last = 1; // ヘッダ行=1想定
-  for (let r = 2; r <= maxRow; r++) {
+  for (let r = 1; r <= maxRow; r++) {
+    if (String(colA[r - 1][0]).trim() === 'No') return r;
+  }
+  return 1; // 見つからなければフォールバック
+}
+
+// 一覧テーブルの最終データ行を返す(見出し行の下で No が連番で埋まっている最後の行)
+function findLastDataRow(sheet) {
+  const header = findHeaderRow(sheet);
+  const maxRow = sheet.getLastRow();
+  const colA = sheet.getRange(1, 1, maxRow, 1).getValues();
+  let last = header;
+  for (let r = header + 1; r <= maxRow; r++) {
     const v = colA[r - 1][0];
     if (v === '' || v === null) break;           // 空欄でテーブル終端
     if (typeof v === 'number' || /^\d+$/.test(String(v).trim())) {
