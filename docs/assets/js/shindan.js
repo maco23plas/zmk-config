@@ -23,43 +23,28 @@
     if (dailyWage <= 12000) return 0.58;
     return 0.50;
   }
-  // 所定給付日数（簡易テーブル）
-  function jobseekerDays(reason, ageKey, tenureKey) {
-    // tenureKey: lt1 / y1_10 / y10_20 / y20
-    if (reason === 'self') {
-      var selfMap = { lt1: 0, y1_10: 90, y10_20: 120, y20: 150 };
-      return selfMap[tenureKey] || 0;
-    }
-    // company / health（特定受給資格者・特定理由離職者 相当：年齢×期間 簡易）
-    var t = { lt1: 90 };
-    if (ageKey === 'a20') { t.y1_10 = 120; t.y10_20 = 180; t.y20 = 180; }
-    else if (ageKey === 'a30') { t.y1_10 = 150; t.y10_20 = 210; t.y20 = 240; }
-    else if (ageKey === 'a35') { t.y1_10 = 180; t.y10_20 = 240; t.y20 = 270; }
-    else if (ageKey === 'a45') { t.y1_10 = 180; t.y10_20 = 270; t.y20 = 330; }
-    else { t.y1_10 = 150; t.y10_20 = 210; t.y20 = 240; } // a60
-    return t[tenureKey] || 90;
-  }
-
   function compute() {
     var income = state.income || 0;
     var dailyWage = income / 30;                 // 賃金日額 概算
-    // 失業保険（基本手当）概算
+    // 失業保険（基本手当）概算 ─ 3ヶ月分で試算
     var rate = benefitRate(dailyWage);
     var basicDaily = Math.min(dailyWage * rate, 8870); // 上限の目安でクリップ
-    var days = jobseekerDays(state.reason, state.age, state.tenure);
+    var unemploymentMonths = 3;                  // 失業手当：3ヶ月分
+    var days = 30 * unemploymentMonths;          // 90日
     var unemployment = Math.round(basicDaily * days);
 
-    // 傷病手当金 概算（体調により就労困難な場合のみ）
-    var sickness = 0, sicknessDays = 0;
+    // 傷病手当金 概算（体調により就労困難な場合のみ）─ 18ヶ月分で試算
+    var sickness = 0, sicknessDays = 0, sicknessMonths = 0;
     if (state.cannotWork) {
       var sickDaily = Math.round(income / 30 * 2 / 3);
-      sicknessDays = 30 * 6;                      // 概算表示は6ヶ月分を目安に（最長は通算1年6ヶ月）
+      sicknessMonths = 18;                       // 傷病手当金：18ヶ月分＝通算1年6ヶ月（上限）
+      sicknessDays = 30 * sicknessMonths;        // 540日
       sickness = Math.round(sickDaily * sicknessDays);
     }
     var total = unemployment + sickness;
     return {
-      unemployment: unemployment, unemploymentDays: days,
-      sickness: sickness, sicknessDays: sicknessDays,
+      unemployment: unemployment, unemploymentDays: days, unemploymentMonths: unemploymentMonths,
+      sickness: sickness, sicknessDays: sicknessDays, sicknessMonths: sicknessMonths,
       total: total, basicDaily: Math.round(basicDaily)
     };
   }
@@ -188,7 +173,7 @@
     bar.style.width = '100%';
     card.innerHTML = '<div class="center" style="padding:40px 0">'
       + '<div class="eyebrow">診断中…</div>'
-      + '<h2 class="q-title mt-4">あなたが受け取れる可能性のある<br>制度を計算しています</h2>'
+      + '<h2 class="q-title mt-4">あなたが受け取れる可能性のある<br class="br-pc">制度を計算しています</h2>'
       + '<div style="max-width:360px;margin:28px auto;display:grid;gap:12px">'
       + '<div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:75%"></div>'
       + '<div class="skeleton" style="width:85%"></div></div></div>';
@@ -206,11 +191,11 @@
       + '</div>';
 
     html += '<div class="result-bar mt-6">';
-    html += '<div class="rb"><span>失業保険（基本手当）概算</span><b>約 ' + yen(r.unemployment) + ' 円</b></div>';
-    html += '<div class="rb" style="font-size:.85rem;color:var(--muted)"><span>　└ 給付日数の目安</span><span>' + r.unemploymentDays + ' 日 ／ 日額 約' + yen(r.basicDaily) + '円</span></div>';
+    html += '<div class="rb"><span>失業保険（基本手当）概算（3ヶ月分の目安）</span><b>約 ' + yen(r.unemployment) + ' 円</b></div>';
+    html += '<div class="rb" style="font-size:.85rem;color:var(--muted)"><span>　└ 3ヶ月分（90日）で試算</span><span>日額 約' + yen(r.basicDaily) + '円</span></div>';
     if (r.sickness > 0) {
-      html += '<div class="rb"><span>傷病手当金 概算（6ヶ月分の目安）</span><b>約 ' + yen(r.sickness) + ' 円</b></div>';
-      html += '<div class="rb" style="font-size:.85rem;color:var(--muted)"><span>　└ 最長は通算1年6ヶ月</span><span>医師の労務不能の証明が前提</span></div>';
+      html += '<div class="rb"><span>傷病手当金 概算（18ヶ月分の目安）</span><b>約 ' + yen(r.sickness) + ' 円</b></div>';
+      html += '<div class="rb" style="font-size:.85rem;color:var(--muted)"><span>　└ 通算1年6ヶ月（18ヶ月）まで</span><span>医師の労務不能の証明が前提</span></div>';
     }
     html += '</div>';
 
@@ -220,7 +205,7 @@
       + '事実と異なる申請は不正受給にあたり、ご本人の責任となります。</div>';
 
     html += '<div class="cta-band mt-8" style="border-radius:var(--r-lg);padding:36px 26px">'
-      + '<h2 style="font-size:1.5rem">正確な受給可否と「損しない申請プラン」は<br>無料LINE相談で</h2>'
+      + '<h2 style="font-size:1.5rem">正確な受給可否と「損しない申請プラン」は<br class="br-pc">無料LINE相談で</h2>'
       + '<p>あなたの状況に合わせて、対象となる制度・必要書類・申請の順番を専門スタッフが整理します。'
       + '相談は無料、しつこい勧誘はありません。</p>'
       + '<a class="btn btn--line btn--lg mt-6" data-line href="#">'
