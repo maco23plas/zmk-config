@@ -1,7 +1,6 @@
 /* =============================================================
    ANTAI サイト 中央設定ファイル（ここだけ編集すれば全ページ反映）
-   -------------------------------------------------------------
-   ▼ 実データに差し替えてください（現在はプレースホルダー）
+   運営：合同会社HUG ／ サービスブランド：アンタイ（ANTAI）
    ============================================================= */
 window.ANTAI_CONFIG = {
   /* ブランド */
@@ -9,43 +8,42 @@ window.ANTAI_CONFIG = {
   brandEn: "ANTAI",
   tagline: "退職後の生活を、安泰に。",
 
-  /* 公式LINE（CTAの遷移先）★最優先で差し替え */
-  lineUrl: "#",            // 例: "https://lin.ee/xxxxxxx"
+  /* 公式LINE（CTAの遷移先） */
+  lineUrl: "https://lin.ee/tyGZJqhE",
 
   /* 公開ドメイン（独自ドメイン接続時にここを変更） */
   baseUrl: "https://maco23plas.github.io/zmk-config",
 
-  /* 連絡先・特商法（各ページにも直書きしていますが、ここでも一元管理） */
+  /* 連絡先・特商法（運営：合同会社HUG） */
   company: {
-    legalName:      "【事業者名を記入】",
-    representative: "【代表者名を記入】",
-    address:        "【所在地を記入】",
-    tel:            "【電話番号を記入】",
-    email:          "【メールアドレスを記入】",
-    established:    "",                 // 例: "2024年4月"
-    registration:  ""                  // 任意（許認可・登録番号等）
+    legalName:      "合同会社HUG",
+    representative: "土方 誠",
+    address:        "東京都港区北青山一丁目3番1号 アールキューブ青山3階",
+    tel:            "【電話番号を記入】",      // ★特商法上、要記載（未受領）
+    email:          "【メールアドレスを記入】", // ★特商法上、要記載（未受領）
+    established:    "2024年3月",
+    registration:  ""
   },
 
-  /* 料金（ハイブリッド型：着手金＋成果報酬）★金額/率を差し替え */
+  /* 料金（定額・3プラン） */
   pricing: {
-    type: "hybrid",
-    setupFee:     "【着手金 ◯◯,◯◯◯円】",   // 例: "11,000円（税込）"
-    successRate:  "【受給額の◯◯％】",        // 例: "受給額の15％"
-    refund:       "全額返金保証",            // 受給に至らなかった場合の返金有無（実態に合わせて）
-    note:         "成功報酬は実際に受給が確定した後のお支払いです。"
+    model:    "tiered",
+    prepay:   "45万円（税込）",
+    postpay:  "55万円（税込・着手金5万円＋残額50万円）",
+    unemploymentOnly: "33万円（税込）",
+    refund:   "申請が通らなかった場合は全額返金保証",
+    note:     "ご相談・受給診断は無料。最終金額は契約前に書面で明示します。"
   }
 };
 
-/* CTAリンク・連絡先をページ全体へ反映（SEO本文はHTML側に直書き済み） */
+/* CTAリンク・連絡先をページ全体へ反映 */
 (function () {
   function apply() {
     var c = window.ANTAI_CONFIG;
-    // すべての [data-line] に公式LINEのURLを設定
     document.querySelectorAll('[data-line]').forEach(function (el) {
       el.setAttribute('href', c.lineUrl);
       if (c.lineUrl === '#') { el.setAttribute('data-line-placeholder', 'true'); }
     });
-    // テキスト差し込み（[data-cfg="company.tel"] のように指定）
     document.querySelectorAll('[data-cfg]').forEach(function (el) {
       var path = el.getAttribute('data-cfg').split('.');
       var v = c; path.forEach(function (k) { v = v ? v[k] : v; });
