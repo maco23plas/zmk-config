@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>受給診断｜失業保険・傷病手当金の概算が30秒でわかる｜アンタイ</title>
+<meta name="description" content="かんたんな質問に答えるだけ。失業保険・傷病手当金など、あなたが受け取れる可能性のある社会保険給付金の概算が30秒でわかります。無料・登録不要。結果は公的な計算式に基づく目安です。">
+<link rel="canonical" href="https://maco23plas.github.io/zmk-config/shindan.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="受給診断｜失業保険・傷病手当金の概算が30秒でわかる｜アンタイ">
+<meta property="og:description" content="あなたが受け取れる可能性のある社会保険給付金の概算が30秒でわかる無料診断。">
+<meta property="og:image" content="https://maco23plas.github.io/zmk-config/assets/img/ogp.svg">
+<meta property="og:url" content="https://maco23plas.github.io/zmk-config/shindan.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/img/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="index.html"><img class="logo" src="assets/img/logo.svg" alt="アンタイ ロゴ"><span>アンタイ<small>ANTAI</small></span></a>
+    <nav class="nav-links">
+      <a href="index.html#service">サービス</a><a href="index.html#flow">ご利用の流れ</a><a href="index.html#price">料金</a>
+      <a href="shindan.html">受給診断</a><a href="blog/index.html">お役立ち情報</a><a href="company.html">運営会社</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn--ghost" href="index.html">トップへ</a>
+      <a class="btn btn--line" data-line href="#">LINEで無料相談</a>
+    </div>
+    <button class="nav-toggle" aria-label="メニューを開く"><span></span><span></span><span></span></button>
+  </div>
+</header>
+
+<section class="section" style="background:radial-gradient(900px 400px at 80% -10%,#e9f7f5 0,transparent 60%),linear-gradient(180deg,#fff,#f3f9fd)">
+  <div class="container diag-wrap">
+
+    <!-- イントロ -->
+    <div id="diagIntro" class="center" data-reveal>
+      <span class="eyebrow">かんたん受給診断</span>
+      <h1 class="h-lg mt-4">あなたが受け取れる可能性のある<br>給付金の「概算」を、30秒で。</h1>
+      <p class="lead mt-4">6つの質問に答えるだけ。失業保険・傷病手当金の<b>受給イメージ</b>がその場でわかります。<br>無料・登録不要・しつこい勧誘はありません。</p>
+      <div class="diag-card mt-8" style="min-height:auto">
+        <div class="result-bar">
+          <div class="rb"><span>診断にかかる時間</span><b>約30秒</b></div>
+          <div class="rb"><span>費用</span><b>無料</b></div>
+          <div class="rb"><span>個人情報の入力</span><b>不要</b></div>
+        </div>
+        <button class="btn btn--accent btn--block btn--lg mt-6" id="startDiag">診断をはじめる →</button>
+        <p class="disclaimer mt-4">※ 結果は公的な計算式に基づく概算（目安）です。実際の受給可否・金額・期間は法律および行政（ハローワーク／健康保険組合）の審査により決定されます。給付額を増額・保証するものではありません。</p>
+      </div>
+    </div>
+
+    <!-- 診断本体 -->
+    <div id="diagShell" style="display:none">
+      <div class="progress"><i id="diagBar"></i></div>
+      <div class="diag-card" id="diagCard"></div>
+      <p class="disclaimer center mt-6">この診断は概算です。入力内容は当社サーバーに送信されません（ブラウザ内で計算しています）。</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- 補足説明（SEO） -->
+<section class="section section--soft">
+  <div class="container prose">
+    <h2>この診断でわかること</h2>
+    <p>本診断は、<b>失業保険（雇用保険の基本手当）</b>と<b>傷病手当金（健康保険）</b>について、あなたの離職理由・年齢・雇用保険の加入期間・月収などをもとに、受け取れる可能性のある給付の<b>概算（目安）</b>を計算します。</p>
+    <h3>計算の考え方</h3>
+    <ul>
+      <li><b>失業保険</b>：賃金日額（おおよそ 月収 ÷ 30）に給付率（年齢・賃金により約50〜80%）を掛けた「基本手当日額」に、所定給付日数（90〜330日）を掛けて概算します。</li>
+      <li><b>傷病手当金</b>：標準報酬月額（おおよそ 月収）÷ 30 × 2/3 を1日あたりの目安とし、支給期間（最長 通算1年6ヶ月）の範囲で概算します。医師が「労務不能」と認めることが前提です。</li>
+    </ul>
+    <blockquote>給付額・期間は法律で定められています。アンタイを含む民間サービスがこれを<b>増額することはできません</b>。診断結果は「本来受け取れる可能性のある金額の目安」であり、受給を保証するものではありません。</blockquote>
+    <h3>正確な金額を知りたい方へ</h3>
+    <p>あなたのケースで実際に対象となる制度・正確な金額・最適な申請の順番は、状況を詳しくお伺いしたうえでないと判断できません。無料のLINE相談で、専門スタッフが具体的に整理します。</p>
+    <p class="center" style="margin-top:24px"><a class="btn btn--line btn--lg" data-line href="#">公式LINEで無料相談する</a></p>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="index.html" style="color:#fff"><img class="logo" src="assets/img/logo.svg" alt=""><span style="color:#fff">アンタイ<small style="color:#7e93ad">ANTAI</small></span></a>
+        <p style="margin-top:14px;max-width:300px">退職後の生活を、安泰に。社会保険給付金の申請を、誠実・正確にサポートします。</p>
+      </div>
+      <div><h4>サービス</h4><a href="index.html#service">サービス内容</a><a href="index.html#flow">ご利用の流れ</a><a href="index.html#price">料金</a><a href="shindan.html">受給診断</a></div>
+      <div><h4>情報</h4><a href="blog/index.html">お役立ち情報</a><a href="index.html#faq">よくある質問</a><a href="company.html">運営会社</a></div>
+      <div><h4>規約・その他</h4><a href="tokushoho.html">特定商取引法に基づく表記</a><a href="privacy.html">プライバシーポリシー</a><a data-line href="#">公式LINE</a></div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 アンタイ（ANTAI）. All rights reserved.</span>
+      <span>本サービスは社会保険給付金の申請手続きを支援するものであり、給付額の増額や受給を保証するものではありません。</span>
+    </div>
+  </div>
+</footer>
+
+<div class="float-cta"><a class="btn btn--line" data-line href="#">LINEで無料相談する</a></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/shindan.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://maco23plas.github.io/zmk-config/index.html</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/shindan.html</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/company.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/index.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/taishoku-kyufukin-towa.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/shitsugyo-hoken-ikura.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/shobyo-teate-towa.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/jiko-kaisha-tsugo.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/tokutei-riyu-rishokusha.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/shobyo-teate-taishokugo.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/heikyu-shitsugyo-shobyo.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/taishoku-moraeru-okane.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/support-erabikata.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://maco23plas.github.io/zmk-config/blog/utsu-taishoku-okane.html</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+</urlset>

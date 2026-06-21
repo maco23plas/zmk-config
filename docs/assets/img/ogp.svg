@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="ANTAI OGP">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B2A4A"/>
+      <stop offset="1" stop-color="#0e3a64"/>
+    </linearGradient>
+    <linearGradient id="mk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0FB5A6"/><stop offset="1" stop-color="#0a8c80"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1040" cy="120" r="320" fill="#0FB5A6" opacity="0.12"/>
+  <g transform="translate(96,150)">
+    <path d="M44 0 L92 16 V56 C92 86 71 105 44 113 C17 105 -4 86 -4 56 V16 Z" fill="url(#mk)"/>
+    <path d="M24 60 l13 13 L66 44" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="210" y="225" fill="#fff" font-family="'Noto Sans JP',sans-serif" font-size="46" font-weight="800" letter-spacing="6">ANTAI ／ アンタイ</text>
+  <text x="96" y="350" fill="#ffffff" font-family="'Noto Sans JP',sans-serif" font-size="76" font-weight="800">退職後の生活を、安泰に。</text>
+  <text x="96" y="430" fill="#cfe0f0" font-family="'Noto Sans JP',sans-serif" font-size="34" font-weight="500">社会保険給付金（失業保険・傷病手当金）の申請を、</text>
+  <text x="96" y="478" fill="#cfe0f0" font-family="'Noto Sans JP',sans-serif" font-size="34" font-weight="500">正確に・漏れなく。誠実な専門サポート。</text>
+  <rect x="96" y="528" width="430" height="62" rx="31" fill="#06C755"/>
+  <text x="311" y="568" fill="#fff" text-anchor="middle" font-family="'Noto Sans JP',sans-serif" font-size="28" font-weight="700">公式LINEで無料診断</text>
+</svg>
