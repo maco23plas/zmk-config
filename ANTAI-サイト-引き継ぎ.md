@@ -82,7 +82,7 @@ docs/
 - **「当日契約限定価格」**：契約を急がせる表現は特商法・消費者契約法の観点でリスクがあり、サイトの「煽らない」約束と矛盾するため不使用。価格は通常価格として提示しています。
 
 ## 7. 公開前の最終チェックリスト
-- [ ] `config.js` の `company.tel`／`company.email` を実値に（**特商法上ほぼ必須**・未受領）
+- [x] `config.js` の `company.tel`（070-9053-4022）／`company.email`（info@support-hugllc.com）記入済み
 - [ ] GitHub Settings > Pages を有効化（Actions または /docs ブランチ）
 - [ ] 公式LINE（`lin.ee/tyGZJqhE`）の遷移を実機で確認
 - [ ] Google Search Console にサイトマップ登録

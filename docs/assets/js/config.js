@@ -19,8 +19,8 @@ window.ANTAI_CONFIG = {
     legalName:      "合同会社HUG",
     representative: "土方 誠",
     address:        "東京都港区北青山一丁目3番1号 アールキューブ青山3階",
-    tel:            "【電話番号を記入】",      // ★特商法上、要記載（未受領）
-    email:          "【メールアドレスを記入】", // ★特商法上、要記載（未受領）
+    tel:            "070-9053-4022",
+    email:          "info@support-hugllc.com",
     established:    "2024年3月",
     registration:  ""
   },
