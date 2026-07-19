@@ -41,6 +41,8 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
       MAIL_TO: ${{ secrets.MAIL_TO }}
+      # 状態(議事録・DB)を暗号化してコミットするための鍵。公開リポジトリでは必須。
+      STATE_KEY: ${{ secrets.STATE_KEY }}
       # ランナーには Bot アカウントのログインプロファイルが無いので、
       # ゲストとして参加をリクエストする (主催者が「許可」を押す運用)
       AUTO_INVITE_BOT: 'false'
@@ -50,14 +52,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 状態を復元 (minutemate-state ブランチ)
+      - name: 状態ブランチを取得 (minutemate-state)
         working-directory: .
         run: |
           if git fetch origin minutemate-state 2>/dev/null; then
             git restore --source FETCH_HEAD --worktree -- mm-state || true
-            mkdir -p minutemate/data
-            cp mm-state/minutemate.db minutemate/data/ 2>/dev/null || true
-            echo "状態を復元しました"
+            echo "状態ブランチを取得しました"
           else
             echo "初回実行 (状態ブランチなし)"
           fi
@@ -71,6 +71,9 @@ jobs:
       - name: 依存関係をインストール
         run: npm ci
 
+      - name: 状態を復号して展開
+        run: npm run state:restore
+
       - name: 実行
         run: |
           if [ -n "${{ inputs.meeting_url }}" ]; then
@@ -82,15 +85,16 @@ jobs:
             xvfb-run -a npm run once
           fi
 
-      - name: 状態を保存 (minutemate-state ブランチへ)
+      - name: 状態を暗号化
+        if: always()
+        run: npm run state:save
+
+      - name: 状態ブランチへコミット (minutemate-state)
         if: always()
         working-directory: .
         run: |
-          mkdir -p mm-state
-          cp minutemate/data/minutemate.db mm-state/ 2>/dev/null || true
-          if [ -d minutemate/data/businesses ]; then
-            rsync -a --include='*/' --include='*.md' --include='*.json' --exclude='*' \
-              minutemate/data/businesses/ mm-state/businesses/
+          if [ ! -e mm-state/state.enc ] && [ ! -e mm-state/state.json ]; then
+            echo "保存すべき状態がありません"; exit 0
           fi
           git add -f mm-state
           if git -c user.name=minutemate-bot -c user.email=bot@users.noreply.github.com \
