@@ -24,9 +24,12 @@ export const PROFILE_DIR = () => path.join(cfg.dataDir, 'browser-profile');
 
 export async function launchBot(headlessOverride?: boolean): Promise<BrowserContext> {
   const headless = headlessOverride ?? cfg.headless;
+  // プロキシ環境 (HTTPS_PROXY) を Chromium にも反映する
+  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY;
   return chromium.launchPersistentContext(PROFILE_DIR(), {
     headless,
     executablePath: cfg.chromiumPath || undefined,
+    ...(proxy ? { proxy: { server: proxy } } : {}),
     viewport: { width: 1280, height: 800 },
     ignoreDefaultArgs: ['--mute-audio'],
     args: [

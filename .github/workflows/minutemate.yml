@@ -1,0 +1,112 @@
+# MinuteMate を「常時マシンなし」で回す GitHub Actions ランタイム。
+# - 15分おき (JST 8:00-22:55) にカレンダーをチェックし、会議が近ければそのまま入室・録音・議事録化
+# - 月曜 8:00 JST に週次進捗レポート
+# - 手動実行 (workflow_dispatch) で会議 URL を渡せばその場で参加
+# 状態 (タスク台帳・会議 DB・議事録アーカイブ) は minutemate-state ブランチに保存される。
+# 注意: schedule トリガーはデフォルトブランチ上のワークフローしか動かない (PR をマージしてから有効になる)。
+name: MinuteMate Bot
+
+on:
+  schedule:
+    - cron: '*/15 23,0-13 * * *' # JST 8:00〜22:55 の15分おき
+    - cron: '0 23 * * 0'         # JST 月曜 8:00 = 週次進捗レポート
+  workflow_dispatch:
+    inputs:
+      meeting_url:
+        description: '今すぐ参加する会議 URL (空なら通常の検知サイクルを実行)'
+        required: false
+        type: string
+
+concurrency:
+  group: minutemate
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 220
+    defaults:
+      run:
+        working-directory: minutemate
+    env:
+      TZ: Asia/Tokyo
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
+      # ランナーには Bot アカウントのログインプロファイルが無いので、
+      # ゲストとして参加をリクエストする (主催者が「許可」を押す運用)
+      AUTO_INVITE_BOT: 'false'
+      HEADLESS: 'false' # xvfb 上で通常モード起動 (Meet との相性が最も良い)
+      ONCE_WINDOW_MIN: '20'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 状態を復元 (minutemate-state ブランチ)
+        working-directory: .
+        run: |
+          if git fetch origin minutemate-state 2>/dev/null; then
+            git restore --source FETCH_HEAD --worktree -- mm-state || true
+            mkdir -p minutemate/data
+            cp mm-state/minutemate.db minutemate/data/ 2>/dev/null || true
+            echo "状態を復元しました"
+          else
+            echo "初回実行 (状態ブランチなし)"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: minutemate/package-lock.json
+
+      - name: 依存関係をインストール
+        run: npm ci
+
+      - name: 実行
+        run: |
+          if [ -n "${{ inputs.meeting_url }}" ]; then
+            npx playwright install --with-deps chromium
+            xvfb-run -a npm run bot -- --url "${{ inputs.meeting_url }}"
+          elif [ "${{ github.event.schedule }}" = "0 23 * * 0" ]; then
+            npm run report
+          else
+            xvfb-run -a npm run once
+          fi
+
+      - name: 状態を保存 (minutemate-state ブランチへ)
+        if: always()
+        working-directory: .
+        run: |
+          mkdir -p mm-state
+          cp minutemate/data/minutemate.db mm-state/ 2>/dev/null || true
+          if [ -d minutemate/data/businesses ]; then
+            rsync -a --include='*/' --include='*.md' --include='*.json' --exclude='*' \
+              minutemate/data/businesses/ mm-state/businesses/
+          fi
+          git add -f mm-state
+          if git -c user.name=minutemate-bot -c user.email=bot@users.noreply.github.com \
+               commit -m "minutemate state $(date -u +%FT%TZ)"; then
+            git push -f origin HEAD:minutemate-state
+          else
+            echo "状態に変更なし"
+          fi
+
+      - name: デバッグ素材を保存 (失敗調査用)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minutemate-run-${{ github.run_id }}
+          path: |
+            minutemate/data/debug/
+            minutemate/data/meetings/
+          if-no-files-found: ignore
+          retention-days: 7

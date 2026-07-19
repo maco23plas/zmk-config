@@ -33,13 +33,17 @@ Google カレンダー ──(2分毎に同期)──> 会議検知 + Bot アカ
                                 └─> (毎週月曜) 事業ごとの週次進捗レポートを自動配信
 ```
 
+> **常時起動できるマシンが無い場合** → [DEPLOY.md](./DEPLOY.md) を参照。
+> GitHub Actions の無料枠だけで動かすワークフロー (`.github/workflows/minutemate.yml`) を同梱している。
+> 15分おきにカレンダーをチェックし、会議が近ければ Actions のランナー上でそのまま入室・録音・議事録化する。
+
 ## セットアップ (30分)
 
 ### 0. 必要なもの
 
 - Node.js 20 以上
-- 常時起動できるマシン (自宅PC / 会社PC / 無料枠VPS など)
-- Bot 専用の Google アカウント (無料 Gmail でOK) ← 会議に「議事録Bot」として入室する人格
+- 常時起動できるマシン (自宅PC / 無料枠VPS など)。**無い場合は GitHub Actions 運用 → [DEPLOY.md](./DEPLOY.md)**
+- Bot 専用の Google アカウント (無料 Gmail でOK) ← 会議に「議事録Bot」として入室する人格 (Actions 運用では不要)
 
 ### 1. インストール
 

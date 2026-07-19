@@ -26,10 +26,14 @@ export function oauthClient(): OAuth2Client {
     cfg.googleClientSecret,
     `http://localhost:${cfg.oauthPort}/oauth2cb`
   );
-  if (fs.existsSync(TOKEN_PATH())) {
+  // GitHub Actions 等では GOOGLE_TOKEN_JSON (Secrets) からトークンを渡す
+  if (process.env.GOOGLE_TOKEN_JSON) {
+    client.setCredentials(JSON.parse(process.env.GOOGLE_TOKEN_JSON));
+  } else if (fs.existsSync(TOKEN_PATH())) {
     client.setCredentials(JSON.parse(fs.readFileSync(TOKEN_PATH(), 'utf8')));
   }
   client.on('tokens', (tokens) => {
+    if (process.env.GOOGLE_TOKEN_JSON) return; // env 運用時はファイル保存しない
     const prev = fs.existsSync(TOKEN_PATH()) ? JSON.parse(fs.readFileSync(TOKEN_PATH(), 'utf8')) : {};
     fs.mkdirSync(path.dirname(TOKEN_PATH()), { recursive: true });
     fs.writeFileSync(TOKEN_PATH(), JSON.stringify({ ...prev, ...tokens }, null, 2));
@@ -38,7 +42,7 @@ export function oauthClient(): OAuth2Client {
 }
 
 export function hasGoogleAuth(): boolean {
-  return fs.existsSync(TOKEN_PATH());
+  return !!process.env.GOOGLE_TOKEN_JSON || fs.existsSync(TOKEN_PATH());
 }
 
 export const calendarApi = () => google.calendar({ version: 'v3', auth: oauthClient() });
@@ -65,6 +69,20 @@ export async function runAuthFlow(): Promise<void> {
     server.listen(cfg.oauthPort, () => {
       console.log('\n以下の URL をブラウザで開いて Google にログインしてください:\n');
       console.log(url + '\n');
+      console.log(
+        '※ 別の端末 (スマホ等) で開いた場合はリダイレクトが失敗しますが、その失敗した' +
+          '\n   アドレスバーの URL (http://localhost:8790/oauth2cb?code=...) をコピーして' +
+          '\n   このターミナルに貼り付けて Enter を押せば続行できます。\n'
+      );
+    });
+    // 手動貼り付けのフォールバック (リダイレクトを受けられない環境用)
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (line) => {
+      const m = String(line).match(/[?&]code=([^&\s]+)/);
+      if (m) {
+        server.close();
+        resolve(decodeURIComponent(m[1]));
+      }
     });
   });
   const { tokens } = await oauth2.getToken(code);
@@ -72,6 +90,11 @@ export async function runAuthFlow(): Promise<void> {
   fs.mkdirSync(path.dirname(TOKEN_PATH()), { recursive: true });
   fs.writeFileSync(TOKEN_PATH(), JSON.stringify(tokens, null, 2));
   log('auth', `トークンを保存しました: ${TOKEN_PATH()}`);
+  console.log('\nGitHub Actions で運用する場合は、以下の1行を GitHub リポジトリの');
+  console.log('Settings → Secrets and variables → Actions → New repository secret で');
+  console.log('GOOGLE_TOKEN_JSON という名前で登録してください:\n');
+  console.log(JSON.stringify(tokens) + '\n');
+  process.exit(0);
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));

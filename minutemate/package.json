@@ -11,6 +11,7 @@
     "auth": "tsx src/google.ts auth",
     "bot:login": "tsx src/bot/run.ts login",
     "bot": "tsx src/bot/run.ts",
+    "once": "tsx src/once.ts",
     "report": "tsx src/secretary.ts report",
     "typecheck": "tsc --noEmit"
   },

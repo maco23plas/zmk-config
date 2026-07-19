@@ -1,0 +1,12 @@
+services:
+  minutemate:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Asia/Tokyo
+    volumes:
+      - ./data:/app/data
+      - ./businesses.yaml:/app/businesses.yaml:ro
+    ports:
+      - '8788:8788' # Web ダッシュボード
