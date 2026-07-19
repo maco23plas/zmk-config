@@ -2,6 +2,9 @@
 # Playwright 公式イメージに Chromium・xvfb・全依存が入っている。
 FROM mcr.microsoft.com/playwright:v1.61.1-jammy
 
+# ffmpeg: アップロードされた大きい録音を STT 用に圧縮するのに使う
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

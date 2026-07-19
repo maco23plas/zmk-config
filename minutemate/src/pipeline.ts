@@ -12,6 +12,7 @@ import { db, getMeeting, openTasks, setMeetingStatus, updateMeeting, attendeesOf
 import type { MeetingRow } from './db.js';
 import { deliverMeeting, uploadMeetingToDrive } from './deliver.js';
 import { chatJSON, chatText } from './llm.js';
+import { findRecording } from './media.js';
 import { attributeSpeakers, transcribe, transcriptToText } from './stt.js';
 import type { Seg } from './stt.js';
 import { log, slug, truncate, ymd } from './util.js';
@@ -59,9 +60,9 @@ export async function runPipeline(meetingId: string): Promise<void> {
   setMeetingStatus(m.id, 'processing');
   log('pipeline', `後処理開始: ${m.title}`);
   try {
-    // 1. 文字起こし
-    const recording = path.join(m.dir, 'recording.webm');
-    if (!fs.existsSync(recording)) throw new Error('録音ファイルが見つかりません');
+    // 1. 文字起こし (Bot は recording.webm、アップロードは recording.<元拡張子>)
+    const recording = findRecording(m.dir);
+    if (!recording) throw new Error('録音ファイルが見つかりません');
     const transcriptPath = path.join(m.dir, 'transcript.json');
     let transcript = fs.existsSync(transcriptPath)
       ? (JSON.parse(fs.readFileSync(transcriptPath, 'utf8')) as { segments: Seg[] })

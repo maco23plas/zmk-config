@@ -1,5 +1,6 @@
-/** Web ダッシュボード: 会議一覧 / 議事録ビュー / 事業ビュー / タスク管理 */
+/** Web ダッシュボード: 会議一覧 / 議事録ビュー / 事業ビュー / タスク管理 / 録音アップロード */
 import express from 'express';
+import multer from 'multer';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getBusinesses } from './businesses.js';
@@ -7,6 +8,9 @@ import { cfg } from './config.js';
 import { db, getMeeting, openTasks } from './db.js';
 import type { MeetingRow, TaskRow } from './db.js';
 import { mdToHtml } from './deliver.js';
+import { registerUpload } from './ingest.js';
+import { findRecording } from './media.js';
+import { runPipeline } from './pipeline.js';
 import { escapeHtml, log } from './util.js';
 
 const STATUS_JA: Record<string, string> = {
@@ -48,6 +52,20 @@ ${body}
 export function startWeb(): void {
   const app = express();
   app.use(express.urlencoded({ extended: false }));
+
+  // 録音アップロード用 (一時保存 → registerUpload が会議フォルダへ移動)
+  const uploadTmp = path.join(cfg.dataDir, 'tmp', 'uploads');
+  fs.mkdirSync(uploadTmp, { recursive: true });
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: uploadTmp,
+      filename: (_req, file, cb) => {
+        const ext = (path.extname(file.originalname) || '.webm').toLowerCase();
+        cb(null, `up-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2GB まで
+  });
 
   if (cfg.webPassword) {
     app.use((req, res, next) => {
@@ -93,10 +111,26 @@ export function startWeb(): void {
             )
             .join('')}</table>`
         : '<p class="muted">なし</p>';
+    const bizOptions = getBusinesses()
+      .map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)}</option>`)
+      .join('');
+    const uploadCard = `<div class="card" style="border:2px dashed #93c5fd;background:#f0f7ff">
+      <b>🎙️ 録音をアップロードして議事録化</b>
+      <div class="muted">会議に入らなくてもOK。手持ちの音声/動画 (mp3, m4a, wav, mp4, mov, webm…) を上げると、文字起こし→議事録→タスク→事業分類→配信まで自動で走ります。</div>
+      <form method="post" action="/upload" enctype="multipart/form-data" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <input type="file" name="file" accept="audio/*,video/*" required>
+        <input type="text" name="title" placeholder="タイトル (任意)" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px">
+        <select name="business" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px">
+          <option value="">事業: 自動判定</option>${bizOptions}
+        </select>
+        <button type="submit" style="background:#2563eb;color:#fff;border:none;padding:6px 14px">議事録を作る</button>
+      </form>
+    </div>`;
     res.send(
       layout(
         'ホーム',
         `<h1>🤖 MinuteMate — 会議秘書</h1>
+         ${uploadCard}
          <h2>事業</h2>${bizCards || '<p class="muted">businesses.yaml に事業を登録してください</p>'}
          <h2>これからの会議</h2>${table(upcoming)}
          <h2>最近の会議</h2>${table(recent)}`
@@ -104,19 +138,41 @@ export function startWeb(): void {
     );
   });
 
+  app.post('/upload', upload.single('file'), (req, res) => {
+    const file = (req as express.Request & { file?: { path: string } }).file;
+    if (!file) return res.status(400).send('ファイルがありません');
+    try {
+      const body = req.body as { title?: string; business?: string };
+      const id = registerUpload(file.path, { title: body.title, business: body.business || null }, true);
+      // パイプラインは裏で実行し、会議ページ (処理中表示) へ即リダイレクト
+      runPipeline(id).catch((e) => log('web', 'upload pipeline error:', (e as Error).message));
+      res.redirect(`/m/${id}`);
+    } catch (e) {
+      fs.rm(file.path, () => {});
+      res.status(400).send(`取り込みに失敗しました: ${escapeHtml((e as Error).message)}`);
+    }
+  });
+
   app.get('/m/:id', (req, res) => {
     const m = getMeeting(req.params.id);
     if (!m) return res.status(404).send('not found');
     const minutesPath = m.dir ? path.join(m.dir, 'minutes.md') : '';
     const minutes = minutesPath && fs.existsSync(minutesPath) ? fs.readFileSync(minutesPath, 'utf8') : '';
-    const hasAudio = m.dir && fs.existsSync(path.join(m.dir, 'recording.webm'));
+    const hasAudio = m.dir ? !!findRecording(m.dir) : false;
     const tasks = db.prepare('SELECT * FROM tasks WHERE meeting_id = ?').all(m.id) as TaskRow[];
+    // 処理中 (アップロード直後など) は自動更新して、完成した議事録が出たら止める
+    const busy = ['ended', 'processing', 'joining', 'recording'].includes(m.status);
+    const processingBanner = busy
+      ? `<div class="card" style="background:#fffbeb">⚙️ 文字起こし・議事録を生成中です… (このページは自動更新されます)</div>
+         <script>setTimeout(function(){location.reload()}, 8000)</script>`
+      : '';
     res.send(
       layout(
         m.title,
         `<h1>${escapeHtml(m.title)}</h1>
         <p class="muted">${fmtDate(m.start_at)} / ${STATUS_JA[m.status] ?? m.status} / 事業: ${escapeHtml(m.business ?? '未分類')}
         ${m.share_url ? ` / <a href="${escapeHtml(m.share_url)}" target="_blank">🔗 共有リンク (Drive)</a>` : ''}</p>
+        ${processingBanner}
         ${m.join_error ? `<div class="card">⚠️ ${escapeHtml(m.join_error)}</div>` : ''}
         ${hasAudio ? `<audio controls src="/m/${m.id}/audio"></audio>` : ''}
         ${tasks.length ? `<h2>この会議のタスク</h2>${taskList(tasks)}` : ''}
@@ -129,7 +185,7 @@ export function startWeb(): void {
 
   app.get('/m/:id/audio', (req, res) => {
     const m = getMeeting(req.params.id);
-    const p = m?.dir ? path.join(m.dir, 'recording.webm') : '';
+    const p = m?.dir ? findRecording(m.dir) : null;
     if (!p || !fs.existsSync(p)) return res.status(404).end();
     res.sendFile(p);
   });

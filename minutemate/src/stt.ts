@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cfg } from './config.js';
+import { mimeForExt, preprocessForGroq } from './media.js';
 import { log } from './util.js';
 
 export interface Seg {
@@ -24,9 +25,12 @@ export async function transcribe(file: string): Promise<Transcript> {
 
 async function transcribeGroq(file: string): Promise<Transcript> {
   if (!cfg.groqApiKey) throw new Error('STT_PROVIDER=groq には GROQ_API_KEY が必要です');
-  const buf = fs.readFileSync(file);
+  // 動画や長時間録音は 25MB 制限に合わせて前処理 (ffmpeg で圧縮)
+  const sttFile = preprocessForGroq(file, path.join(path.dirname(file), 'tmp'));
+  const ext = path.extname(sttFile).slice(1) || 'webm';
+  const buf = fs.readFileSync(sttFile);
   const form = new FormData();
-  form.append('file', new Blob([buf], { type: 'audio/webm' }), path.basename(file));
+  form.append('file', new Blob([buf], { type: mimeForExt(ext) }), `recording.${ext}`);
   form.append('model', 'whisper-large-v3-turbo');
   form.append('response_format', 'verbose_json');
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {

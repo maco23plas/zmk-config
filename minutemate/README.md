@@ -105,6 +105,23 @@ xvfb-run -a npm start
 npm run bot -- --url https://meet.google.com/xxx-xxxx-xxx --title "テスト会議"
 ```
 
+### 録音をアップロードして議事録化 (会議に入らず使える・一番手軽)
+
+会議に入らなくても、**手持ちの録音を渡すだけ**で議事録・タスク・事業分類・配信まで走ります。
+Zoom/Meet の入室設定が無くても、これだけで今日から使えます。
+
+- **Web**: ダッシュボード (http://localhost:8788) 上部の「🎙️ 録音をアップロード」にファイルを
+  ドロップ → タイトルと事業(任意)を選んで「議事録を作る」。処理中はページが自動更新され、
+  完成した議事録が表示される。
+- **CLI**:
+
+  ```bash
+  npm run ingest -- ./会議録音.m4a --title "SHINKAI 定例" --business ANTAI
+  ```
+
+対応形式: mp3 / m4a / wav / mp4 / mov / webm / ogg / flac など。動画や長時間の録音は
+自動で音声圧縮してから文字起こしする (ffmpeg があれば。無い場合は `STT_PROVIDER=local` 推奨)。
+
 ## 運用のヒント
 
 - **入室が承認待ちで止まる** → 会議のカレンダー予定に Bot アカウントを招待しておく (`AUTO_INVITE_BOT=true` なら自動)。社外主催の Zoom は待機室で承認が必要なことが多い。
