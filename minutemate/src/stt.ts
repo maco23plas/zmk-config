@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cfg } from './config.js';
 import { mimeForExt, preprocessForGroq } from './media.js';
+import { groqKey, sttProvider } from './settings.js';
 import { log } from './util.js';
 
 export interface Seg {
@@ -19,12 +20,12 @@ export interface Transcript {
 
 /** 録音ファイル (webm/opus) を文字起こしする。groq = 無料枠 API / local = faster-whisper */
 export async function transcribe(file: string): Promise<Transcript> {
-  if (cfg.sttProvider === 'groq') return transcribeGroq(file);
+  if (sttProvider() === 'groq') return transcribeGroq(file);
   return transcribeLocal(file);
 }
 
 async function transcribeGroq(file: string): Promise<Transcript> {
-  if (!cfg.groqApiKey) throw new Error('STT_PROVIDER=groq には GROQ_API_KEY が必要です');
+  if (!groqKey()) throw new Error('文字起こしの GROQ_API_KEY が未設定です (設定画面で入力してください)');
   // 動画や長時間録音は 25MB 制限に合わせて前処理 (ffmpeg で圧縮)
   const sttFile = preprocessForGroq(file, path.join(path.dirname(file), 'tmp'));
   const ext = path.extname(sttFile).slice(1) || 'webm';
@@ -35,7 +36,7 @@ async function transcribeGroq(file: string): Promise<Transcript> {
   form.append('response_format', 'verbose_json');
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${cfg.groqApiKey}` },
+    headers: { Authorization: `Bearer ${groqKey()}` },
     body: form,
   });
   if (!res.ok) throw new Error(`Groq STT ${res.status}: ${await res.text()}`);

@@ -1,0 +1,40 @@
+# デスクトップアプリのパッケージ設定 (electron-builder)。
+# .dmg (Mac) / .exe (Windows) を作り、GitHub Releases に公開する。
+appId: com.minutemate.app
+productName: MinuteMate
+copyright: MinuteMate
+
+directories:
+  output: release
+  buildResources: build
+
+# アプリに同梱するもの (録音・議事録データはユーザーの userData 側に作られる)
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+  - '!**/*.map'
+  - '!src/**/*'
+
+# ネイティブモジュール (better-sqlite3) は asar から出して Electron 用に再ビルドする
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+npmRebuild: true
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  # 署名なし配布 (GitHub Releases 用)。初回は右クリック→開くで実行できる。
+  identity: null
+
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+publish:
+  provider: github

@@ -1,15 +1,16 @@
 import { z } from 'zod';
 import { cfg } from './config.js';
+import { geminiKey, groqKey, llmProvider } from './settings.js';
 import { log } from './util.js';
 
 /** LLM をプロバイダ非依存で呼ぶ。全プロバイダに無料枠 or 無料ローカル動作がある。 */
 
 async function callProvider(system: string, user: string, json: boolean, maxTokens = 8192): Promise<string> {
-  switch (cfg.llmProvider) {
+  switch (llmProvider()) {
     case 'gemini': {
-      if (!cfg.geminiApiKey) throw new Error('GEMINI_API_KEY が未設定です');
+      if (!geminiKey()) throw new Error('GEMINI_API_KEY が未設定です (設定画面で入力してください)');
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${cfg.geminiModel}:generateContent?key=${cfg.geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${cfg.geminiModel}:generateContent?key=${geminiKey()}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -30,10 +31,10 @@ async function callProvider(system: string, user: string, json: boolean, maxToke
       return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
     }
     case 'groq': {
-      if (!cfg.groqApiKey) throw new Error('GROQ_API_KEY が未設定です');
+      if (!groqKey()) throw new Error('GROQ_API_KEY が未設定です (設定画面で入力してください)');
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.groqApiKey}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey()}` },
         body: JSON.stringify({
           model: cfg.groqModel,
           max_tokens: maxTokens,

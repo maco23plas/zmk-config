@@ -11,6 +11,7 @@ import { mdToHtml } from './deliver.js';
 import { registerUpload } from './ingest.js';
 import { findRecording } from './media.js';
 import { runPipeline } from './pipeline.js';
+import { getSettings, groqKey, geminiKey, hasRequiredKeys, mailTo, setSettings } from './settings.js';
 import { escapeHtml, log } from './util.js';
 
 const STATUS_JA: Record<string, string> = {
@@ -29,22 +30,33 @@ function layout(title: string, body: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)} - MinuteMate</title>
 <style>
-body{font-family:-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;max-width:960px;margin:0 auto;padding:20px;line-height:1.7;color:#1a202c}
-a{color:#2563eb;text-decoration:none}a:hover{text-decoration:underline}
-table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #e2e8f0;padding:8px;text-align:left;font-size:14px}
-.card{border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin:12px 0}
-.muted{color:#64748b;font-size:13px}
-nav{margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #e2e8f0}
-nav a{margin-right:16px;font-weight:600}
-h1{font-size:24px}h2{font-size:19px;margin-top:28px}
-button{cursor:pointer;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:2px 10px;font-size:12px}
-.done{text-decoration:line-through;color:#94a3b8}
-audio{width:100%;margin:8px 0}
-.md h1{font-size:22px}.md h2{font-size:18px}.md h3{font-size:16px}
+:root{--bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--muted:#6e6e73;--hair:rgba(0,0,0,.09);--blue:#0066cc;--blue-bg:rgba(0,102,204,.1);--warn:#fff8e6;--radius:12px}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--muted:#98989d;--hair:rgba(255,255,255,.12);--blue:#0a84ff;--blue-bg:rgba(10,132,255,.16);--warn:#2a2410}}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Hiragino Sans','Noto Sans JP',sans-serif;max-width:840px;margin:0 auto;padding:24px 20px 64px;line-height:1.6;color:var(--ink);background:var(--bg);letter-spacing:.003em}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+table{border-collapse:collapse;width:100%;background:var(--card);border-radius:var(--radius);overflow:hidden;border:.5px solid var(--hair)}
+td,th{border-bottom:.5px solid var(--hair);padding:11px 14px;text-align:left;font-size:14px}
+tr:last-child td{border-bottom:0}th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.02em}
+.card{background:var(--card);border:.5px solid var(--hair);border-radius:var(--radius);padding:16px 20px;margin:12px 0}
+.muted{color:var(--muted);font-size:13px}
+nav{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:24px;padding-bottom:14px;border-bottom:.5px solid var(--hair);font-size:14px}
+nav a{font-weight:590}nav a.right{margin-left:auto}
+h1{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:6px 0 14px}h2{font-size:18px;font-weight:650;letter-spacing:-.01em;margin-top:30px}
+button{cursor:pointer;border:.5px solid var(--hair);background:var(--card);color:var(--ink);border-radius:8px;padding:5px 12px;font-size:13px;font-weight:550}
+button[type=submit]{background:var(--blue);color:#fff;border:0;padding:9px 18px;font-size:14px}
+.done{text-decoration:line-through;color:var(--muted)}
+audio{width:100%;margin:10px 0}
+.md h1{font-size:22px}.md h2{font-size:17px}.md h3{font-size:15px}
+form.settings{display:flex;flex-direction:column;gap:18px;max-width:520px;margin-top:8px}
+form.settings label{display:flex;flex-direction:column;gap:6px;font-weight:590;font-size:14px}
+form.settings a{font-size:12px;font-weight:500}
+form.settings input{font-size:15px;padding:10px 12px;border:.5px solid var(--hair);border-radius:9px;background:var(--card);color:var(--ink)}
+form.settings input:focus{outline:2px solid var(--blue);outline-offset:0;border-color:transparent}
 </style></head><body>
 <nav><a href="/">🏠 ホーム</a>${getBusinesses()
     .map((b) => `<a href="/b/${encodeURIComponent(b.name)}">📁 ${escapeHtml(b.name)}</a>`)
-    .join('')}<a href="/b/_inbox">📥 未分類</a></nav>
+    .join('')}<a href="/b/_inbox">📥 未分類</a><a href="/settings" class="right">⚙️ 設定</a></nav>
 ${body}
 </body></html>`;
 }
@@ -79,6 +91,48 @@ export function startWeb(): void {
 
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // 初回ゲート: API キーが未設定なら設定画面へ誘導する
+  app.use((req, res, next) => {
+    const exempt = req.path === '/settings' || req.path === '/health' || req.path.endsWith('/audio');
+    if (!exempt && !hasRequiredKeys()) return res.redirect('/settings?first=1');
+    next();
+  });
+
+  app.get('/settings', (req, res) => {
+    const s = getSettings();
+    const first = req.query.first === '1';
+    const mask = (set: boolean) => (set ? 'value="" placeholder="設定済み（変更する時だけ入力）"' : 'value="" placeholder="ここに貼り付け"');
+    res.send(
+      layout(
+        '設定',
+        `<h1>設定</h1>
+        ${first ? `<div class="card" style="background:var(--warn,#fffbeb)">はじめに、議事録づくりに使う無料APIキーを2つ入れてください。どちらも登録するだけで無料です。</div>` : ''}
+        <form method="post" action="/settings" class="settings">
+          <label>Gemini APIキー <span class="muted">— 議事録づくり用</span>
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">取得ページを開く ↗</a>
+            <input type="password" name="geminiApiKey" ${mask(!!geminiKey())} autocomplete="off"></label>
+          <label>Groq APIキー <span class="muted">— 文字起こし用</span>
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener">取得ページを開く ↗</a>
+            <input type="password" name="groqApiKey" ${mask(!!groqKey())} autocomplete="off"></label>
+          <label>議事録メールの送り先 <span class="muted">（任意・カンマ区切り）</span>
+            <input type="text" name="mailTo" value="${escapeHtml((mailTo()).join(', '))}" placeholder="you@example.com"></label>
+          <button type="submit">保存する</button>
+        </form>`
+      )
+    );
+  });
+
+  app.post('/settings', (req, res) => {
+    const b = req.body as Record<string, string>;
+    setSettings({
+      geminiApiKey: b.geminiApiKey,
+      groqApiKey: b.groqApiKey,
+      mailTo: b.mailTo,
+    });
+    log('web', '設定を保存しました');
+    res.redirect(hasRequiredKeys() ? '/' : '/settings?first=1');
   });
 
   app.get('/', (_req, res) => {

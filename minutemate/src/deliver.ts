@@ -7,6 +7,7 @@ import { cfg } from './config.js';
 import { attendeesOf, getMeeting } from './db.js';
 import type { MeetingRow } from './db.js';
 import { driveApi, gmailApi, hasGoogleAuth } from './google.js';
+import { mailTo } from './settings.js';
 import { log } from './util.js';
 
 export function mdToHtml(md: string): string {
@@ -96,7 +97,7 @@ export async function deliverMeeting(meetingId: string): Promise<void> {
   links.push(`- ダッシュボード: ${cfg.publicUrl}/m/${m.id}`);
   const body = `${minutesMd}\n\n---\n${links.join('\n')}`;
 
-  const to = new Set(cfg.mailTo);
+  const to = new Set(mailTo());
   if (cfg.mailAttendees) {
     for (const a of attendeesOf(m)) if (a.email) to.add(a.email);
   }
@@ -120,6 +121,6 @@ export async function deliverMeeting(meetingId: string): Promise<void> {
 /** 入室失敗をオーナーへ通知する */
 export async function notifyFailure(m: MeetingRow, error: string): Promise<void> {
   const msg = `⚠️ 議事録Bot が会議に参加できませんでした\n\n- 会議: ${m.title}\n- 日時: ${m.start_at}\n- 理由: ${error}\n\n待機室で承認されなかった場合は、次回はカレンダーに ${cfg.botEmail || 'Bot アカウント'} を招待しておくとスムーズです。`;
-  await sendMail(cfg.mailTo, `【要確認】Bot が会議に参加できませんでした: ${m.title}`, msg).catch(() => {});
+  await sendMail(mailTo(), `【要確認】Bot が会議に参加できませんでした: ${m.title}`, msg).catch(() => {});
   await postSlack(msg).catch(() => {});
 }
