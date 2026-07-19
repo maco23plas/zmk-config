@@ -68,6 +68,12 @@ PC が無い場合は、Claude Code のクラウドセッションでも実行�
 
 Oracle Cloud Always Free (ARM 4コア/24GB まで無料・クレカ登録のみ) や、余った実家のPCなど。
 
+> 📘 **Oracle Cloud での手順は [deploy/ORACLE.md](./deploy/ORACLE.md) に完全版がある**
+> (VM作成 → ポート開放 → Botログイン → 起動)。VM に入ったら `bash deploy/vps-setup.sh`
+> 一本で「Docker導入 → ポート開放 → 診断 → 起動」まで自動化される。
+
+手動で最小構成なら:
+
 ```bash
 git clone <このリポジトリ>
 cd zmk-config/minutemate
