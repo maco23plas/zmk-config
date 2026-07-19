@@ -14,9 +14,9 @@ import {
 
 const LEAVE_SEL = 'button[aria-label*="Leave" i], [aria-label*="退出"]';
 
-/** Zoom の招待 URL を Web クライアント URL に変換する */
+/** Zoom の招待 URL を Web クライアント URL に変換する (/j/ /w/ /wc/join/ に対応) */
 export function toWebClientUrl(url: string): string {
-  const m = url.match(/https?:\/\/([\w.-]*zoom\.us)\/j\/(\d+)(?:\?[^#]*)?/i);
+  const m = url.match(/https?:\/\/([\w.-]*zoom\.us)\/(?:j|w|wc\/join)\/(\d+)(?:\?[^#]*)?/i);
   if (!m) return url;
   const pwd = url.match(/[?&]pwd=([^&#]+)/)?.[1];
   return `https://${m[1]}/wc/join/${m[2]}${pwd ? `?pwd=${pwd}` : ''}`;
@@ -47,20 +47,50 @@ export async function joinZoom(meeting: MeetingRow, dir: string): Promise<JoinRe
       /* none */
     }
 
-    // 名前 (+ パスコード) を入力して参加
+    // 「アプリを起動」画面に飛ばされたら「ブラウザから参加」を辿る
     try {
-      const nameInput = page.locator('#input-for-name, input[placeholder*="Name" i], input[aria-label*="名前"]').first();
-      await nameInput.waitFor({ state: 'visible', timeout: 20_000 });
-      await nameInput.fill(cfg.botName);
-      const pwdInput = page.locator('#input-for-pwd, input[placeholder*="Passcode" i]').first();
+      await page
+        .getByRole('link', { name: /Join from Your Browser|ブラウザから参加|ブラウザから参加する/i })
+        .first()
+        .click({ timeout: 3000 });
+      await sleep(1500);
+    } catch {
+      /* 直接 /wc/join に来ていれば不要 */
+    }
+
+    // 名前入力: ゲスト参加時のみ表示される。Zoom にログイン済みなら省略されることがあるので
+    // 「無ければスキップ」にして、サインイン必須の会議でも失敗しないようにする。
+    try {
+      const nameInput = page
+        .locator('#input-for-name, input[placeholder*="Name" i], input[aria-label*="名前" i]')
+        .first();
+      if (await nameInput.isVisible({ timeout: 8000 }).catch(() => false)) {
+        await nameInput.fill(cfg.botName);
+      } else {
+        log('bot', '名前入力欄なし (Zoom ログイン済みの可能性)');
+      }
+    } catch {
+      /* 省略可 */
+    }
+
+    // パスコード (URL に pwd があれば埋める)
+    try {
+      const pwdInput = page
+        .locator('#input-for-pwd, input[placeholder*="Passcode" i], input[placeholder*="パスコード" i]')
+        .first();
       if (await pwdInput.isVisible({ timeout: 1000 }).catch(() => false)) {
         const pwd = meeting.url!.match(/[?&]pwd=([^&#]+)/)?.[1];
-        if (pwd) await pwdInput.fill(pwd);
+        if (pwd) await pwdInput.fill(decodeURIComponent(pwd));
       }
-      await page.getByRole('button', { name: /^(Join|参加)$/i }).first().click({ timeout: 10_000 });
-    } catch (e) {
-      await screenshot(page, meeting.id, 'zoom-prejoin');
-      return { ok: false, error: `Zoom 参加画面の操作に失敗: ${(e as Error).message}`, participants: [] };
+    } catch {
+      /* パスコード不要 */
+    }
+
+    // 参加ボタン (押せなくても既に参加処理に入っていることがあるので続行)
+    try {
+      await page.getByRole('button', { name: /^(Join|参加|参加する)$/i }).first().click({ timeout: 10_000 });
+    } catch {
+      log('bot', 'Zoom 参加ボタンが見当たらず (自動遷移済みの可能性) — 入室待ちに進みます');
     }
 
     // 入室待ち (待機室があれば承認まで待つ) → 退出ボタンが見えたら入室完了
@@ -72,6 +102,16 @@ export async function joinZoom(meeting: MeetingRow, dir: string): Promise<JoinRe
     } catch {
       await screenshot(page, meeting.id, 'zoom-not-admitted');
       return { ok: false, error: `${cfg.admitTimeoutMin}分待っても入室が許可されませんでした`, participants: [] };
+    }
+
+    // ホストが録画している場合などの同意ダイアログが出たら同意して続行
+    try {
+      await page
+        .getByRole('button', { name: /I Consent|Consent|同意して続行|同意します|同意|Continue|続行/i })
+        .first()
+        .click({ timeout: 3000 });
+    } catch {
+      /* 同意ダイアログなし */
     }
 
     // コンピューターオーディオで参加 (これをしないと音声が流れてこない)

@@ -16,12 +16,22 @@ function arg(name: string): string | undefined {
 }
 
 async function loginFlow() {
-  console.log('\nブラウザが開きます。Bot 用の Google アカウント (BOT_EMAIL) でログインしてください。');
-  console.log('Zoom アカウントも使う場合は zoom.us にもログインしておくと安定します。');
-  console.log('終わったらブラウザを閉じてください。\n');
+  // `bot:login google` / `bot:login zoom` で片方だけ、無指定なら両方のタブを開く
+  const target = process.argv[3] || 'both';
+  console.log('\nブラウザが開きます。以下にログインして、終わったらブラウザを閉じてください:');
+  if (target !== 'zoom') console.log('  • タブ1: Google (Bot 用 Google アカウント = BOT_EMAIL) → Meet 用');
+  if (target !== 'google')
+    console.log('  • タブ2: Zoom (無料 Zoom アカウントで OK) → サインイン必須の Zoom 会議に入るため');
+  console.log('  ※ ログイン状態はブラウザプロファイルに保存され、次回から自動で使われます。\n');
   const context = await launchBot(false);
-  const page = await context.newPage();
-  await page.goto('https://accounts.google.com/');
+  if (target !== 'zoom') {
+    const g = await context.newPage();
+    await g.goto('https://accounts.google.com/');
+  }
+  if (target !== 'google') {
+    const z = await context.newPage();
+    await z.goto('https://zoom.us/signin');
+  }
   await new Promise<void>((resolve) => context.on('close', () => resolve()));
   console.log('プロファイルを保存しました。');
 }

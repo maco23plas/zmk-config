@@ -5,7 +5,7 @@ import { db } from './db.js';
 import type { MeetingRow } from './db.js';
 import { log } from './util.js';
 
-const ZOOM_RE = /https?:\/\/[\w.-]*zoom\.us\/j\/(\d+)[^\s<>"']*/i;
+const ZOOM_RE = /https?:\/\/[\w.-]*zoom\.us\/(?:j|w|wc\/join)\/(\d+)[^\s<>"']*/i;
 const MEET_RE = /https?:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}[^\s<>"']*/i;
 
 function extractUrl(ev: {
