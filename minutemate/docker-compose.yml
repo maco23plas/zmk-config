@@ -5,6 +5,9 @@ services:
     env_file: .env
     environment:
       TZ: Asia/Tokyo
+      BROWSER_NO_SANDBOX: '1'
+    # Chromium が使う共有メモリ。小さいとタブがクラッシュするので広げる
+    shm_size: '1gb'
     volumes:
       - ./data:/app/data
       - ./businesses.yaml:/app/businesses.yaml:ro

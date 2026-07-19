@@ -12,6 +12,8 @@ COPY . .
 RUN npm run build
 
 ENV HEADLESS=false
+# root で動くコンテナでは Chromium に --no-sandbox が必要
+ENV BROWSER_NO_SANDBOX=1
 # データ (録音・議事録・DB・ブラウザプロファイル) は /app/data に永続化する
 VOLUME /app/data
 

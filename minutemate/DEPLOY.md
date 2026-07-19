@@ -78,6 +78,18 @@ docker compose up -d --build
 初回のみコンテナ外で `npm run auth`(あなたのGoogle認証) と `npm run bot:login`(Botアカウント) を実行し、
 生成された `data/google-token.json` とブラウザプロファイルがボリュームに載っていることを確認する。
 
+### 起動前チェック (プリフライト診断)
+
+実際の会議で試す前に、設定が揃っているか一発で確認できる:
+
+```bash
+docker compose run --rm minutemate npm run doctor
+```
+
+LLM/STT キー・LLM 応答・ffmpeg・Google 接続・**Zoom への到達性と Bot の Zoom ログイン状態**・
+Chromium 起動を順にチェックし、✅/⚠️/❌ で表示する。❌ が出たらそれを直してから起動する。
+(常駐サービスを起動済みなら一旦 `docker compose stop` してから実行 — ブラウザプロファイルは同時に開けない)
+
 - ダッシュボード: `http://<サーバーIP>:8788` (`.env` の `WEB_PASSWORD` を必ず設定)
 - こちらのモードでは常駐スケジューラが2分おきに監視し、Bot アカウントが招待されていれば
   承認なしで自動入室する (完全自動)。

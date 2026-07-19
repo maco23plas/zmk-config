@@ -14,6 +14,7 @@
     "once": "tsx src/once.ts",
     "report": "tsx src/secretary.ts report",
     "ingest": "tsx src/ingest.ts",
+    "doctor": "tsx src/doctor.ts",
     "state:save": "tsx src/state.ts save",
     "state:restore": "tsx src/state.ts restore",
     "typecheck": "tsc --noEmit"

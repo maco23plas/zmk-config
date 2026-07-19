@@ -26,6 +26,8 @@ export async function launchBot(headlessOverride?: boolean): Promise<BrowserCont
   const headless = headlessOverride ?? cfg.headless;
   // プロキシ環境 (HTTPS_PROXY) を Chromium にも反映する
   const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY;
+  // コンテナ(root)で動かす場合は --no-sandbox が必要 (Dockerfile が BROWSER_NO_SANDBOX=1 を設定)
+  const noSandbox = ['1', 'true'].includes((process.env.BROWSER_NO_SANDBOX || '').toLowerCase());
   return chromium.launchPersistentContext(PROFILE_DIR(), {
     headless,
     executablePath: cfg.chromiumPath || undefined,
@@ -39,6 +41,8 @@ export async function launchBot(headlessOverride?: boolean): Promise<BrowserCont
       '--disable-blink-features=AutomationControlled',
       '--no-first-run',
       '--lang=ja',
+      '--disable-dev-shm-usage', // コンテナの小さい /dev/shm でのクラッシュを防ぐ
+      ...(noSandbox ? ['--no-sandbox'] : []),
     ],
   });
 }
