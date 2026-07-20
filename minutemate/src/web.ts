@@ -240,12 +240,32 @@ export function startWeb(): void {
     ['dragenter','dragover'].forEach(function(e){dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.add('over');});});
     dz.addEventListener('dragleave',function(){dz.classList.remove('over');});
     dz.addEventListener('drop',function(ev){ev.preventDefault();dz.classList.remove('over');if(ev.dataTransfer.files.length){fi.files=ev.dataTransfer.files;show();}});})();</script>`;
+    const joinCard = `<div class="card" id="joinCard" style="display:none">
+      <div style="font-weight:640;font-size:15px;margin-bottom:2px">会議に入って録音する</div>
+      <div class="muted" style="margin-bottom:10px">Zoom / Google Meet のリンクを貼ると、アプリ内で会議を開きます。参加ボタンを押せば自動で録音が始まり、閉じると議事録になります。</div>
+      <div class="uprow" style="margin-top:0">
+        <input type="text" id="joinUrl" placeholder="https://us02web.zoom.us/j/... または https://meet.google.com/...">
+        <input type="text" id="joinTitle" placeholder="タイトル（任意）" style="flex:0 1 180px">
+        <button class="primary" id="joinBtn">会議に入る</button>
+      </div>
+    </div>
+    <script>(function(){
+      if(window.mm&&window.mm.isDesktop){
+        var c=document.getElementById('joinCard');c.style.display='block';
+        document.getElementById('joinBtn').addEventListener('click',function(){
+          var u=document.getElementById('joinUrl').value.trim();
+          if(!u){return;}
+          window.mm.joinMeeting(u,document.getElementById('joinTitle').value.trim());
+        });
+      }
+    })();</script>`;
     res.send(
       layout(
         'ホーム',
         `<h1>新しい議事録をつくる</h1>
          <p class="muted" style="margin:0 0 14px">録音を入れるだけ。文字起こし → 議事録 → タスク → 事業分けまで自動。</p>
          ${dropzone}
+         ${joinCard}
          ${bizCards ? `<h2>事業</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">${bizCards}</div>` : ''}
          <h2>これからの会議</h2>${meetingRows(upcoming, '予定された会議はありません。')}
          <h2>最近の会議</h2>${meetingRows(recent, 'まだありません。録音をドロップして最初の議事録をつくりましょう。')}`
