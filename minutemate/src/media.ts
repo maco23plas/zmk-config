@@ -2,6 +2,7 @@
 import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import ffmpegStatic from 'ffmpeg-static';
 import { log } from './util.js';
 
 // 録音として受け付ける拡張子 (アップロード + Bot の webm)
@@ -39,16 +40,34 @@ export function findRecording(dir: string): string | null {
   return null;
 }
 
-let ffmpegCache: boolean | null = null;
-export function hasFfmpeg(): boolean {
-  if (ffmpegCache !== null) return ffmpegCache;
+let ffmpegBinCache: string | null | undefined;
+/** 使う ffmpeg のパスを返す。同梱の ffmpeg-static を最優先し、無ければシステムの ffmpeg。 */
+export function ffmpegBin(): string | null {
+  if (ffmpegBinCache !== undefined) return ffmpegBinCache;
+  // 同梱バイナリ (パッケージ済みアプリでは asar の外に展開されている)
+  let p = (ffmpegStatic as unknown as string | null) || '';
+  if (p) p = p.replace('app.asar', 'app.asar.unpacked');
+  if (p && fs.existsSync(p)) {
+    try {
+      fs.chmodSync(p, 0o755);
+    } catch {
+      /* 権限変更できなくても実行できることがある */
+    }
+    ffmpegBinCache = p;
+    return p;
+  }
+  // フォールバック: システムにインストールされた ffmpeg
   try {
     execSync('ffmpeg -version', { stdio: 'ignore' });
-    ffmpegCache = true;
+    ffmpegBinCache = 'ffmpeg';
   } catch {
-    ffmpegCache = false;
+    ffmpegBinCache = null;
   }
-  return ffmpegCache;
+  return ffmpegBinCache;
+}
+
+export function hasFfmpeg(): boolean {
+  return ffmpegBin() !== null;
 }
 
 // Groq の Whisper は 1 リクエスト最大 25MB。安全側で 24MB を上限にする。
@@ -63,17 +82,17 @@ export function preprocessForGroq(file: string, tmpDir: string): string {
   const size = fs.statSync(file).size;
   if (size <= GROQ_LIMIT) return file;
 
-  if (!hasFfmpeg()) {
+  const ff = ffmpegBin();
+  if (!ff) {
     throw new Error(
-      `録音が大きすぎます (${(size / 1024 / 1024).toFixed(1)}MB > 24MB)。` +
-        'ffmpeg をインストールするか、STT_PROVIDER=local (faster-whisper) をお使いください。'
+      `録音が大きすぎます (${(size / 1024 / 1024).toFixed(1)}MB > 24MB) が、音声を圧縮できませんでした。`
     );
   }
   fs.mkdirSync(tmpDir, { recursive: true });
   const out = path.join(tmpDir, 'stt-input.ogg');
   log('media', `録音が大きい (${(size / 1024 / 1024).toFixed(1)}MB) ため 16kHz mono opus に圧縮します`);
   execFileSync(
-    'ffmpeg',
+    ff,
     ['-y', '-i', file, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '16k', out],
     { stdio: 'ignore' }
   );

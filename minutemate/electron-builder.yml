@@ -19,6 +19,7 @@ files:
 # ネイティブモジュール (better-sqlite3) は asar から出して Electron 用に再ビルドする
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
+  - '**/node_modules/ffmpeg-static/**'
 npmRebuild: true
 
 mac:

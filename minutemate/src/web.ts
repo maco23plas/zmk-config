@@ -25,38 +25,84 @@ const STATUS_JA: Record<string, string> = {
   skipped: '➖ スキップ',
 };
 
+const STATUS_PILL: Record<string, [string, string]> = {
+  delivered: ['green', '完了'],
+  processing: ['amber', '処理中'],
+  ended: ['amber', '処理中'],
+  recording: ['amber', '録音中'],
+  joining: ['amber', '入室中'],
+  scheduled: ['gray', '予定'],
+  failed: ['gray', '失敗'],
+  skipped: ['gray', 'スキップ'],
+};
+
+function statusPill(status: string): string {
+  const [cls, label] = STATUS_PILL[status] ?? ['gray', status];
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+
 function layout(title: string, body: string): string {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)} - MinuteMate</title>
 <style>
-:root{--bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--muted:#6e6e73;--hair:rgba(0,0,0,.09);--blue:#0066cc;--blue-bg:rgba(0,102,204,.1);--warn:#fff8e6;--radius:12px}
-@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--muted:#98989d;--hair:rgba(255,255,255,.12);--blue:#0a84ff;--blue-bg:rgba(10,132,255,.16);--warn:#2a2410}}
+:root{--bg:#f5f5f7;--card:#fff;--card-2:#fbfbfd;--ink:#1d1d1f;--muted:#6e6e73;--faint:#8a8a8e;--hair:rgba(0,0,0,.08);--hair2:rgba(0,0,0,.12);--blue:#0066cc;--blue-bg:rgba(0,102,204,.08);--green:#1d7a4d;--green-bg:rgba(29,122,77,.1);--amber:#95600a;--amber-bg:rgba(149,96,10,.12);--red:#c1362f;--radius:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0b0c;--card:#1c1c1e;--card-2:#242426;--ink:#f5f5f7;--muted:#98989d;--faint:#8a8a8e;--hair:rgba(255,255,255,.1);--hair2:rgba(255,255,255,.16);--blue:#0a84ff;--blue-bg:rgba(10,132,255,.14);--green:#30d158;--green-bg:rgba(48,209,88,.14);--amber:#ffb340;--amber-bg:rgba(255,179,64,.14);--red:#ff6961}}
 *{box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Hiragino Sans','Noto Sans JP',sans-serif;max-width:840px;margin:0 auto;padding:24px 20px 64px;line-height:1.6;color:var(--ink);background:var(--bg);letter-spacing:.003em}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Hiragino Kaku Gothic ProN','Hiragino Sans','Noto Sans JP',sans-serif;max-width:760px;margin:0 auto;padding:0 20px 72px;line-height:1.6;color:var(--ink);background:var(--bg);letter-spacing:.003em;-webkit-font-smoothing:antialiased}
 a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
-table{border-collapse:collapse;width:100%;background:var(--card);border-radius:var(--radius);overflow:hidden;border:.5px solid var(--hair)}
-td,th{border-bottom:.5px solid var(--hair);padding:11px 14px;text-align:left;font-size:14px}
-tr:last-child td{border-bottom:0}th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.02em}
-.card{background:var(--card);border:.5px solid var(--hair);border-radius:var(--radius);padding:16px 20px;margin:12px 0}
+header.top{display:flex;align-items:center;gap:10px;padding:22px 0 16px;position:sticky;top:0;background:linear-gradient(var(--bg),var(--bg) 70%,transparent);z-index:5}
+.wordmark{font-weight:700;font-size:17px;letter-spacing:-.02em;color:var(--ink);display:flex;align-items:center;gap:8px}
+.wordmark .dot{width:22px;height:22px;border-radius:6px;background:linear-gradient(145deg,#0a84ff,#0066cc);display:inline-block}
+nav{display:flex;gap:4px;margin-left:auto;font-size:13.5px;flex-wrap:wrap}
+nav a{font-weight:560;color:var(--muted);padding:5px 10px;border-radius:8px}
+nav a:hover{text-decoration:none;background:var(--card);color:var(--ink)}
+nav a.active{background:var(--card);color:var(--ink)}
+h1{font-size:27px;font-weight:700;letter-spacing:-.022em;margin:8px 0 4px;text-wrap:balance}
+h2{font-size:15px;font-weight:640;letter-spacing:-.01em;color:var(--faint);margin:34px 0 10px;text-transform:none}
+.card{background:var(--card);border:.5px solid var(--hair);border-radius:var(--radius);padding:18px 20px;margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
 .muted{color:var(--muted);font-size:13px}
-nav{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:24px;padding-bottom:14px;border-bottom:.5px solid var(--hair);font-size:14px}
-nav a{font-weight:590}nav a.right{margin-left:auto}
-h1{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:6px 0 14px}h2{font-size:18px;font-weight:650;letter-spacing:-.01em;margin-top:30px}
-button{cursor:pointer;border:.5px solid var(--hair);background:var(--card);color:var(--ink);border-radius:8px;padding:5px 12px;font-size:13px;font-weight:550}
-button[type=submit]{background:var(--blue);color:#fff;border:0;padding:9px 18px;font-size:14px}
-.done{text-decoration:line-through;color:var(--muted)}
-audio{width:100%;margin:10px 0}
-.md h1{font-size:22px}.md h2{font-size:17px}.md h3{font-size:15px}
+.list{background:var(--card);border:.5px solid var(--hair);border-radius:var(--radius);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:13px 16px;font-size:14.5px}
+.row+.row{border-top:.5px solid var(--hair)}
+.row a.title{font-weight:560;color:var(--ink)}
+.row .when{color:var(--faint);font-size:12.5px;font-variant-numeric:tabular-nums;min-width:74px}
+.row .spacer{margin-left:auto}
+.pill{font-size:11.5px;font-weight:640;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pill.blue{background:var(--blue-bg);color:var(--blue)}
+.pill.green{background:var(--green-bg);color:var(--green)}
+.pill.amber{background:var(--amber-bg);color:var(--amber)}
+.pill.gray{background:var(--card-2);color:var(--muted);border:.5px solid var(--hair)}
+.empty{color:var(--faint);font-size:14px;padding:26px 4px;text-align:center}
+button{cursor:pointer;border:.5px solid var(--hair2);background:var(--card);color:var(--ink);border-radius:9px;padding:6px 13px;font-size:13px;font-weight:560}
+button:hover{background:var(--card-2)}
+button.primary,button[type=submit]{background:var(--blue);color:#fff;border:0;padding:10px 20px;font-size:14.5px;font-weight:600}
+button.primary:hover,button[type=submit]:hover{filter:brightness(1.06)}
+.done{text-decoration:line-through;color:var(--faint)}
+audio{width:100%;margin:12px 0}
+.md h1{font-size:22px}.md h2{font-size:17px;color:var(--ink);text-transform:none;margin-top:22px}.md h3{font-size:15px}
+.md ul{padding-left:20px}.md li{margin:4px 0}
+/* dropzone */
+.drop{border:1.5px dashed var(--hair2);border-radius:var(--radius);background:var(--card);padding:30px 20px;text-align:center;transition:border-color .15s,background .15s;cursor:pointer}
+.drop.over{border-color:var(--blue);background:var(--blue-bg)}
+.drop .ic{width:46px;height:46px;margin:0 auto 10px;border-radius:12px;background:var(--blue-bg);display:grid;place-items:center;color:var(--blue);font-size:22px}
+.drop .big{font-weight:620;font-size:16px}
+.drop .sub{color:var(--faint);font-size:12.5px;margin-top:4px}
+.drop .fname{color:var(--blue);font-weight:600;margin-top:8px;font-size:13.5px}
+.uprow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.uprow input,.uprow select{font-size:14px;padding:9px 11px;border:.5px solid var(--hair2);border-radius:9px;background:var(--card);color:var(--ink)}
+.uprow input{flex:1;min-width:160px}
 form.settings{display:flex;flex-direction:column;gap:18px;max-width:520px;margin-top:8px}
-form.settings label{display:flex;flex-direction:column;gap:6px;font-weight:590;font-size:14px}
+form.settings label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px}
 form.settings a{font-size:12px;font-weight:500}
-form.settings input{font-size:15px;padding:10px 12px;border:.5px solid var(--hair);border-radius:9px;background:var(--card);color:var(--ink)}
-form.settings input:focus{outline:2px solid var(--blue);outline-offset:0;border-color:transparent}
+form.settings input{font-size:15px;padding:11px 13px;border:.5px solid var(--hair2);border-radius:10px;background:var(--card);color:var(--ink)}
+form.settings input:focus,.uprow input:focus{outline:2px solid var(--blue);outline-offset:0;border-color:transparent}
 </style></head><body>
-<nav><a href="/">🏠 ホーム</a>${getBusinesses()
-    .map((b) => `<a href="/b/${encodeURIComponent(b.name)}">📁 ${escapeHtml(b.name)}</a>`)
-    .join('')}<a href="/b/_inbox">📥 未分類</a><a href="/settings" class="right">⚙️ 設定</a></nav>
+<header class="top"><span class="wordmark"><span class="dot"></span>MinuteMate</span>
+<nav><a href="/">ホーム</a>${getBusinesses()
+    .map((b) => `<a href="/b/${encodeURIComponent(b.name)}">${escapeHtml(b.name)}</a>`)
+    .join('')}<a href="/b/_inbox">未分類</a><a href="/settings">設定</a></nav></header>
 ${body}
 </body></html>`;
 }
@@ -144,50 +190,65 @@ export function startWeb(): void {
     const recent = db
       .prepare("SELECT * FROM meetings WHERE status IN ('delivered','failed') ORDER BY start_at DESC LIMIT 15")
       .all() as MeetingRow[];
+    const meetingRows = (rows: MeetingRow[], emptyMsg: string) =>
+      rows.length
+        ? `<div class="list">${rows
+            .map(
+              (m) => `<div class="row">
+              <span class="when">${fmtDate(m.start_at)}</span>
+              <a class="title" href="/m/${m.id}">${escapeHtml(m.title)}</a>
+              <span class="spacer"></span>
+              ${m.business ? `<span class="pill blue">${escapeHtml(m.business)}</span>` : ''}
+              ${statusPill(m.status)}
+            </div>`
+            )
+            .join('')}</div>`
+        : `<div class="empty">${escapeHtml(emptyMsg)}</div>`;
+    const bizOptions = getBusinesses()
+      .map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)}</option>`)
+      .join('');
     const bizCards = getBusinesses()
       .map((b) => {
         const open = openTasks(b.name).length;
         const last = db
           .prepare("SELECT * FROM meetings WHERE business = ? AND status='delivered' ORDER BY start_at DESC LIMIT 1")
           .get(b.name) as MeetingRow | undefined;
-        return `<div class="card"><b><a href="/b/${encodeURIComponent(b.name)}">📁 ${escapeHtml(b.name)}</a></b>
-        <div class="muted">${escapeHtml(b.description)}</div>
-        <div>未完了タスク: ${open} 件${last ? ` / 直近会議: ${escapeHtml(last.title)} (${fmtDate(last.start_at)})` : ''}</div></div>`;
+        return `<a class="card" style="display:block;margin:0" href="/b/${encodeURIComponent(b.name)}">
+          <div style="font-weight:640;font-size:15px">${escapeHtml(b.name)}</div>
+          <div class="muted" style="margin:2px 0 8px">${escapeHtml(b.description)}</div>
+          <div style="font-size:12.5px;color:var(--faint)">未完了タスク ${open} 件${last ? ` · 直近 ${fmtDate(last.start_at)}` : ''}</div>
+        </a>`;
       })
       .join('');
-    const table = (rows: MeetingRow[]) =>
-      rows.length
-        ? `<table><tr><th>日時</th><th>会議</th><th>事業</th><th>状態</th></tr>${rows
-            .map(
-              (m) =>
-                `<tr><td>${fmtDate(m.start_at)}</td><td><a href="/m/${m.id}">${escapeHtml(m.title)}</a></td>
-                 <td>${escapeHtml(m.business ?? '-')}</td><td>${STATUS_JA[m.status] ?? m.status}</td></tr>`
-            )
-            .join('')}</table>`
-        : '<p class="muted">なし</p>';
-    const bizOptions = getBusinesses()
-      .map((b) => `<option value="${escapeHtml(b.name)}">${escapeHtml(b.name)}</option>`)
-      .join('');
-    const uploadCard = `<div class="card" style="border:2px dashed #93c5fd;background:#f0f7ff">
-      <b>🎙️ 録音をアップロードして議事録化</b>
-      <div class="muted">会議に入らなくてもOK。手持ちの音声/動画 (mp3, m4a, wav, mp4, mov, webm…) を上げると、文字起こし→議事録→タスク→事業分類→配信まで自動で走ります。</div>
-      <form method="post" action="/upload" enctype="multipart/form-data" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        <input type="file" name="file" accept="audio/*,video/*" required>
-        <input type="text" name="title" placeholder="タイトル (任意)" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px">
-        <select name="business" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px">
-          <option value="">事業: 自動判定</option>${bizOptions}
-        </select>
-        <button type="submit" style="background:#2563eb;color:#fff;border:none;padding:6px 14px">議事録を作る</button>
-      </form>
-    </div>`;
+    const dropzone = `<form method="post" action="/upload" enctype="multipart/form-data">
+      <label class="drop" id="dz">
+        <input type="file" name="file" accept="audio/*,video/*" required hidden id="fileInput">
+        <div class="ic">🎙️</div>
+        <div class="big">録音をここにドラッグ＆ドロップ</div>
+        <div class="sub">またはクリックして選択 · mp3 / m4a / wav / mp4 / mov / webm など</div>
+        <div class="fname" id="fname"></div>
+      </label>
+      <div class="uprow">
+        <input type="text" name="title" placeholder="タイトル（任意）">
+        <select name="business"><option value="">事業：自動で判定</option>${bizOptions}</select>
+        <button type="submit" class="primary">議事録を作る</button>
+      </div>
+    </form>
+    <script>(function(){var dz=document.getElementById('dz'),fi=document.getElementById('fileInput'),fn=document.getElementById('fname');
+    function show(){if(fi.files&&fi.files[0])fn.textContent='選択中: '+fi.files[0].name;}
+    fi.addEventListener('change',show);
+    ['dragenter','dragover'].forEach(function(e){dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.add('over');});});
+    dz.addEventListener('dragleave',function(){dz.classList.remove('over');});
+    dz.addEventListener('drop',function(ev){ev.preventDefault();dz.classList.remove('over');if(ev.dataTransfer.files.length){fi.files=ev.dataTransfer.files;show();}});})();</script>`;
     res.send(
       layout(
         'ホーム',
-        `<h1>🤖 MinuteMate — 会議秘書</h1>
-         ${uploadCard}
-         <h2>事業</h2>${bizCards || '<p class="muted">businesses.yaml に事業を登録してください</p>'}
-         <h2>これからの会議</h2>${table(upcoming)}
-         <h2>最近の会議</h2>${table(recent)}`
+        `<h1>新しい議事録をつくる</h1>
+         <p class="muted" style="margin:0 0 14px">録音を入れるだけ。文字起こし → 議事録 → タスク → 事業分けまで自動。</p>
+         ${dropzone}
+         ${bizCards ? `<h2>事業</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">${bizCards}</div>` : ''}
+         <h2>これからの会議</h2>${meetingRows(upcoming, '予定された会議はありません。')}
+         <h2>最近の会議</h2>${meetingRows(recent, 'まだありません。録音をドロップして最初の議事録をつくりましょう。')}`
       )
     );
   });
