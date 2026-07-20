@@ -22,6 +22,9 @@ asarUnpack:
   - '**/node_modules/ffmpeg-static/**'
 npmRebuild: true
 
+# 署名フェーズ後にアドホック署名を確実に焼き込む (Apple Silicon の「壊れている」対策)
+afterSign: build/after-sign.cjs
+
 mac:
   target:
     - dmg
