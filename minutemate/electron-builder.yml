@@ -25,8 +25,8 @@ mac:
   target:
     - dmg
   category: public.app-category.productivity
-  # 署名なし配布 (GitHub Releases 用)。初回は右クリック→開くで実行できる。
-  identity: null
+  # Apple Silicon は無署名アプリを「壊れている」と拒否するため、
+  # identity は指定せず electron-builder のアドホック署名(無料)に任せる。
 
 win:
   target:
