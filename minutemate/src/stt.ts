@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cfg } from './config.js';
-import { mimeForExt, preprocessForGroq } from './media.js';
+import { mimeForExt, prepareGroqAudio } from './media.js';
 import { groqKey, sttProvider } from './settings.js';
 import { log } from './util.js';
 
@@ -24,14 +24,12 @@ export async function transcribe(file: string): Promise<Transcript> {
   return transcribeLocal(file);
 }
 
-async function transcribeGroq(file: string): Promise<Transcript> {
-  if (!groqKey()) throw new Error('文字起こしの GROQ_API_KEY が未設定です (設定画面で入力してください)');
-  // 動画や長時間録音は 25MB 制限に合わせて前処理 (ffmpeg で圧縮)
-  const sttFile = preprocessForGroq(file, path.join(path.dirname(file), 'tmp'));
-  const ext = path.extname(sttFile).slice(1) || 'webm';
-  const buf = fs.readFileSync(sttFile);
+/** 1 チャンク (25MB 以内) を Groq Whisper に投げる */
+async function groqTranscribeChunk(file: string): Promise<Transcript> {
+  const ext = path.extname(file).slice(1) || 'ogg';
+  const buf = fs.readFileSync(file);
   const form = new FormData();
-  form.append('file', new Blob([buf], { type: mimeForExt(ext) }), `recording.${ext}`);
+  form.append('file', new Blob([buf], { type: mimeForExt(ext) }), `chunk.${ext}`);
   form.append('model', 'whisper-large-v3-turbo');
   form.append('response_format', 'verbose_json');
   const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -45,15 +43,27 @@ async function transcribeGroq(file: string): Promise<Transcript> {
     segments?: Array<{ start: number; end: number; text: string }>;
     text?: string;
   };
-  const segments = (data.segments ?? []).map((s) => ({
-    start: s.start,
-    end: s.end,
-    text: s.text.trim(),
-  }));
-  if (segments.length === 0 && data.text) {
-    segments.push({ start: 0, end: 0, text: data.text.trim() });
-  }
+  const segments = (data.segments ?? []).map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
+  if (segments.length === 0 && data.text) segments.push({ start: 0, end: 0, text: data.text.trim() });
   return { language: data.language, segments };
+}
+
+async function transcribeGroq(file: string): Promise<Transcript> {
+  if (!groqKey()) throw new Error('文字起こしの GROQ_API_KEY が未設定です (設定画面で入力してください)');
+  // 長時間・動画・大きいファイルは 15 分ごとに分割 (2〜3時間でも通る)
+  const chunks = prepareGroqAudio(file, path.join(path.dirname(file), 'tmp'));
+  const merged: Seg[] = [];
+  let language: string | undefined;
+  for (let i = 0; i < chunks.length; i++) {
+    const { path: chunkPath, offsetSec } = chunks[i];
+    if (chunks.length > 1) log('stt', `文字起こし ${i + 1}/${chunks.length} …`);
+    const t = await groqTranscribeChunk(chunkPath);
+    language = language ?? t.language;
+    for (const s of t.segments) {
+      merged.push({ start: s.start + offsetSec, end: s.end + offsetSec, text: s.text });
+    }
+  }
+  return { language, segments: merged };
 }
 
 async function transcribeLocal(file: string): Promise<Transcript> {

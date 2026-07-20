@@ -72,36 +72,59 @@ export function hasFfmpeg(): boolean {
 
 // Groq の Whisper は 1 リクエスト最大 25MB。安全側で 24MB を上限にする。
 const GROQ_LIMIT = 24 * 1024 * 1024;
+// 分割する場合の 1 チャンクの長さ (秒)。15分 ≈ 16kHz mono opus で約 2〜3MB。
+export const SEGMENT_SEC = 900;
+const GROQ_AUDIO_EXTS = ['.mp3', '.m4a', '.wav', '.ogg', '.opus', '.flac', '.webm', '.mpga'];
+
+export interface GroqChunk {
+  path: string;
+  offsetSec: number;
+}
 
 /**
- * Groq へ送る前にファイルを整える。大きすぎる (動画・長時間) 場合は ffmpeg で
- * 16kHz モノラル opus に圧縮する。ffmpeg が無く上限超過なら分かりやすいエラーを投げる。
- * 返り値は実際に送信すべきファイルパス。
+ * Groq へ送る音声を用意する。長時間・動画・大きいファイルは ffmpeg で
+ * 16kHz モノラル opus に変換しつつ 15 分ごとに分割し、各チャンクと開始オフセットを返す。
+ * これにより 2〜3 時間の録画でも 25MB 制限を超えず文字起こしできる。
  */
-export function preprocessForGroq(file: string, tmpDir: string): string {
+export function prepareGroqAudio(file: string, tmpDir: string): GroqChunk[] {
   const size = fs.statSync(file).size;
-  if (size <= GROQ_LIMIT) return file;
+  const ext = path.extname(file).toLowerCase();
+
+  // すでに小さく、Groq がそのまま受け付ける音声形式ならそのまま 1 チャンク
+  if (size <= GROQ_LIMIT && GROQ_AUDIO_EXTS.includes(ext)) {
+    return [{ path: file, offsetSec: 0 }];
+  }
 
   const ff = ffmpegBin();
   if (!ff) {
+    if (size <= GROQ_LIMIT) return [{ path: file, offsetSec: 0 }];
     throw new Error(
-      `録音が大きすぎます (${(size / 1024 / 1024).toFixed(1)}MB > 24MB) が、音声を圧縮できませんでした。`
+      `録音が大きすぎます (${(size / 1024 / 1024).toFixed(1)}MB) が、音声を変換できませんでした。`
     );
   }
+
   fs.mkdirSync(tmpDir, { recursive: true });
-  const out = path.join(tmpDir, 'stt-input.ogg');
-  log('media', `録音が大きい (${(size / 1024 / 1024).toFixed(1)}MB) ため 16kHz mono opus に圧縮します`);
+  // 掃除 (前回の分割ファイルが残っていると混ざる)
+  for (const f of fs.readdirSync(tmpDir)) {
+    if (/^seg_\d+\.ogg$/.test(f)) fs.rmSync(path.join(tmpDir, f));
+  }
+  const pattern = path.join(tmpDir, 'seg_%03d.ogg');
+  log('media', `音声を 16kHz mono opus に変換し、${SEGMENT_SEC / 60}分ごとに分割します`);
   execFileSync(
     ff,
-    ['-y', '-i', file, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '16k', out],
+    [
+      '-y', '-i', file,
+      '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '16k',
+      '-f', 'segment', '-segment_time', String(SEGMENT_SEC), '-reset_timestamps', '1',
+      pattern,
+    ],
     { stdio: 'ignore' }
   );
-  const outSize = fs.statSync(out).size;
-  if (outSize > GROQ_LIMIT) {
-    throw new Error(
-      `圧縮後もファイルが大きすぎます (${(outSize / 1024 / 1024).toFixed(1)}MB)。` +
-        '長時間の録音は STT_PROVIDER=local をお使いください。'
-    );
-  }
-  return out;
+  const segs = fs
+    .readdirSync(tmpDir)
+    .filter((f) => /^seg_\d+\.ogg$/.test(f))
+    .sort();
+  if (segs.length === 0) throw new Error('音声の抽出に失敗しました (ファイルが壊れている可能性)');
+  if (segs.length > 1) log('media', `${segs.length} チャンクに分割しました`);
+  return segs.map((f, i) => ({ path: path.join(tmpDir, f), offsetSec: i * SEGMENT_SEC }));
 }
