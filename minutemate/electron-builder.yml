@@ -38,3 +38,5 @@ nsis:
 
 publish:
   provider: github
+  owner: maco23plas
+  repo: zmk-config
