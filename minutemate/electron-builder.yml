@@ -40,3 +40,5 @@ publish:
   provider: github
   owner: maco23plas
   repo: zmk-config
+  # 下書きではなく、そのまま公開リリースにする (誰でもダウンロードできる)
+  releaseType: release
