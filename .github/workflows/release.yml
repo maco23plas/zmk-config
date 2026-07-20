@@ -6,6 +6,7 @@ name: Build desktop app
 on:
   push:
     tags: ['v*']
+    branches: ['app-release'] # このブランチに push するとビルドが走る (タグ push が使えない環境向け)
   workflow_dispatch:
 
 permissions:
@@ -40,3 +41,5 @@ jobs:
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 署名なしビルド (証明書を探しに行って失敗しないようにする)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
