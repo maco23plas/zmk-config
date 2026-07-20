@@ -19,7 +19,7 @@ export const cfg = {
   calendarIds: list(process.env.CALENDAR_IDS, ['primary']),
 
   // Bot
-  botName: process.env.BOT_NAME || '議事録Bot（録音中）',
+  botName: process.env.BOT_NAME || 'AI秘書',
   botEmail: process.env.BOT_EMAIL || '',
   autoInviteBot: bool(process.env.AUTO_INVITE_BOT, true),
   joinMode: (process.env.JOIN_MODE || 'all') as 'all' | 'off',

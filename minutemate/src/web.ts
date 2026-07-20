@@ -241,8 +241,8 @@ export function startWeb(): void {
     dz.addEventListener('dragleave',function(){dz.classList.remove('over');});
     dz.addEventListener('drop',function(ev){ev.preventDefault();dz.classList.remove('over');if(ev.dataTransfer.files.length){fi.files=ev.dataTransfer.files;show();}});})();</script>`;
     const joinCard = `<div class="card" id="joinCard" style="display:none">
-      <div style="font-weight:640;font-size:15px;margin-bottom:2px">会議に入って録音する</div>
-      <div class="muted" style="margin-bottom:10px">Zoom / Google Meet のリンクを貼ると、アプリ内で会議を開きます。参加ボタンを押せば自動で録音が始まり、閉じると議事録になります。</div>
+      <div style="font-weight:640;font-size:15px;margin-bottom:2px">AI秘書を会議に入れる</div>
+      <div class="muted" style="margin-bottom:10px">Zoom / Google Meet のリンクを貼ると、「AI秘書」が別ウィンドウで会議に入室します（あなたはいつも通り参加）。待機室がある場合はホストが承認するとAI秘書が入れます。会議の音声を録音し、ウィンドウを閉じると議事録になります。</div>
       <div class="uprow" style="margin-top:0">
         <input type="text" id="joinUrl" placeholder="https://us02web.zoom.us/j/... または https://meet.google.com/...">
         <input type="text" id="joinTitle" placeholder="タイトル（任意）" style="flex:0 1 180px">
@@ -294,6 +294,8 @@ export function startWeb(): void {
     const minutesPath = m.dir ? path.join(m.dir, 'minutes.md') : '';
     const minutes = minutesPath && fs.existsSync(minutesPath) ? fs.readFileSync(minutesPath, 'utf8') : '';
     const hasAudio = m.dir ? !!findRecording(m.dir) : false;
+    const joinLogPath = m.dir ? path.join(m.dir, 'join-log.txt') : '';
+    const joinLog = joinLogPath && fs.existsSync(joinLogPath) ? fs.readFileSync(joinLogPath, 'utf8') : '';
     const tasks = db.prepare('SELECT * FROM tasks WHERE meeting_id = ?').all(m.id) as TaskRow[];
     // 処理中 (アップロード直後など) は自動更新して、完成した議事録が出たら止める
     const busy = ['ended', 'processing', 'joining', 'recording'].includes(m.status);
@@ -313,7 +315,8 @@ export function startWeb(): void {
         ${tasks.length ? `<h2>この会議のタスク</h2>${taskList(tasks)}` : ''}
         <div class="md">${minutes ? mdToHtml(minutes) : '<p class="muted">議事録はまだありません</p>'}</div>
         <form method="post" action="/m/${m.id}/reprocess" style="margin-top:24px">
-          <button>⚙️ 議事録を再生成する</button></form>`
+          <button>⚙️ 議事録を再生成する</button></form>
+        ${joinLog ? `<h2>入室・録音の診断ログ</h2><div class="muted" style="margin-bottom:6px">うまく録れない時は、この内容をそのまま共有してください。</div><pre style="background:var(--card);border:.5px solid var(--hair);border-radius:10px;padding:12px;overflow:auto;font-size:12px;white-space:pre-wrap">${escapeHtml(joinLog)}</pre>` : ''}`
       )
     );
   });

@@ -1,6 +1,6 @@
 {
   "name": "minutemate",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "無料枠だけで動く全自動ミーティング秘書 (自動入室・録音・議事録・タスク・事業別整理・進捗レポート)",

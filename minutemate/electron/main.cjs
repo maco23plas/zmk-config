@@ -64,15 +64,38 @@ function createWindow() {
   return win;
 }
 
-/** 会議 URL を内蔵ブラウザで開き、通話音声を録音する。閉じると議事録化が走る。 */
+// 「AI秘書」として名前を入れて参加ボタンを押す注入スクリプト (見えているので手動でも押せる)
+const AUTO_JOIN_JS = `(function(){
+  var BOT='AI秘書';
+  function vis(el){ return el && el.offsetParent !== null; }
+  function fillName(){
+    var sel=['#input-for-name','input[placeholder*="Name" i]','input[placeholder*="名前"]','input[aria-label*="name" i]','input[aria-label*="名前"]','input[type="text"]'];
+    for(var i=0;i<sel.length;i++){ var el=document.querySelector(sel[i]); if(vis(el)){ if(el.value!==BOT){ el.focus(); el.value=BOT; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); } return true; } }
+    return false;
+  }
+  function clickJoin(){
+    var btns=[].slice.call(document.querySelectorAll('button, [role=button], span, div'));
+    var re=/^(参加|参加する|今すぐ参加|参加をリクエスト|Join|Join now|Ask to join|Join Audio by Computer|コンピューター\\s*オーディオ)/i;
+    for(var i=0;i<btns.length;i++){ var b=btns[i]; var t=(b.innerText||b.textContent||'').trim(); if(t && re.test(t) && vis(b)){ b.click(); console.log('[AIhisho] clicked:', t); return true; } }
+    return false;
+  }
+  var n=0, iv=setInterval(function(){ n++; try{ fillName(); clickJoin(); }catch(e){} if(n>40) clearInterval(iv); }, 1500);
+  console.log('[AIhisho] auto-join armed');
+})();`;
+
+/** 会議 URL を内蔵ブラウザで「AI秘書」ボットとして開き、通話音声を録音する。閉じると議事録化。 */
 function openMeetingWindow(url, title) {
   const live = joinApi.createLiveMeeting(url, title);
   const stream = fs.createWriteStream(live.recordingPath, { flags: 'a' });
+  const logPath = path.join(live.dir, 'join-log.txt');
+  const logLine = (s) => { try { fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${s}\n`); } catch (e) {} };
+  logLine(`会議を開きます: ${url}`);
+  let bytes = 0;
 
   const win = new BrowserWindow({
     width: 1180,
     height: 820,
-    title: '会議（録音中）— ' + (title || ''),
+    title: 'AI秘書（録音中）— ' + (title || ''),
     backgroundColor: '#111',
     webPreferences: {
       preload: path.join(__dirname, 'rec-preload.cjs'),
@@ -82,27 +105,40 @@ function openMeetingWindow(url, title) {
     },
   });
 
-  // このウィンドウからの音声チャンクだけを受け取る
+  // このウィンドウからの音声チャンク/状態だけを受け取る
   const onAudio = (e, b64) => {
-    if (e.sender === win.webContents) {
-      try { stream.write(Buffer.from(b64, 'base64')); } catch (err) {}
-    }
+    if (e.sender !== win.webContents) return;
+    try { const buf = Buffer.from(b64, 'base64'); stream.write(buf); bytes += buf.length; } catch (err) {}
   };
+  const onStatus = (e, msg) => { if (e.sender === win.webContents) logLine('recorder: ' + msg); };
   ipcMain.on('mm-audio', onAudio);
+  ipcMain.on('mm-status', onStatus);
 
-  // マイク/スピーカーの権限は自動許可（本人が開いた会議なので）
+  // メディア権限は自動許可（本人が開いた会議のため）
   win.webContents.session.setPermissionRequestHandler((wc, perm, cb) => cb(true));
-  win.loadURL(url);
+  try { win.webContents.session.setPermissionCheckHandler(() => true); } catch (e) {}
+  // 会議ページの console を診断ログに残す（テストで原因を追えるように）
+  win.webContents.on('console-message', (_e, _lvl, message) => {
+    if (/AIhisho|__mm|recorder|error|Error/i.test(message)) logLine('page: ' + message);
+  });
+  win.webContents.on('did-finish-load', () => {
+    logLine('ページ読み込み完了、AI秘書として参加を試みます');
+    win.webContents.executeJavaScript(AUTO_JOIN_JS).catch((e) => logLine('auto-join注入失敗: ' + e.message));
+  });
+
+  win.loadURL(live.loadUrl || url);
 
   let finishing = false;
   const finish = async () => {
     if (finishing) return;
     finishing = true;
     ipcMain.removeListener('mm-audio', onAudio);
+    ipcMain.removeListener('mm-status', onStatus);
     try { stream.end(); } catch (e) {}
+    logLine(`録音を終了しました（${(bytes / 1024).toFixed(0)} KB）`);
     try {
       await joinApi.finishLiveMeeting(live.id);
-    } catch (e) {}
+    } catch (e) { logLine('議事録生成エラー: ' + e.message); }
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(`${BASE}/m/${live.id}`);
   };
 
@@ -113,7 +149,7 @@ function openMeetingWindow(url, title) {
     win.webContents.executeJavaScript('window.__mmStop && window.__mmStop()').catch(() => {});
     setTimeout(() => {
       finish().then(() => { if (!win.isDestroyed()) win.destroy(); });
-    }, 1800);
+    }, 2000);
   });
 }
 

@@ -14,6 +14,15 @@ export interface LiveMeeting {
   id: string;
   dir: string;
   recordingPath: string;
+  loadUrl: string; // ブラウザで開くURL (Zoom は Web クライアントに変換)
+}
+
+/** Zoom の招待 URL をアプリ内ブラウザで開ける Web クライアント URL に変換 */
+function toLoadUrl(url: string): string {
+  const m = url.match(/https?:\/\/([\w.-]*zoom\.us)\/(?:j|w|wc\/join)\/(\d+)(?:\?[^#]*)?/i);
+  if (!m) return url;
+  const pwd = url.match(/[?&]pwd=([^&#]+)/)?.[1];
+  return `https://${m[1]}/wc/join/${m[2]}${pwd ? `?pwd=${pwd}` : ''}`;
 }
 
 /** 会議ウィンドウを開く直前に呼ぶ。録音先を用意して会議レコードを作る。 */
@@ -32,7 +41,7 @@ export function createLiveMeeting(url: string, title?: string): LiveMeeting {
     JSON.stringify({ meetingId: id, title: title || '会議', url, source: 'live', recStartedAt: Date.now() }, null, 2)
   );
   log('join', `会議ウィンドウを開始: ${title || url}`);
-  return { id, dir, recordingPath: path.join(dir, 'recording.webm') };
+  return { id, dir, recordingPath: path.join(dir, 'recording.webm'), loadUrl: toLoadUrl(url) };
 }
 
 /** 会議ウィンドウを閉じたら呼ぶ。録音があれば議事録パイプラインを回す。 */
