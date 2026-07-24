@@ -1,0 +1,218 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* =========================================================================
+   インスタ分析思考 2026 — Design System
+   トーン: macOS / OPPO ColorOS 風。余白広め・角丸・やわらかな影・上品。
+   ========================================================================= */
+
+:root {
+  --radius: 0.875rem;
+
+  /* Surfaces */
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+
+  /* Brand / primary — 落ち着いた先進的なブルー */
+  --primary: #2f6fed;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eceef3;
+  --secondary-foreground: #2b2f38;
+
+  --muted: #f0f1f4;
+  --muted-foreground: #6b7280;
+
+  --accent: #eef3fe;
+  --accent-foreground: #1e40af;
+
+  --destructive: #ff3b30;
+  --destructive-foreground: #ffffff;
+
+  --border: #e6e7ea;
+  --input: #e2e4e9;
+  --ring: #2f6fed;
+
+  /* Status */
+  --ok: #17a34a;
+  --ok-bg: #e8f6ee;
+  --warn: #d97706;
+  --warn-bg: #fbf1e3;
+  --bad: #e23b34;
+  --bad-bg: #fbeae9;
+
+  /* Category badges */
+  --cat-keep: #6b7280;
+  --cat-keep-bg: #f0f1f4;
+  --cat-update: #2563eb;
+  --cat-update-bg: #e9f0fe;
+  --cat-new: #b45309;
+  --cat-new-bg: #fbf1e0;
+
+  /* Chart palette */
+  --chart-1: #2f6fed;
+  --chart-2: #17a34a;
+  --chart-3: #d97706;
+  --chart-4: #8b5cf6;
+  --chart-5: #e2557a;
+}
+
+.dark {
+  --background: #0b0b0d;
+  --foreground: #f2f2f5;
+  --card: #17181b;
+  --card-foreground: #f2f2f5;
+  --popover: #17181b;
+  --popover-foreground: #f2f2f5;
+
+  --primary: #4f8bff;
+  --primary-foreground: #0b0b0d;
+
+  --secondary: #202227;
+  --secondary-foreground: #e7e9ee;
+
+  --muted: #1c1e22;
+  --muted-foreground: #9aa0ab;
+
+  --accent: #17233f;
+  --accent-foreground: #cfe0ff;
+
+  --destructive: #ff6961;
+  --destructive-foreground: #0b0b0d;
+
+  --border: #26282d;
+  --input: #2c2f35;
+  --ring: #4f8bff;
+
+  --ok: #34c759;
+  --ok-bg: #12251a;
+  --warn: #f0a94b;
+  --warn-bg: #2a2113;
+  --bad: #ff6961;
+  --bad-bg: #2b1615;
+
+  --cat-keep: #9aa0ab;
+  --cat-keep-bg: #202227;
+  --cat-update: #6ea0ff;
+  --cat-update-bg: #16233f;
+  --cat-new: #e6a94e;
+  --cat-new-bg: #2a2113;
+
+  --chart-1: #4f8bff;
+  --chart-2: #34c759;
+  --chart-3: #f0a94b;
+  --chart-4: #a78bfa;
+  --chart-5: #f2789b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+
+  --color-cat-keep: var(--cat-keep);
+  --color-cat-keep-bg: var(--cat-keep-bg);
+  --color-cat-update: var(--cat-update);
+  --color-cat-update-bg: var(--cat-update-bg);
+  --color-cat-new: var(--cat-new);
+  --color-cat-new-bg: var(--cat-new-bg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-sans: var(--font-noto-sans-jp), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", Meiryo, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings: "palt";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 数値はタブラー数字で桁を揃える */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* やわらかな macOS 風カード影 */
+.shadow-soft {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.06);
+}
+.dark .shadow-soft {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* スクロールバーを控えめに */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
