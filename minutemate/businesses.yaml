@@ -1,0 +1,18 @@
+# 事業の定義。ここに登録した事業ごとに会議が自動分類され、
+# フォルダ分け・タスク管理・週次進捗レポート・事前ブリーフが動く。
+businesses:
+  - name: ANTAI
+    description: 給付金診断サイト事業。LP 制作・広告運用・診断フローの改善など。
+    keywords: [給付金, 診断, LP, 広告, ANTAI]
+    # 参加者のメールアドレス/ドメインが一致したら分類の強いヒントになる
+    emails: []
+    # この事業専用の Slack Incoming Webhook (空なら全体の SLACK_WEBHOOK_URL を使う)
+    slack_webhook: ""
+    weekly_report: true
+
+  - name: 新規事業X
+    description: 検討中の新規事業。壁打ち・リサーチ系の会議はこちら。
+    keywords: [新規, リサーチ, 壁打ち]
+    emails: []
+    slack_webhook: ""
+    weekly_report: true

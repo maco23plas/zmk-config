@@ -1,0 +1,49 @@
+{
+  "name": "minutemate",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "無料枠だけで動く全自動ミーティング秘書 (自動入室・録音・議事録・タスク・事業別整理・進捗レポート)",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "desktop": "npm run build && electron electron/main.cjs",
+    "dist:app": "npm run build && electron-builder -mw",
+    "auth": "tsx src/google.ts auth",
+    "bot:login": "tsx src/bot/run.ts login",
+    "bot": "tsx src/bot/run.ts",
+    "once": "tsx src/once.ts",
+    "report": "tsx src/secretary.ts report",
+    "ingest": "tsx src/ingest.ts",
+    "doctor": "tsx src/doctor.ts",
+    "state:save": "tsx src/state.ts save",
+    "state:restore": "tsx src/state.ts restore",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ffmpeg-static": "^5.2.0",
+    "googleapis": "^144.0.0",
+    "marked": "^12.0.2",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.47.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.5.0",
+    "@types/node-cron": "^3.0.11",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}

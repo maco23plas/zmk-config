@@ -1,0 +1,45 @@
+# デスクトップアプリ (MinuteMate) を Mac / Windows 向けにビルドして
+# GitHub Releases に .dmg / .exe を公開する。
+# 使い方: リリースしたい状態でタグを打つ  →  git tag v0.1.0 && git push origin v0.1.0
+name: Build desktop app
+
+on:
+  push:
+    tags: ['v*']
+    branches: ['app-release'] # このブランチに push するとビルドが走る (タグ push が使えない環境向け)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: minutemate
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: minutemate/package-lock.json
+
+      - name: 依存をインストール
+        run: npm ci
+
+      - name: TypeScript をビルド
+        run: npm run build
+
+      - name: アプリをビルドして Releases に公開
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 署名なしビルド (証明書を探しに行って失敗しないようにする)
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
