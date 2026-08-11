@@ -141,15 +141,27 @@ function generateUrls() {
   let sh = ss.getSheetByName(SHEETS.URLS);
   if (sh) sh.clear(); else sh = ss.insertSheet(SHEETS.URLS);
 
-  const rows = [['QR ID', '表示名', '★エルメ「外部連携」タブに貼るURL（本命）', '（方式B）QRコードの飛び先にするURL']];
+  const rows = [[
+    'QR ID', '表示名',
+    '★エルメ「外部連携」タブに貼るURL（本命）',
+    '（方式B）QRコードの飛び先にするURL',
+    '（方式B）配布用QR画像プレビュー',
+    '（方式B）QR画像ダウンロード（開いて右クリック保存）',
+  ]];
   const qrs = getQrMap_();
   for (const [id, qr] of Object.entries(qrs)) {
-    rows.push([id, qr.name, base + '?ev=reg&id=' + id, base + '?id=' + id]);
+    const clickUrl = base + '?id=' + id;
+    // 配布用QR画像（無料のQR画像API。QRの中身は上のclickUrl）
+    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=' +
+      encodeURIComponent(clickUrl);
+    rows.push([id, qr.name, base + '?ev=reg&id=' + id, clickUrl, '=IMAGE("' + qrImg + '")', qrImg]);
   }
-  sh.getRange(1, 1, rows.length, 4).setValues(rows);
+  sh.getRange(1, 1, rows.length, 6).setValues(rows);
   sh.setFrozenRows(1);
-  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 480).setColumnWidth(4, 480);
-  toast_('URL一覧を生成しました。「URL一覧」シートのC列をエルメの各QRコードアクション →「外部連携」タブへ。');
+  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 460)
+    .setColumnWidth(4, 460).setColumnWidth(5, 140).setColumnWidth(6, 460);
+  if (rows.length > 1) sh.setRowHeights(2, rows.length - 1, 130);
+  toast_('URL一覧を生成しました。C列→エルメ外部連携タブ／E・F列→方式Bの配布用QRコード画像です。');
 }
 
 // ────────────────────────────────────────────
