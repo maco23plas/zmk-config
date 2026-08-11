@@ -33,6 +33,7 @@ const SHEETS = {
   REGS: '登録ログ',
   DAILY: '日次集計',
   URLS: 'URL一覧',
+  DASH: 'ダッシュボード',
 };
 
 const TZ = 'Asia/Tokyo';
@@ -46,6 +47,7 @@ function onOpen() {
     .addItem('① 初期セットアップ／設定反映', 'setup')
     .addItem('② エルメ登録用URL一覧を生成', 'generateUrls')
     .addItem('③ テスト配信（今すぐレポート送信）', 'dailyReport')
+    .addItem('④ ダッシュボード＆個人タブを更新', 'buildDashboards')
     .addToUi();
 }
 
@@ -143,25 +145,17 @@ function generateUrls() {
 
   const rows = [[
     'QR ID', '表示名',
-    '★エルメ「外部連携」タブに貼るURL（本命）',
-    '（方式B）QRコードの飛び先にするURL',
-    '（方式B）配布用QR画像プレビュー',
-    '（方式B）QR画像ダウンロード（開いて右クリック保存）',
+    '★エルメ「外部連携」タブ（パラメーターエクスポート）に貼るURL',
+    '（オプション）クリック計測リダイレクタURL ※通常は使わない',
   ]];
   const qrs = getQrMap_();
   for (const [id, qr] of Object.entries(qrs)) {
-    const clickUrl = base + '?id=' + id;
-    // 配布用QR画像（無料のQR画像API。QRの中身は上のclickUrl）
-    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=' +
-      encodeURIComponent(clickUrl);
-    rows.push([id, qr.name, base + '?ev=reg&id=' + id, clickUrl, '=IMAGE("' + qrImg + '")', qrImg]);
+    rows.push([id, qr.name, base + '?ev=reg&id=' + id, base + '?id=' + id]);
   }
-  sh.getRange(1, 1, rows.length, 6).setValues(rows);
+  sh.getRange(1, 1, rows.length, 4).setValues(rows);
   sh.setFrozenRows(1);
-  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 460)
-    .setColumnWidth(4, 460).setColumnWidth(5, 140).setColumnWidth(6, 460);
-  if (rows.length > 1) sh.setRowHeights(2, rows.length - 1, 130);
-  toast_('URL一覧を生成しました。C列→エルメ外部連携タブ／E・F列→方式Bの配布用QRコード画像です。');
+  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 480).setColumnWidth(4, 480);
+  toast_('URL一覧を生成しました。C列をエルメの各QRコードアクション →「外部連携」タブへ。');
 }
 
 // ────────────────────────────────────────────
@@ -347,6 +341,13 @@ function dailyReport() {
     sentTo.push('Chatwork');
   }
   Logger.log(text);
+
+  // ダッシュボードも毎日更新（失敗してもレポート配信は成立させる）
+  try {
+    buildDashboards();
+  } catch (err) {
+    console.error('ダッシュボード更新失敗: ' + err);
+  }
   toast_(sentTo.length
     ? sentTo.join('・') + ' に送信しました。'
     : '送信先が未設定です。「設定」シートに Discord Webhook URL または Chatworkトークン+ルームID を入力してください。');
@@ -390,4 +391,176 @@ function sendChatwork_(token, roomId, text) {
     payload: { body: '[info][title]QRコード流入レポート[/title]' + text + '[/info]' },
     muteHttpExceptions: true,
   });
+}
+
+// ────────────────────────────────────────────
+// ④ ダッシュボード＆アフィリエイター別タブの自動生成
+//    （毎日レポート時に自動実行。メニューから手動更新も可）
+// ────────────────────────────────────────────
+function buildDashboards() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const qrs = getQrMap_();
+  const qrIds = Object.keys(qrs);
+  if (!qrIds.length) {
+    toast_('QR設定シートが空です。先に①を実行してください。');
+    return;
+  }
+
+  // 登録ログを読んで counts[id][日付] = 件数 に集計
+  const counts = {};
+  qrIds.forEach(id => counts[id] = {});
+  let firstDay = null;
+  const regSh = ss.getSheetByName(SHEETS.REGS);
+  if (regSh && regSh.getLastRow() > 1) {
+    const values = regSh.getRange(2, 1, regSh.getLastRow() - 1, 2).getValues();
+    for (const [when, rawId] of values) {
+      if (!(when instanceof Date)) continue;
+      const id = String(rawId).trim();
+      if (!counts[id]) counts[id] = {}; // QR設定から消えたIDも一応拾う
+      const day = Utilities.formatDate(when, TZ, 'yyyy-MM-dd');
+      counts[id][day] = (counts[id][day] || 0) + 1;
+      if (!firstDay || day < firstDay) firstDay = day;
+    }
+  }
+
+  // 日付の並び（最初のログの日〜今日。ログが無ければ今日1日分）
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  const days = listDays_(firstDay || today, today);
+
+  // 全体ダッシュボード
+  buildOverviewSheet_(ss, qrs, counts, days);
+
+  // アフィリエイター別タブ（📈 表示名）
+  const usedNames = new Set();
+  for (const [id, qr] of Object.entries(qrs)) {
+    let name = '📈 ' + (qr.name || id);
+    if (usedNames.has(name)) name += '（' + id + '）';
+    usedNames.add(name);
+    buildAffiSheet_(ss, name, qr.name || id, counts[id] || {}, days);
+  }
+
+  toast_('ダッシュボードと個人タブを更新しました。');
+}
+
+/** start〜end（両端含む・yyyy-MM-dd）の日付配列を作る */
+function listDays_(start, end) {
+  const days = [];
+  let d = new Date(start + 'T00:00:00+09:00');
+  const stop = new Date(end + 'T00:00:00+09:00');
+  while (d <= stop && days.length < 400) { // 400日で頭打ち（シート肥大防止）
+    days.push(Utilities.formatDate(d, TZ, 'yyyy-MM-dd'));
+    d = new Date(d.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return days;
+}
+
+function sumLastNDays_(dayCounts, days, n) {
+  return days.slice(-n).reduce((s, day) => s + (dayCounts[day] || 0), 0);
+}
+
+/** シートを空にして返す（無ければ作る）。既存グラフも消す */
+function resetSheet_(ss, name) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  sh.clear();
+  sh.getCharts().forEach(c => sh.removeChart(c));
+  return sh;
+}
+
+/** 全体ダッシュボード：全員のサマリー表＋日別推移（積み上げ）＋累計比較グラフ */
+function buildOverviewSheet_(ss, qrs, counts, days) {
+  const sh = resetSheet_(ss, SHEETS.DASH);
+  const ids = Object.keys(qrs);
+  const yesterday = days.length >= 2 ? days[days.length - 2] : null;
+  const today = days[days.length - 1];
+
+  // サマリー表
+  sh.getRange(1, 1).setValue('📊 流入ダッシュボード（自動更新: ' +
+    Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + '）')
+    .setFontWeight('bold').setFontSize(12);
+  const sumHeader = ['アフィリエイター', '累計', '今日', '昨日', '直近7日', '直近30日'];
+  const sumRows = ids.map(id => {
+    const dc = counts[id] || {};
+    const total = Object.values(dc).reduce((a, b) => a + b, 0);
+    return [qrs[id].name, total, dc[today] || 0, yesterday ? (dc[yesterday] || 0) : 0,
+      sumLastNDays_(dc, days, 7), sumLastNDays_(dc, days, 30)];
+  });
+  sh.getRange(3, 1, 1, 6).setValues([sumHeader]).setFontWeight('bold').setBackground('#E4F5EA');
+  if (sumRows.length) sh.getRange(4, 1, sumRows.length, 6).setValues(sumRows);
+  sh.setColumnWidth(1, 220);
+
+  // 日別マトリクス（日付 × アフィリエイター）
+  const matTop = 4 + sumRows.length + 2;
+  sh.getRange(matTop, 1).setValue('日別推移').setFontWeight('bold');
+  const matHeader = ['日付'].concat(ids.map(id => qrs[id].name), ['合計']);
+  const matRows = days.map(day => {
+    const per = ids.map(id => (counts[id] || {})[day] || 0);
+    return [day].concat(per, [per.reduce((a, b) => a + b, 0)]);
+  });
+  sh.getRange(matTop + 1, 1, 1, matHeader.length).setValues([matHeader])
+    .setFontWeight('bold').setBackground('#E4F5EA');
+  sh.getRange(matTop + 2, 1, matRows.length, matHeader.length).setValues(matRows);
+
+  // グラフ1: 日別推移（アフィリエイター別・積み上げ棒）
+  sh.insertChart(sh.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(sh.getRange(matTop + 1, 1, matRows.length + 1, matHeader.length - 1))
+    .setPosition(3, 8, 0, 0)
+    .setOption('title', '日別登録数（アフィリエイター別）')
+    .setOption('isStacked', true)
+    .setOption('width', 640).setOption('height', 320)
+    .build());
+
+  // グラフ2: 累計の比較（横棒）
+  sh.insertChart(sh.newChart()
+    .setChartType(Charts.ChartType.BAR)
+    .addRange(sh.getRange(3, 1, sumRows.length + 1, 2))
+    .setPosition(20, 8, 0, 20)
+    .setOption('title', '累計登録数の比較')
+    .setOption('legend', { position: 'none' })
+    .setOption('width', 640).setOption('height', 320)
+    .build());
+
+  // ダッシュボードを先頭タブへ
+  ss.setActiveSheet(sh);
+  ss.moveActiveSheet(1);
+}
+
+/** アフィリエイター別タブ：サマリー＋日別表＋棒グラフ */
+function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days) {
+  const sh = resetSheet_(ss, sheetName.substring(0, 90));
+  const total = Object.values(dayCounts).reduce((a, b) => a + b, 0);
+  const today = days[days.length - 1];
+  const yesterday = days.length >= 2 ? days[days.length - 2] : null;
+
+  sh.getRange(1, 1).setValue('📈 ' + dispName + ' の流入状況（自動更新）')
+    .setFontWeight('bold').setFontSize(12);
+  sh.getRange(2, 1, 1, 5).setValues([['累計', '今日', '昨日', '直近7日', '直近30日']])
+    .setFontWeight('bold').setBackground('#E4F5EA');
+  sh.getRange(3, 1, 1, 5).setValues([[
+    total, dayCounts[today] || 0, yesterday ? (dayCounts[yesterday] || 0) : 0,
+    sumLastNDays_(dayCounts, days, 7), sumLastNDays_(dayCounts, days, 30),
+  ]]).setFontSize(12);
+
+  // 日別表（累計つき）
+  sh.getRange(5, 1, 1, 3).setValues([['日付', '登録数', '累計']])
+    .setFontWeight('bold').setBackground('#E4F5EA');
+  let running = 0;
+  const rows = days.map(day => {
+    const n = dayCounts[day] || 0;
+    running += n;
+    return [day, n, running];
+  });
+  sh.getRange(6, 1, rows.length, 3).setValues(rows);
+  sh.setFrozenRows(5);
+
+  // グラフ: 日別登録数
+  sh.insertChart(sh.newChart()
+    .setChartType(Charts.ChartType.COLUMN)
+    .addRange(sh.getRange(5, 1, rows.length + 1, 2))
+    .setPosition(2, 5, 0, 0)
+    .setOption('title', dispName + '：日別登録数')
+    .setOption('legend', { position: 'none' })
+    .setOption('width', 600).setOption('height', 300)
+    .build());
 }
