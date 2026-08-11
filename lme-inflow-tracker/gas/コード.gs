@@ -1,73 +1,155 @@
 /**
  * ============================================================
- *  エルメ（L Message）QRコード別 流入計測 & 毎日レポート配信ツール
+ *  エルメ（L Message）QRコード別 流入計測 & 毎日レポート配信ツール v2
  * ============================================================
  *
- *  できること（すべて無料枠のみで動作）:
- *   1. 【本命】エルメ公式「パラメーターエクスポート」の受け口
- *      … 各QRコードアクションの「外部連携」タブにこのGASのURLを
- *        コールバックURLとして登録すると、QR経由で友だち追加される
- *        たびにエルメがGETリクエストを送ってくる → 実登録をQR別に記録
- *   2. 【代替】QRコード別のクリック（読み取り→遷移）を記録するリダイレクタ
- *      … エルメの流入経路URLの「手前」にこのGASを挟んで計測します
- *   3. スプレッドシートに時系列でログを蓄積
- *   4. 毎日決まった時刻に Discord / Chatwork へ集計レポートを自動配信
+ *  ▼ このファイルは「一度貼り付けたら編集不要」です。
+ *    設定（QRコード一覧・Discord/Chatworkのキー・配信時刻）は
+ *    すべてスプレッドシートの「設定」「QR設定」シートで行います。
  *
- *  セットアップ手順は同梱の README.md を参照してください。
+ *  ▼ 使い方（詳細は同梱README）
+ *   1. スプレッドシート → 拡張機能 → Apps Script にこのファイルを貼り付けて保存
+ *   2. スプレッドシートをリロード → メニュー「📊 エルメ流入ツール」が出る
+ *   3. 「① 初期セットアップ／設定反映」を実行（シートとトリガーが作られる）
+ *   4. デプロイ → ウェブアプリ（実行ユーザー:自分／アクセス:全員）
+ *   5. 「② エルメ登録用URL一覧を生成」→ URL一覧シートのURLを
+ *      エルメ各QRコードアクションの「外部連携」タブに貼る
+ *   6. 「設定」シートに Discord Webhook URL / Chatworkトークン を貼る
+ *   7. 「③ テスト配信」で届けばOK。以後、毎日自動配信
+ *
+ *  できること（すべて無料枠のみで動作）:
+ *   ・【本命】エルメ公式「パラメーターエクスポート」（外部連携タブ）を受信し、
+ *     QR経由の友だち追加（実登録）をリアルタイムにシートへ記録
+ *   ・【代替】QRコード別クリック計測リダイレクタ（外部連携タブが無い場合）
+ *   ・毎日決まった時刻に Discord / Chatwork へQR別集計レポートを自動配信
  * ============================================================
  */
 
-// ────────────────────────────────────────────
-// ★ 設定（ここだけ書き換えれば動きます）
-// ────────────────────────────────────────────
-const CONFIG = {
-  // ① 計測したいQRコード。id は短い英数字で自由に決める。
-  //    url には「エルメのQRコードアクションで発行された友だち追加URL」を貼る。
-  QR_CODES: {
-    affi_01: { name: 'TTM様 アフィ_01', url: 'https://s.lmes.jp/landing-qr/xxxxxxxx?uLand=xxxxxx' },
-    affi_02: { name: 'TTM様 アフィ_02', url: 'https://s.lmes.jp/landing-qr/xxxxxxxx?uLand=xxxxxx' },
-    affi_03: { name: 'TTM様 アフィ_03', url: 'https://s.lmes.jp/landing-qr/xxxxxxxx?uLand=xxxxxx' },
-    affi_04: { name: 'TTM様 アフィ_04', url: 'https://s.lmes.jp/landing-qr/xxxxxxxx?uLand=xxxxxx' },
-    affi_05: { name: 'TTM様 アフィ_05', url: 'https://s.lmes.jp/landing-qr/xxxxxxxx?uLand=xxxxxx' },
-    affi_06: { name: 'TTM様 アフィ_06', url: 'https://s.lmes.jp/landing-qr/xxxxxxxx?uLand=xxxxxx' },
-  },
-
-  // ② 配信先（使うものだけ設定。空文字のままなら送信されません）
-  DISCORD_WEBHOOK_URL: '',            // 例: 'https://discord.com/api/webhooks/…'
-  CHATWORK_API_TOKEN: '',             // Chatwork 個人設定 > API から発行
-  CHATWORK_ROOM_ID: '',               // 送りたいルームのID（URLの #!rid の数字）
-
-  // ③ 毎日レポートを送る時刻（0〜23時。setup() 実行時にトリガー登録されます）
-  REPORT_HOUR: 9,
-
-  // ④ シート名（通常は変更不要）
-  SHEET_CLICKS: 'クリックログ',
-  SHEET_REGISTERS: '登録ログ',
-  SHEET_DAILY: '日次集計',
+// シート名（変更しないでください）
+const SHEETS = {
+  CONFIG: '設定',
+  QR: 'QR設定',
+  CLICKS: 'クリックログ',
+  REGS: '登録ログ',
+  DAILY: '日次集計',
+  URLS: 'URL一覧',
 };
 
+const TZ = 'Asia/Tokyo';
+
 // ────────────────────────────────────────────
-// 初期セットアップ（最初に1回だけ実行する）
+// スプレッドシートのカスタムメニュー
+// ────────────────────────────────────────────
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('📊 エルメ流入ツール')
+    .addItem('① 初期セットアップ／設定反映', 'setup')
+    .addItem('② エルメ登録用URL一覧を生成', 'generateUrls')
+    .addItem('③ テスト配信（今すぐレポート送信）', 'dailyReport')
+    .addToUi();
+}
+
+// ────────────────────────────────────────────
+// ① 初期セットアップ（何度実行してもOK。設定変更後の反映もこれ）
 // ────────────────────────────────────────────
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // シートを用意
-  ensureSheet_(ss, CONFIG.SHEET_CLICKS, ['日時', 'QR ID', 'QR名', 'UserAgent']);
-  ensureSheet_(ss, CONFIG.SHEET_REGISTERS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
-  ensureSheet_(ss, CONFIG.SHEET_DAILY, ['日付', 'QR ID', 'QR名', 'クリック数', '登録数']);
+  // 設定シート（キーと値）
+  const conf = ss.getSheetByName(SHEETS.CONFIG);
+  if (!conf) {
+    const sh = ss.insertSheet(SHEETS.CONFIG);
+    sh.getRange(1, 1, 6, 3).setValues([
+      ['設定項目', '値', 'メモ'],
+      ['DISCORD_WEBHOOK_URL', '', 'Discord: チャンネル設定 → 連携サービス → ウェブフック作成 → URLコピー'],
+      ['CHATWORK_API_TOKEN', '', 'Chatwork: 右上の自分の名前 → サービス連携 → APIトークン'],
+      ['CHATWORK_ROOM_ID', '', '送りたいチャットのURLの「#!rid」の後ろの数字'],
+      ['REPORT_HOUR', 9, '毎日レポートを送る時刻（0〜23）。変更したら①を再実行'],
+      ['REPORT_TITLE', 'QRコード流入レポート', 'レポートの見出し（自由に変更可）'],
+    ]);
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 190).setColumnWidth(2, 320).setColumnWidth(3, 420);
+  }
 
-  // 既存の日次トリガーを消してから登録し直す（多重登録防止）
+  // QR設定シート（計測するQRコードの一覧。行の追加・削除は自由）
+  const qrSh = ss.getSheetByName(SHEETS.QR);
+  if (!qrSh) {
+    const sh = ss.insertSheet(SHEETS.QR);
+    sh.getRange(1, 1, 7, 3).setValues([
+      ['QR ID（英数字・自由）', '表示名', 'エルメ友だち追加URL（方式B用・任意）'],
+      ['affi_01', 'TTM様 アフィ_01', ''],
+      ['affi_02', 'TTM様 アフィ_02', ''],
+      ['affi_03', 'TTM様 アフィ_03', ''],
+      ['affi_04', 'TTM様 アフィ_04', ''],
+      ['affi_05', 'TTM様 アフィ_05', ''],
+      ['affi_06', 'TTM様 アフィ_06', ''],
+    ]);
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 170).setColumnWidth(2, 220).setColumnWidth(3, 380);
+  }
+
+  // ログ系シート
+  ensureSheet_(ss, SHEETS.REGS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
+  ensureSheet_(ss, SHEETS.CLICKS, ['日時', 'QR ID', 'QR名', '補足']);
+  ensureSheet_(ss, SHEETS.DAILY, ['日付', 'QR ID', 'QR名', '登録数', 'クリック数']);
+
+  // 毎日トリガーを（再）登録
+  const hour = Number(getConfig_().REPORT_HOUR) || 9;
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'dailyReport')
     .forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('dailyReport')
-    .timeBased()
-    .atHour(CONFIG.REPORT_HOUR)
-    .everyDays(1)
-    .create();
+  ScriptApp.newTrigger('dailyReport').timeBased().atHour(hour).everyDays(1).create();
 
-  Logger.log('セットアップ完了。毎日 %s 時に dailyReport が実行されます。', CONFIG.REPORT_HOUR);
+  toast_('セットアップ完了。毎日 ' + hour + ' 時ごろに自動配信されます。次は「デプロイ」→ ②URL生成へ。');
+}
+
+// ────────────────────────────────────────────
+// ② エルメに貼るURLの一覧を自動生成
+//    （先に「デプロイ → ウェブアプリ」を済ませておくこと）
+// ────────────────────────────────────────────
+function generateUrls() {
+  const base = ScriptApp.getService().getUrl();
+  if (!base) {
+    toast_('先に「デプロイ」→「新しいデプロイ」→ ウェブアプリ（実行:自分／アクセス:全員）を行ってください。');
+    return;
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEETS.URLS);
+  if (sh) sh.clear(); else sh = ss.insertSheet(SHEETS.URLS);
+
+  const rows = [['QR ID', '表示名', '★エルメ「外部連携」タブに貼るURL（本命）', '（方式B）QRコードの飛び先にするURL']];
+  const qrs = getQrMap_();
+  for (const [id, qr] of Object.entries(qrs)) {
+    rows.push([id, qr.name, base + '?ev=reg&id=' + id, base + '?id=' + id]);
+  }
+  sh.getRange(1, 1, rows.length, 4).setValues(rows);
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 480).setColumnWidth(4, 480);
+  toast_('URL一覧を生成しました。「URL一覧」シートのC列をエルメの各QRコードアクション →「外部連携」タブへ。');
+}
+
+// ────────────────────────────────────────────
+// 設定・QR一覧の読み込み
+// ────────────────────────────────────────────
+function getConfig_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CONFIG);
+  const out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  for (const [k, v] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
+    if (k) out[String(k).trim()] = String(v).trim();
+  }
+  return out;
+}
+
+function getQrMap_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
+  const out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  for (const [id, name, url] of sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues()) {
+    const key = String(id).trim();
+    if (key) out[key] = { name: String(name).trim() || key, url: String(url).trim() };
+  }
+  return out;
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -80,27 +162,33 @@ function ensureSheet_(ss, name, headers) {
   return sh;
 }
 
+function toast_(msg) {
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast(msg, '📊 エルメ流入ツール', 10);
+  } catch (e) { /* トリガー実行時はUIなし */ }
+  Logger.log(msg);
+}
+
 // ────────────────────────────────────────────
 // Webアプリ入口（用途はURLパラメータで分岐）
 //
 // ① 実登録の記録（エルメ「パラメーターエクスポート」の受け口）★本命
-//    エルメ側の各QRコードアクション >「外部連携」タブ に登録するURL:
-//      https://script.google.com/macros/s/XXXX/exec?ev=reg&id=affi_01
-//    → QR経由の友だち追加のたびにエルメがGETでLINE ID等を送ってくる
+//      …/exec?ev=reg&id=affi_01
+//    → QR経由の友だち追加のたびにエルメがGETで情報を送ってくる
 //
 // ② クリック計測リダイレクタ（外部連携タブが使えない場合の代替）
-//    QRコードの飛び先をこのURLにする:
-//      https://script.google.com/macros/s/XXXX/exec?id=affi_01
+//      …/exec?id=affi_01
+//    → クリックを記録して、QR設定シートのエルメURLへ転送
 // ────────────────────────────────────────────
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  const id = p.id || '';
-  const qr = CONFIG.QR_CODES[id];
+  const id = String(p.id || '').trim();
+  const qr = getQrMap_()[id];
 
-  // ① パラメーターエクスポート受信（ev=reg）: 実登録をログして終了
+  // ① パラメーターエクスポート受信
   if (p.ev === 'reg') {
     try {
-      logRegister_(id, qr ? qr.name : '(未設定:' + id + ')', p);
+      appendLog_(SHEETS.REGS, id, qr ? qr.name : '(未設定:' + id + ')', JSON.stringify(p));
     } catch (err) {
       console.error('登録ログ記録失敗: ' + err);
     }
@@ -108,14 +196,12 @@ function doGet(e) {
   }
 
   // ② リダイレクタ
-  if (qr) {
+  if (qr && qr.url) {
     try {
-      logClick_(id, qr.name);
+      appendLog_(SHEETS.CLICKS, id, qr.name, '');
     } catch (err) {
-      // ログ失敗でもユーザーの遷移は止めない
       console.error('クリックログ記録失敗: ' + err);
     }
-    // GASのWebアプリは本物の302を返せないため、JS+metaの両方でリダイレクト
     const url = qr.url;
     const html =
       '<!DOCTYPE html><html><head><meta charset="utf-8">' +
@@ -132,17 +218,36 @@ function doGet(e) {
   }
 
   return HtmlService.createHtmlOutput(
-    '<p style="font-family:sans-serif">リンクが無効です（idが未設定）。</p>'
+    '<p style="font-family:sans-serif">リンクが無効です（QR設定シートに id「' +
+    escapeHtmlAttr_(id) + '」がないか、エルメURLが未記入です）。</p>'
   );
 }
 
-function logClick_(id, name) {
+// POSTで送ってくる外部システム向けの受け口（動きはGETのev=regと同じ）
+function doPost(e) {
+  let params = (e && e.parameter) || {};
+  let raw = '';
+  try {
+    raw = e && e.postData ? e.postData.contents : '';
+    const data = raw ? JSON.parse(raw) : {};
+    params = Object.assign({}, data, params);
+  } catch (err) { /* JSONでないボディはそのまま補足に残す */ }
+  const id = String(params.id || '').trim();
+  const qr = getQrMap_()[id];
+  appendLog_(SHEETS.REGS, id, qr ? qr.name : '(不明)',
+    JSON.stringify(raw ? Object.assign({ _body: raw }, params) : params));
+  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/** ログ追記（同時アクセスに備えてロックを取る） */
+function appendLog_(sheetName, id, name, note) {
   const lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ensureSheet_(ss, CONFIG.SHEET_CLICKS, ['日時', 'QR ID', 'QR名', 'UserAgent']);
-    sh.appendRow([new Date(), id, name, '']);
+    const sh = ensureSheet_(ss, sheetName, ['日時', 'QR ID', 'QR名', '補足']);
+    sh.appendRow([new Date(), id, name, note]);
   } finally {
     lock.releaseLock();
   }
@@ -152,76 +257,44 @@ function escapeHtmlAttr_(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
-/** 実登録（パラメーターエクスポート等）を登録ログに記録する。
- *  エルメが付けてくるパラメータ名は環境で変わりうるため、全パラメータを
- *  そのままJSONで保存しておく（後から列を分けたくなっても困らない）。 */
-function logRegister_(id, name, params) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ensureSheet_(ss, CONFIG.SHEET_REGISTERS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
-    sh.appendRow([new Date(), id, name, JSON.stringify(params)]);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// POSTで送ってくる外部システム向けの受け口（念のため用意。動きはGETと同じ）
-function doPost(e) {
-  let id = '';
-  let raw = '';
-  let params = (e && e.parameter) || {};
-  try {
-    raw = e && e.postData ? e.postData.contents : '';
-    const data = raw ? JSON.parse(raw) : {};
-    params = Object.assign({}, data, params);
-  } catch (err) { /* JSONでないボディはそのまま補足に残す */ }
-  id = params.id || '';
-  const qr = CONFIG.QR_CODES[id];
-  logRegister_(id, qr ? qr.name : '(不明)', raw ? Object.assign({ _body: raw }, params) : params);
-  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
 // ────────────────────────────────────────────
-// ③ 毎日レポート（トリガーから自動実行）
+// ③ 毎日レポート（トリガーから自動実行。メニューから手動実行も可）
 // ────────────────────────────────────────────
 function dailyReport() {
-  const tz = 'Asia/Tokyo';
+  const conf = getConfig_();
+  const qrs = getQrMap_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
   const now = new Date();
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const ymd = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
-  const targetDay = ymd(yesterday);
+  const targetDay = Utilities.formatDate(yesterday, TZ, 'yyyy-MM-dd');
 
-  const clicks = countByQr_(CONFIG.SHEET_CLICKS, targetDay);
-  const clicksTotal = countByQr_(CONFIG.SHEET_CLICKS, null);
-  const regs = countByQr_(CONFIG.SHEET_REGISTERS, targetDay);
-  const regsTotal = countByQr_(CONFIG.SHEET_REGISTERS, null);
+  const regs = countByQr_(SHEETS.REGS, targetDay);
+  const regsTotal = countByQr_(SHEETS.REGS, null);
+  const clicks = countByQr_(SHEETS.CLICKS, targetDay);
+  const clicksTotal = countByQr_(SHEETS.CLICKS, null);
 
-  // 日次集計シートにも書き残す
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const daily = ensureSheet_(ss, CONFIG.SHEET_DAILY, ['日付', 'QR ID', 'QR名', 'クリック数', '登録数']);
+  const useRegs = hasRows_(SHEETS.REGS);     // 外部連携（実登録）を使っているか
+  const useClicks = hasRows_(SHEETS.CLICKS); // リダイレクタ（クリック）を使っているか
 
-  const useRegs = hasRows_(CONFIG.SHEET_REGISTERS);   // 外部連携（実登録）を使っているか
-  const useClicks = hasRows_(CONFIG.SHEET_CLICKS);    // リダイレクタ（クリック）を使っているか
+  const daily = ensureSheet_(ss, SHEETS.DAILY, ['日付', 'QR ID', 'QR名', '登録数', 'クリック数']);
 
   const lines = [];
-  lines.push('📊 QRコード流入レポート（' + targetDay + '）');
+  lines.push('📊 ' + (conf.REPORT_TITLE || 'QRコード流入レポート') + '（' + targetDay + '）');
   lines.push('');
-  let dayClickSum = 0;
   let dayRegSum = 0;
-  for (const [id, qr] of Object.entries(CONFIG.QR_CODES)) {
-    const c = clicks[id] || 0;
+  let dayClickSum = 0;
+  for (const [id, qr] of Object.entries(qrs)) {
     const r = regs[id] || 0;
-    dayClickSum += c;
+    const c = clicks[id] || 0;
     dayRegSum += r;
+    dayClickSum += c;
     const parts = [];
     if (useRegs) parts.push('登録 ' + r + ' 件（累計 ' + (regsTotal[id] || 0) + '）');
     if (useClicks) parts.push('クリック ' + c + ' 件（累計 ' + (clicksTotal[id] || 0) + '）');
     if (!parts.length) parts.push('登録 0 件');
     lines.push('・' + qr.name + '： ' + parts.join(' ／ '));
-    daily.appendRow([targetDay, id, qr.name, c, r]);
+    daily.appendRow([targetDay, id, qr.name, r, c]);
   }
   lines.push('');
   const sumParts = [];
@@ -231,9 +304,16 @@ function dailyReport() {
   lines.push('シート: ' + ss.getUrl());
 
   const text = lines.join('\n');
-  sendDiscord_(text);
-  sendChatwork_(text);
+  const sentTo = [];
+  if (conf.DISCORD_WEBHOOK_URL) { sendDiscord_(conf.DISCORD_WEBHOOK_URL, text); sentTo.push('Discord'); }
+  if (conf.CHATWORK_API_TOKEN && conf.CHATWORK_ROOM_ID) {
+    sendChatwork_(conf.CHATWORK_API_TOKEN, conf.CHATWORK_ROOM_ID, text);
+    sentTo.push('Chatwork');
+  }
   Logger.log(text);
+  toast_(sentTo.length
+    ? sentTo.join('・') + ' に送信しました。'
+    : '送信先が未設定です。「設定」シートに Discord Webhook URL または Chatworkトークン+ルームID を入力してください。');
 }
 
 function hasRows_(sheetName) {
@@ -243,25 +323,23 @@ function hasRows_(sheetName) {
 
 /** 指定日（yyyy-MM-dd、nullなら全期間）のQR IDごとの件数を数える */
 function countByQr_(sheetName, day) {
-  const tz = 'Asia/Tokyo';
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   const out = {};
   if (!sh || sh.getLastRow() < 2) return out;
   const values = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
   for (const [when, id] of values) {
     if (!(when instanceof Date)) continue;
-    if (day && Utilities.formatDate(when, tz, 'yyyy-MM-dd') !== day) continue;
+    if (day && Utilities.formatDate(when, TZ, 'yyyy-MM-dd') !== day) continue;
     out[id] = (out[id] || 0) + 1;
   }
   return out;
 }
 
 // ────────────────────────────────────────────
-// 配信先: Discord（Incoming Webhook・無料）
+// 配信先: Discord（Incoming Webhook・無料） / Chatwork（API・無料）
 // ────────────────────────────────────────────
-function sendDiscord_(text) {
-  if (!CONFIG.DISCORD_WEBHOOK_URL) return;
-  UrlFetchApp.fetch(CONFIG.DISCORD_WEBHOOK_URL, {
+function sendDiscord_(webhookUrl, text) {
+  UrlFetchApp.fetch(webhookUrl, {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify({ content: text }),
@@ -269,25 +347,11 @@ function sendDiscord_(text) {
   });
 }
 
-// ────────────────────────────────────────────
-// 配信先: Chatwork（APIトークン・無料）
-// ────────────────────────────────────────────
-function sendChatwork_(text) {
-  if (!CONFIG.CHATWORK_API_TOKEN || !CONFIG.CHATWORK_ROOM_ID) return;
-  UrlFetchApp.fetch(
-    'https://api.chatwork.com/v2/rooms/' + CONFIG.CHATWORK_ROOM_ID + '/messages',
-    {
-      method: 'post',
-      headers: { 'x-chatworktoken': CONFIG.CHATWORK_API_TOKEN },
-      payload: { body: '[info][title]QRコード流入レポート[/title]' + text + '[/info]' },
-      muteHttpExceptions: true,
-    }
-  );
-}
-
-// ────────────────────────────────────────────
-// 動作テスト用（手動で実行して配信を確認する）
-// ────────────────────────────────────────────
-function testReport() {
-  dailyReport();
+function sendChatwork_(token, roomId, text) {
+  UrlFetchApp.fetch('https://api.chatwork.com/v2/rooms/' + roomId + '/messages', {
+    method: 'post',
+    headers: { 'x-chatworktoken': token },
+    payload: { body: '[info][title]QRコード流入レポート[/title]' + text + '[/info]' },
+    muteHttpExceptions: true,
+  });
 }
