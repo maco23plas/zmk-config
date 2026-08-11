@@ -52,23 +52,34 @@ function onOpen() {
 // ────────────────────────────────────────────
 // ① 初期セットアップ（何度実行してもOK。設定変更後の反映もこれ）
 // ────────────────────────────────────────────
+// 設定シートの既定行（①実行のたびに、足りない行だけ追記される）
+const CONFIG_DEFAULTS = [
+  ['WEB_APP_URL', '', '★デプロイ完了画面の「ウェブアプリ」URL（https://script.google.com/macros/s/…/exec）をそのまま貼る。②のURL生成で使用'],
+  ['DISCORD_WEBHOOK_URL', '', 'Discord: チャンネル名横の⚙️ → 連携サービス → ウェブフック作成 → URLコピー'],
+  ['CHATWORK_API_TOKEN', '', 'Chatwork: 右上の自分の名前 → サービス連携 → APIトークン'],
+  ['CHATWORK_ROOM_ID', '', '送りたいチャットのURLの「#!rid」の後ろの数字'],
+  ['REPORT_HOUR', 9, '毎日レポートを送る時刻（0〜23）。変更したら①を再実行'],
+  ['REPORT_TITLE', 'QRコード流入レポート', 'レポートの見出し（自由に変更可）'],
+];
+
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // 設定シート（キーと値）
-  const conf = ss.getSheetByName(SHEETS.CONFIG);
+  // 設定シート（キーと値）。既にあっても、足りない設定行は追記する
+  let conf = ss.getSheetByName(SHEETS.CONFIG);
   if (!conf) {
-    const sh = ss.insertSheet(SHEETS.CONFIG);
-    sh.getRange(1, 1, 6, 3).setValues([
-      ['設定項目', '値', 'メモ'],
-      ['DISCORD_WEBHOOK_URL', '', 'Discord: チャンネル設定 → 連携サービス → ウェブフック作成 → URLコピー'],
-      ['CHATWORK_API_TOKEN', '', 'Chatwork: 右上の自分の名前 → サービス連携 → APIトークン'],
-      ['CHATWORK_ROOM_ID', '', '送りたいチャットのURLの「#!rid」の後ろの数字'],
-      ['REPORT_HOUR', 9, '毎日レポートを送る時刻（0〜23）。変更したら①を再実行'],
-      ['REPORT_TITLE', 'QRコード流入レポート', 'レポートの見出し（自由に変更可）'],
-    ]);
-    sh.setFrozenRows(1);
-    sh.setColumnWidth(1, 190).setColumnWidth(2, 320).setColumnWidth(3, 420);
+    conf = ss.insertSheet(SHEETS.CONFIG);
+    conf.appendRow(['設定項目', '値', 'メモ']);
+    conf.setFrozenRows(1);
+    conf.setColumnWidth(1, 190).setColumnWidth(2, 320).setColumnWidth(3, 460);
+  }
+  const existingKeys = new Set(
+    conf.getLastRow() > 1
+      ? conf.getRange(2, 1, conf.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim())
+      : []
+  );
+  for (const row of CONFIG_DEFAULTS) {
+    if (!existingKeys.has(row[0])) conf.appendRow(row);
   }
 
   // QR設定シート（計測するQRコードの一覧。行の追加・削除は自由）
@@ -108,9 +119,22 @@ function setup() {
 //    （先に「デプロイ → ウェブアプリ」を済ませておくこと）
 // ────────────────────────────────────────────
 function generateUrls() {
-  const base = ScriptApp.getService().getUrl();
+  // 設定シートのWEB_APP_URLを最優先で使う。
+  // （ScriptApp.getService().getUrl() はデプロイを作り直すと古いURLを
+  //   返すことがあるため、手貼りのURLを正とする）
+  let base = String(getConfig_().WEB_APP_URL || '').trim();
+  if (base) {
+    const m = base.match(/^https:\/\/script\.google\.com\/macros\/s\/[^\/?#]+\/exec/);
+    if (!m) {
+      toast_('「設定」シートのWEB_APP_URLの形式が違います。https://script.google.com/macros/s/…/exec の形（デプロイ完了画面の「ウェブアプリ」欄のURL）を貼ってください。');
+      return;
+    }
+    base = m[0];
+  } else {
+    base = ScriptApp.getService().getUrl();
+  }
   if (!base) {
-    toast_('先に「デプロイ」→「新しいデプロイ」→ ウェブアプリ（実行:自分／アクセス:全員）を行ってください。');
+    toast_('先に「デプロイ」→「新しいデプロイ」→ ウェブアプリ（実行:自分／アクセス:全員）を行い、発行されたURLを「設定」シートのWEB_APP_URLに貼ってください。');
     return;
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
