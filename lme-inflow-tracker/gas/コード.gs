@@ -687,14 +687,14 @@ function renderStatsPage_(key) {
   }
 
   // 前週比
-  let trendHtml = '<span style="color:#8A9990">—</span>';
+  let trendHtml = '<span style="color:#98A69E">—</span>';
   if (prior7 > 0) {
     const pct = Math.round(((last7 - prior7) / prior7) * 100);
-    trendHtml = pct > 0 ? '<span style="color:#3DDC7A">↑ +' + pct + '%</span>'
-      : pct < 0 ? '<span style="color:#FF7A66">↓ ' + pct + '%</span>'
-      : '<span style="color:#8A9990">±0%</span>';
+    trendHtml = pct > 0 ? '<span style="color:#00A63E">↑ +' + pct + '%</span>'
+      : pct < 0 ? '<span style="color:#CE4A38">↓ ' + pct + '%</span>'
+      : '<span style="color:#98A69E">±0%</span>';
   } else if (last7 > 0) {
-    trendHtml = '<span style="color:#3DDC7A">↑ NEW</span>';
+    trendHtml = '<span style="color:#00A63E">↑ NEW</span>';
   }
 
   // 匿名ランキング（今月・QR設定にいる人だけで順位付け）
@@ -791,53 +791,54 @@ function renderStatsPage_(key) {
   const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>' + esc(found.name) + ' 成果レポート</title><style>' +
-    'body{margin:0;background:#0B0F0D;color:#E9F0EB;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased}' +
+    'body{margin:0;background:#F7F9F7;color:#17211B;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased}' +
     '.wrap{max-width:640px;margin:0 auto;padding:26px 16px 56px}' +
-    '.eyebrow{font-size:10px;letter-spacing:.24em;color:#3DDC7A;font-weight:700}' +
+    '.eyebrow{font-size:10px;letter-spacing:.24em;color:#00A63E;font-weight:700}' +
     'h1{font-size:22px;margin:4px 0 2px;letter-spacing:.01em}' +
-    '.upd{color:#71807A;font-size:11px;font-variant-numeric:tabular-nums}' +
-    '.hero{margin:18px 0 12px;padding:20px;border-radius:18px;border:1px solid rgba(61,220,122,.25);' +
-    'background:radial-gradient(120% 160% at 0% 0%,rgba(61,220,122,.16),rgba(61,220,122,.03) 60%),#121915}' +
-    '.hv{font-size:52px;font-weight:800;color:#3DDC7A;line-height:1.15;font-variant-numeric:tabular-nums}' +
-    '.hl{font-size:12px;color:#8A9990;letter-spacing:.08em}' +
+    '.upd{color:#98A69E;font-size:11px;font-variant-numeric:tabular-nums}' +
+    '.hero{margin:18px 0 12px;padding:20px;border-radius:18px;border:1px solid rgba(0,166,62,.22);' +
+    'background:radial-gradient(120% 160% at 0% 0%,rgba(0,166,62,.10),rgba(0,166,62,.02) 60%),#fff;' +
+    'box-shadow:0 1px 3px rgba(16,40,26,.05)}' +
+    '.hv{font-size:52px;font-weight:800;color:#00A63E;line-height:1.15;font-variant-numeric:tabular-nums}' +
+    '.hl{font-size:12px;color:#6B7A72;letter-spacing:.08em}' +
     '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
-    '.stat{background:#121915;border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:10px 4px;text-align:center}' +
+    '.stat{background:#fff;border:1px solid #E6ECE7;border-radius:14px;padding:10px 4px;text-align:center;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
     '.sv{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}' +
-    '.sl{font-size:10px;color:#71807A}' +
-    '.panel{background:#121915;border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:16px;margin-bottom:12px}' +
-    '.ph{font-size:11px;letter-spacing:.18em;color:#71807A;font-weight:700;margin-bottom:10px}' +
-    '.note{font-size:11px;color:#5E6C66;margin-top:8px}' +
+    '.sl{font-size:10px;color:#8A968E}' +
+    '.panel{background:#fff;border:1px solid #E6ECE7;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
+    '.ph{font-size:11px;letter-spacing:.18em;color:#8A968E;font-weight:700;margin-bottom:10px}' +
+    '.note{font-size:11px;color:#98A69E;margin-top:8px}' +
     '.reward{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}' +
-    '.rv{font-size:28px;font-weight:800;color:#E8C15A;font-variant-numeric:tabular-nums}' +
-    '.rv.dim{font-size:20px;color:#ADB8B2}' +
-    '.rl{font-size:11px;color:#71807A}' +
+    '.rv{font-size:28px;font-weight:800;color:#B08A1E;font-variant-numeric:tabular-nums}' +
+    '.rv.dim{font-size:20px;color:#6B7A72}' +
+    '.rl{font-size:11px;color:#8A968E}' +
     '.goalrow{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}' +
-    '.gnum{font-size:30px;font-weight:800;color:#3DDC7A;font-variant-numeric:tabular-nums}' +
-    '.gden{color:#8A9990;font-size:14px}' +
-    '.gpct{margin-left:auto;font-weight:700;color:#3DDC7A;font-size:14px}' +
-    '.pbar{height:10px;background:#1C2620;border-radius:99px;overflow:hidden}' +
-    '.pfill{height:100%;background:linear-gradient(90deg,#1FA45B,#3DDC7A);border-radius:99px;box-shadow:0 0 12px rgba(61,220,122,.5)}' +
+    '.gnum{font-size:30px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
+    '.gden{color:#8A968E;font-size:14px}' +
+    '.gpct{margin-left:auto;font-weight:700;color:#00A63E;font-size:14px}' +
+    '.pbar{height:10px;background:#EAF1EB;border-radius:99px;overflow:hidden}' +
+    '.pfill{height:100%;background:linear-gradient(90deg,#00A63E,#3ED47A);border-radius:99px}' +
     '.rankrow{display:flex;align-items:baseline;gap:4px}' +
-    '.rankbig{font-size:40px;font-weight:800;color:#3DDC7A;font-variant-numeric:tabular-nums}' +
+    '.rankbig{font-size:40px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
     '.rankunit{font-size:16px;font-weight:700}' +
-    '.rankden{color:#8A9990;margin-left:4px}' +
+    '.rankden{color:#8A968E;margin-left:4px}' +
     '.recs{display:flex;gap:14px;text-align:center}' +
     '.recs>div{flex:1}' +
     '.rv2{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
-    '.unit{font-size:12px;font-weight:600;color:#8A9990;margin-left:1px}' +
+    '.unit{font-size:12px;font-weight:600;color:#8A968E;margin-left:1px}' +
     '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
     '.chart.small{height:96px}' +
     '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
-    '.bar{width:100%;background:linear-gradient(180deg,#3DDC7A,#1E7A47);border-radius:3px 3px 1px 1px;min-height:0}' +
-    '.bar.alt{background:linear-gradient(180deg,#57D0A0,#23694F)}' +
-    '.bval{font-size:9px;color:#8A9990;height:12px;font-variant-numeric:tabular-nums}' +
-    '.blab{font-size:8px;color:#5E6C66;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
-    '.blab2{font-size:9px;color:#5E6C66;height:14px;margin-top:2px}' +
+    '.bar{width:100%;background:linear-gradient(180deg,#3ED47A,#00A63E);border-radius:3px 3px 1px 1px;min-height:0}' +
+    '.bar.alt{background:linear-gradient(180deg,#7FD9AC,#2FA168)}' +
+    '.bval{font-size:9px;color:#6B7A72;height:12px;font-variant-numeric:tabular-nums}' +
+    '.blab{font-size:8px;color:#98A69E;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
+    '.blab2{font-size:9px;color:#98A69E;height:14px;margin-top:2px}' +
     'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
-    'td{padding:7px 8px;border-top:1px solid rgba(255,255,255,.05)}' +
+    'td{padding:7px 8px;border-top:1px solid #EEF2EF}' +
     '.num{text-align:right;font-weight:700}' +
-    'tr.thead td{color:#71807A;border-top:none;font-size:11px}' +
-    '.foot{color:#5E6C66;font-size:11px;text-align:center;margin-top:20px}' +
+    'tr.thead td{color:#8A968E;border-top:none;font-size:11px}' +
+    '.foot{color:#98A69E;font-size:11px;text-align:center;margin-top:20px}' +
     '</style></head><body><div class="wrap">' +
     '<div class="eyebrow">AFFILIATE REPORT</div>' +
     '<h1>' + esc(found.name) + '</h1>' +
@@ -851,7 +852,7 @@ function renderStatsPage_(key) {
     '<div class="panel"><div class="ph">曜日別の傾向</div><div class="chart small">' + wdBars + '</div></div>' +
     '<div class="panel"><div class="ph">月別実績</div><table><tr class="thead"><td>月</td><td class="num">件数</td>' +
     (found.rate > 0 ? '<td class="num">見込み報酬</td>' : '') + '</tr>' +
-    (monthRows || '<tr><td colspan="3" style="color:#5E6C66">まだデータがありません</td></tr>') + '</table></div>' +
+    (monthRows || '<tr><td colspan="3" style="color:#98A69E">まだデータがありません</td></tr>') + '</table></div>' +
     '<div class="panel"><div class="ph">日別一覧 — 直近30日</div><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
     tableRows + '</table></div>' +
     '<div class="foot">このページはあなた専用のリンクです。URLの共有はご遠慮ください。</div>' +
