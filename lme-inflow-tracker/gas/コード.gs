@@ -687,14 +687,14 @@ function renderStatsPage_(key) {
   }
 
   // 前週比
-  let trendHtml = '<span style="color:#96A69C">—</span>';
+  let trendHtml = '<span style="color:#8A9990">—</span>';
   if (prior7 > 0) {
     const pct = Math.round(((last7 - prior7) / prior7) * 100);
-    trendHtml = pct > 0 ? '<span style="color:#00A63E">↑ +' + pct + '%</span>'
-      : pct < 0 ? '<span style="color:#B03A2E">↓ ' + pct + '%</span>'
-      : '<span style="color:#5A6A61">±0%</span>';
+    trendHtml = pct > 0 ? '<span style="color:#3DDC7A">↑ +' + pct + '%</span>'
+      : pct < 0 ? '<span style="color:#FF7A66">↓ ' + pct + '%</span>'
+      : '<span style="color:#8A9990">±0%</span>';
   } else if (last7 > 0) {
-    trendHtml = '<span style="color:#00A63E">↑ NEW</span>';
+    trendHtml = '<span style="color:#3DDC7A">↑ NEW</span>';
   }
 
   // 匿名ランキング（今月・QR設定にいる人だけで順位付け）
@@ -707,47 +707,47 @@ function renderStatsPage_(key) {
   const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
 
   // ── パーツ生成 ──
-  const cards = [
-    ['累計', total], ['今月', monthCount], ['先月', lastMonthCount],
-    ['今日', dayCounts[today] || 0], ['直近7日', last7],
-  ].map(([label, v]) =>
-    '<div class="card"><div class="v">' + v + '</div><div class="l">' + label + '</div></div>'
-  ).join('');
+  const stat = (label, v) =>
+    '<div class="stat"><div class="sv">' + v + '</div><div class="sl">' + label + '</div></div>';
+  const stats = stat('累計', total) + stat('先月', lastMonthCount) +
+    stat('今日', dayCounts[today] || 0) + stat('直近7日', last7);
 
   // 報酬パネル（単価設定時のみ）
   let rewardHtml = '';
   if (found.rate > 0) {
-    rewardHtml = '<div class="panel gold"><h2>💰 見込み報酬</h2><div class="reward">' +
-      '<div><div class="rv">' + yen(found.rate * monthCount) + '</div><div class="rl">今月（' + monthCount + '件 × ' + yen(found.rate) + '）</div></div>' +
-      '<div><div class="rv sub2">' + yen(found.rate * total) + '</div><div class="rl">累計</div></div>' +
-      '</div><div class="note">※確定額はお支払い時のご案内が正となります</div></div>';
+    rewardHtml = '<div class="panel"><div class="ph">見込み報酬</div><div class="reward">' +
+      '<div><div class="rv">' + yen(found.rate * monthCount) + '</div><div class="rl">今月 ・ ' + monthCount + '件 × ' + yen(found.rate) + '</div></div>' +
+      '<div><div class="rv dim">' + yen(found.rate * total) + '</div><div class="rl">累計</div></div>' +
+      '</div><div class="note">確定額はお支払い時のご案内が正となります</div></div>';
   }
 
   // 目標パネル（目標設定時のみ）
   let goalHtml = '';
   if (found.goal > 0) {
     const pct = Math.min(100, Math.round((monthCount / found.goal) * 100));
-    goalHtml = '<div class="panel"><h2>🎯 今月の目標</h2>' +
-      '<div class="goalrow"><b>' + monthCount + '</b> / ' + found.goal + ' 件（' + pct + '%）' +
-      (pct >= 100 ? ' <span class="badge">達成🎉</span>' : '') + '</div>' +
+    goalHtml = '<div class="panel"><div class="ph">今月の目標</div>' +
+      '<div class="goalrow"><span class="gnum">' + monthCount + '</span>' +
+      '<span class="gden">/ ' + found.goal + '件</span>' +
+      '<span class="gpct">' + pct + '%' + (pct >= 100 ? ' 達成' : '') + '</span></div>' +
       '<div class="pbar"><div class="pfill" style="width:' + pct + '%"></div></div></div>';
   }
 
   // ランキングパネル（2人以上いるときのみ）
   let rankHtml = '';
   if (ranked.length >= 2) {
-    rankHtml = '<div class="panel"><h2>🏅 今月のランキング（匿名）</h2>' +
-      '<div class="rank"><span class="rankbig">' + myRank + '位</span> / ' + ranked.length + '人中</div>' +
+    rankHtml = '<div class="panel"><div class="ph">今月のランキング</div>' +
+      '<div class="rankrow"><span class="rankbig">' + myRank + '</span>' +
+      '<span class="rankunit">位</span><span class="rankden">/ ' + ranked.length + '人</span></div>' +
       '<div class="note">' + (myRank === 1
-        ? '現在トップです！このまま突っ走りましょう🔥'
-        : 'トップまであと <b>' + gapToTop + '件</b>。') + '</div></div>';
+        ? '現在トップ。独走を続けましょう'
+        : 'トップまであと ' + gapToTop + '件') + '</div></div>';
   }
 
   // 記録パネル
-  const recordHtml = '<div class="panel"><h2>🏆 記録</h2><div class="recs">' +
-    '<div><div class="rv2">' + (bestDay ? bestN + '件' : '—') + '</div><div class="rl">ベスト日' + (bestDay ? '（' + esc(bestDay.substring(5).replace('-', '/')) + '）' : '') + '</div></div>' +
-    '<div><div class="rv2">' + streak + '日</div><div class="rl">連続登録中</div></div>' +
-    '<div><div class="rv2">' + trendHtml + '</div><div class="rl">前週比</div></div>' +
+  const recordHtml = '<div class="panel"><div class="ph">記録</div><div class="recs">' +
+    '<div><div class="rv2">' + (bestDay ? bestN + '<span class="unit">件</span>' : '—') + '</div><div class="sl">ベスト日' + (bestDay ? ' ' + esc(bestDay.substring(5).replace('-', '/')) : '') + '</div></div>' +
+    '<div><div class="rv2">' + streak + '<span class="unit">日</span></div><div class="sl">連続登録中</div></div>' +
+    '<div><div class="rv2">' + trendHtml + '</div><div class="sl">前週比</div></div>' +
     '</div></div>';
 
   // 30日グラフ
@@ -781,69 +781,81 @@ function renderStatsPage_(key) {
 
   // 表
   const tableRows = days.slice().reverse().map(d =>
-    '<tr><td>' + esc(d) + '</td><td class="num">' + (dayCounts[d] || 0) + '</td></tr>'
+    '<tr><td>' + esc(d.replace(/-/g, '.')) + '</td><td class="num">' + (dayCounts[d] || 0) + '</td></tr>'
   ).join('');
   const monthRows = Object.keys(monthCounts).sort().reverse().slice(0, 12).map(m =>
-    '<tr><td>' + esc(m.replace('-', '年')) + '月</td><td class="num">' + monthCounts[m] +
+    '<tr><td>' + esc(m.replace('-', '.')) + '</td><td class="num">' + monthCounts[m] +
     (found.rate > 0 ? '</td><td class="num">' + yen(found.rate * monthCounts[m]) : '') + '</td></tr>'
   ).join('');
 
   const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>' + esc(found.name) + ' 成果確認</title><style>' +
-    'body{margin:0;background:#F4F8F4;color:#1B2620;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7}' +
-    '.wrap{max-width:640px;margin:0 auto;padding:20px 14px 48px}' +
-    'h1{font-size:18px;margin:6px 0 2px}' +
-    '.sub{color:#5A6A61;font-size:12px;margin-bottom:14px}' +
-    '.cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}' +
-    '.card{flex:1;min-width:80px;background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:10px 6px;text-align:center}' +
-    '.card .v{font-size:21px;font-weight:800;color:#00A63E}' +
-    '.card .l{font-size:11px;color:#5A6A61}' +
-    '.panel{background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:14px;margin-bottom:14px}' +
-    '.panel.gold{border-color:#E8D9A0;background:#FFFDF4}' +
-    '.panel h2{font-size:14px;margin:0 0 10px}' +
-    '.note{font-size:11px;color:#96A69C;margin-top:6px}' +
-    '.reward{display:flex;gap:24px;flex-wrap:wrap}' +
-    '.rv{font-size:26px;font-weight:800;color:#B08A1E}' +
-    '.rv.sub2{font-size:20px;color:#5A6A61}' +
-    '.rl{font-size:11px;color:#5A6A61}' +
-    '.goalrow{font-size:15px;margin-bottom:6px}' +
-    '.goalrow b{font-size:22px;color:#00A63E}' +
-    '.badge{background:#00A63E;color:#fff;border-radius:99px;font-size:11px;padding:2px 10px;font-weight:700}' +
-    '.pbar{height:14px;background:#E8EFE8;border-radius:99px;overflow:hidden}' +
-    '.pfill{height:100%;background:linear-gradient(90deg,#00A63E,#3ED47E);border-radius:99px}' +
-    '.rank{font-size:15px}.rankbig{font-size:30px;font-weight:800;color:#00A63E}' +
-    '.recs{display:flex;gap:18px;flex-wrap:wrap;text-align:center}' +
-    '.recs>div{flex:1;min-width:80px}' +
-    '.rv2{font-size:19px;font-weight:800}' +
+    '<title>' + esc(found.name) + ' 成果レポート</title><style>' +
+    'body{margin:0;background:#0B0F0D;color:#E9F0EB;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased}' +
+    '.wrap{max-width:640px;margin:0 auto;padding:26px 16px 56px}' +
+    '.eyebrow{font-size:10px;letter-spacing:.24em;color:#3DDC7A;font-weight:700}' +
+    'h1{font-size:22px;margin:4px 0 2px;letter-spacing:.01em}' +
+    '.upd{color:#71807A;font-size:11px;font-variant-numeric:tabular-nums}' +
+    '.hero{margin:18px 0 12px;padding:20px;border-radius:18px;border:1px solid rgba(61,220,122,.25);' +
+    'background:radial-gradient(120% 160% at 0% 0%,rgba(61,220,122,.16),rgba(61,220,122,.03) 60%),#121915}' +
+    '.hv{font-size:52px;font-weight:800;color:#3DDC7A;line-height:1.15;font-variant-numeric:tabular-nums}' +
+    '.hl{font-size:12px;color:#8A9990;letter-spacing:.08em}' +
+    '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
+    '.stat{background:#121915;border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:10px 4px;text-align:center}' +
+    '.sv{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}' +
+    '.sl{font-size:10px;color:#71807A}' +
+    '.panel{background:#121915;border:1px solid rgba(255,255,255,.05);border-radius:16px;padding:16px;margin-bottom:12px}' +
+    '.ph{font-size:11px;letter-spacing:.18em;color:#71807A;font-weight:700;margin-bottom:10px}' +
+    '.note{font-size:11px;color:#5E6C66;margin-top:8px}' +
+    '.reward{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}' +
+    '.rv{font-size:28px;font-weight:800;color:#E8C15A;font-variant-numeric:tabular-nums}' +
+    '.rv.dim{font-size:20px;color:#ADB8B2}' +
+    '.rl{font-size:11px;color:#71807A}' +
+    '.goalrow{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}' +
+    '.gnum{font-size:30px;font-weight:800;color:#3DDC7A;font-variant-numeric:tabular-nums}' +
+    '.gden{color:#8A9990;font-size:14px}' +
+    '.gpct{margin-left:auto;font-weight:700;color:#3DDC7A;font-size:14px}' +
+    '.pbar{height:10px;background:#1C2620;border-radius:99px;overflow:hidden}' +
+    '.pfill{height:100%;background:linear-gradient(90deg,#1FA45B,#3DDC7A);border-radius:99px;box-shadow:0 0 12px rgba(61,220,122,.5)}' +
+    '.rankrow{display:flex;align-items:baseline;gap:4px}' +
+    '.rankbig{font-size:40px;font-weight:800;color:#3DDC7A;font-variant-numeric:tabular-nums}' +
+    '.rankunit{font-size:16px;font-weight:700}' +
+    '.rankden{color:#8A9990;margin-left:4px}' +
+    '.recs{display:flex;gap:14px;text-align:center}' +
+    '.recs>div{flex:1}' +
+    '.rv2{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
+    '.unit{font-size:12px;font-weight:600;color:#8A9990;margin-left:1px}' +
     '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
-    '.chart.small{height:100px}' +
+    '.chart.small{height:96px}' +
     '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
-    '.bar{width:100%;background:#00A63E;border-radius:2px 2px 0 0;min-height:0}' +
-    '.bar.alt{background:#57B98A}' +
-    '.bval{font-size:9px;color:#5A6A61;height:12px}' +
-    '.blab{font-size:8px;color:#96A69C;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
-    '.blab2{font-size:9px;color:#96A69C;height:14px;margin-top:2px}' +
-    'table{width:100%;border-collapse:collapse;font-size:13px}' +
-    'td{padding:6px 8px;border-top:1px solid #EDF2ED}.num{text-align:right;font-weight:700}' +
-    '.foot{color:#96A69C;font-size:11px;text-align:center;margin-top:18px}' +
+    '.bar{width:100%;background:linear-gradient(180deg,#3DDC7A,#1E7A47);border-radius:3px 3px 1px 1px;min-height:0}' +
+    '.bar.alt{background:linear-gradient(180deg,#57D0A0,#23694F)}' +
+    '.bval{font-size:9px;color:#8A9990;height:12px;font-variant-numeric:tabular-nums}' +
+    '.blab{font-size:8px;color:#5E6C66;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
+    '.blab2{font-size:9px;color:#5E6C66;height:14px;margin-top:2px}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
+    'td{padding:7px 8px;border-top:1px solid rgba(255,255,255,.05)}' +
+    '.num{text-align:right;font-weight:700}' +
+    'tr.thead td{color:#71807A;border-top:none;font-size:11px}' +
+    '.foot{color:#5E6C66;font-size:11px;text-align:center;margin-top:20px}' +
     '</style></head><body><div class="wrap">' +
-    '<h1>📈 ' + esc(found.name) + '</h1>' +
-    '<div class="sub">LINE友だち登録の成果レポート（' +
-    Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm') + ' 時点・開くたびに最新化）</div>' +
-    '<div class="cards">' + cards + '</div>' +
+    '<div class="eyebrow">AFFILIATE REPORT</div>' +
+    '<h1>' + esc(found.name) + '</h1>' +
+    '<div class="upd">' + Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm') + ' 更新</div>' +
+    '<div class="hero"><div class="hv">' + monthCount + '</div><div class="hl">今月の登録件数</div></div>' +
+    '<div class="stats">' + stats + '</div>' +
     goalHtml + rewardHtml + rankHtml + recordHtml +
-    '<div class="panel"><h2>日別登録数（直近30日）</h2><div class="chart">' + bars + '</div></div>' +
-    '<div class="panel"><h2>⏰ 登録されやすい時間帯</h2><div class="chart small">' + hourBars + '</div>' +
-    '<div class="note">投稿する時間帯の参考にどうぞ（全期間の合計）</div></div>' +
-    '<div class="panel"><h2>📅 曜日別の傾向</h2><div class="chart small">' + wdBars + '</div></div>' +
-    '<div class="panel"><h2>月別実績</h2><table><tr><td style="color:#5A6A61">月</td><td class="num" style="color:#5A6A61">件数</td>' +
-    (found.rate > 0 ? '<td class="num" style="color:#5A6A61">見込み報酬</td>' : '') + '</tr>' +
-    (monthRows || '<tr><td colspan="3" style="color:#96A69C">まだデータがありません</td></tr>') + '</table></div>' +
-    '<div class="panel"><h2>日別一覧（直近30日）</h2><table><tr><td style="color:#5A6A61">日付</td><td class="num" style="color:#5A6A61">登録数</td></tr>' +
+    '<div class="panel"><div class="ph">日別登録数 — 直近30日</div><div class="chart">' + bars + '</div></div>' +
+    '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
+    '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
+    '<div class="panel"><div class="ph">曜日別の傾向</div><div class="chart small">' + wdBars + '</div></div>' +
+    '<div class="panel"><div class="ph">月別実績</div><table><tr class="thead"><td>月</td><td class="num">件数</td>' +
+    (found.rate > 0 ? '<td class="num">見込み報酬</td>' : '') + '</tr>' +
+    (monthRows || '<tr><td colspan="3" style="color:#5E6C66">まだデータがありません</td></tr>') + '</table></div>' +
+    '<div class="panel"><div class="ph">日別一覧 — 直近30日</div><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
     tableRows + '</table></div>' +
-    '<div class="foot">このページはあなた専用です。URLは他の方に共有しないでください。</div>' +
+    '<div class="foot">このページはあなた専用のリンクです。URLの共有はご遠慮ください。</div>' +
     '</div></body></html>';
 
-  return HtmlService.createHtmlOutput(html).setTitle(found.name + ' 成果確認');
+  return HtmlService.createHtmlOutput(html).setTitle(found.name + ' 成果レポート');
 }
