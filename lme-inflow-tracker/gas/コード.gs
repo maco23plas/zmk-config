@@ -183,18 +183,30 @@ function getQrMap_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
   const out = {};
   if (!sh || sh.getLastRow() < 2) return out;
-  for (const [id, name, url, key] of sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues()) {
+  for (const [id, name, url, key, rate, goal] of sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()) {
     const k = String(id).trim();
-    if (k) out[k] = { name: String(name).trim() || k, url: String(url).trim(), key: String(key).trim() };
+    if (k) {
+      out[k] = {
+        name: String(name).trim() || k,
+        url: String(url).trim(),
+        key: String(key).trim(),
+        rate: Number(rate) || 0,
+        goal: Number(goal) || 0,
+      };
+    }
   }
   return out;
 }
 
-/** QR設定シートのD列に、アフィリエイター専用ページ用の閲覧キーを自動生成する */
+/** QR設定シートのD〜F列（閲覧キー・報酬単価・月間目標）を整える */
 function ensureQrKeys_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
   if (!sh) return;
-  sh.getRange(1, 4).setValue('閲覧キー（自動生成・編集しない）');
+  sh.getRange(1, 4, 1, 3).setValues([[
+    '閲覧キー（自動生成・編集しない）',
+    '報酬単価（円・任意）',
+    '月間目標（件・任意）',
+  ]]);
   if (sh.getLastRow() < 2) return;
   const range = sh.getRange(2, 1, sh.getLastRow() - 1, 4);
   const values = range.getValues();
@@ -607,56 +619,173 @@ function renderStatsPage_(key) {
   if (!key) return invalid();
 
   // 閲覧キーからアフィリエイターを特定
+  const qrs = getQrMap_();
   let found = null;
-  for (const [id, qr] of Object.entries(getQrMap_())) {
-    if (qr.key && qr.key === key) { found = { id: id, name: qr.name }; break; }
+  for (const [id, qr] of Object.entries(qrs)) {
+    if (qr.key && qr.key === key) {
+      found = { id: id, name: qr.name, rate: qr.rate, goal: qr.goal };
+      break;
+    }
   }
   if (!found) return invalid();
 
-  // 本人分だけ集計
+  const now = new Date();
+  const thisMonth = Utilities.formatDate(now, TZ, 'yyyy-MM');
+
+  // 1回の走査で全部集計（本人の日別/時間帯/曜日 ＋ ランキング用の全員今月件数）
   const dayCounts = {};
+  const hourCounts = new Array(24).fill(0);
+  const wdCounts = new Array(7).fill(0); // 月〜日
   let total = 0;
+  const monthTotals = {}; // 全員分（今月・匿名ランキング用）
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.REGS);
   if (sh && sh.getLastRow() > 1) {
     for (const [when, rawId] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
-      if (!(when instanceof Date) || String(rawId).trim() !== found.id) continue;
+      if (!(when instanceof Date)) continue;
+      const rid = String(rawId).trim();
       const day = Utilities.formatDate(when, TZ, 'yyyy-MM-dd');
+      if (day.substring(0, 7) === thisMonth) monthTotals[rid] = (monthTotals[rid] || 0) + 1;
+      if (rid !== found.id) continue;
       dayCounts[day] = (dayCounts[day] || 0) + 1;
+      hourCounts[Number(Utilities.formatDate(when, TZ, 'H'))]++;
+      wdCounts[Number(Utilities.formatDate(when, TZ, 'u')) - 1]++;
       total++;
     }
   }
 
-  // 直近30日分の日付
+  // 日付ユーティリティ
+  const dayStr = offset => Utilities.formatDate(new Date(Date.now() - offset * 86400000), TZ, 'yyyy-MM-dd');
   const days = [];
-  for (let i = 29; i >= 0; i--) {
-    days.push(Utilities.formatDate(new Date(Date.now() - i * 86400000), TZ, 'yyyy-MM-dd'));
-  }
+  for (let i = 29; i >= 0; i--) days.push(dayStr(i));
   const today = days[days.length - 1];
   const yesterday = days[days.length - 2];
   const last7 = sumLastNDays_(dayCounts, days, 7);
-  const last30 = sumLastNDays_(dayCounts, days, 30);
-  const maxDaily = Math.max(1, ...days.map(d => dayCounts[d] || 0));
+  let prior7 = 0;
+  for (let i = 13; i >= 7; i--) prior7 += dayCounts[dayStr(i)] || 0;
+
+  // 月別集計（本人）
+  const monthCounts = {};
+  for (const [d, n] of Object.entries(dayCounts)) {
+    const m = d.substring(0, 7);
+    monthCounts[m] = (monthCounts[m] || 0) + n;
+  }
+  const monthCount = monthCounts[thisMonth] || 0;
+  const lastMonthKey = Utilities.formatDate(
+    new Date(now.getFullYear(), now.getMonth() - 1, 15), TZ, 'yyyy-MM');
+  const lastMonthCount = monthCounts[lastMonthKey] || 0;
+
+  // 記録系: ベスト日・連続登録日数
+  let bestDay = null;
+  let bestN = 0;
+  for (const [d, n] of Object.entries(dayCounts)) {
+    if (n > bestN || (n === bestN && d > (bestDay || ''))) { bestDay = d; bestN = n; }
+  }
+  let streak = 0;
+  {
+    let i = (dayCounts[today] || 0) > 0 ? 0 : 1; // 今日まだ0でも昨日までの連続を数える
+    while ((dayCounts[dayStr(i)] || 0) > 0) { streak++; i++; }
+  }
+
+  // 前週比
+  let trendHtml = '<span style="color:#96A69C">—</span>';
+  if (prior7 > 0) {
+    const pct = Math.round(((last7 - prior7) / prior7) * 100);
+    trendHtml = pct > 0 ? '<span style="color:#00A63E">↑ +' + pct + '%</span>'
+      : pct < 0 ? '<span style="color:#B03A2E">↓ ' + pct + '%</span>'
+      : '<span style="color:#5A6A61">±0%</span>';
+  } else if (last7 > 0) {
+    trendHtml = '<span style="color:#00A63E">↑ NEW</span>';
+  }
+
+  // 匿名ランキング（今月・QR設定にいる人だけで順位付け）
+  const ranked = Object.keys(qrs).map(id => ({ id: id, n: monthTotals[id] || 0 }))
+    .sort((a, b) => b.n - a.n);
+  const myRank = ranked.findIndex(r => r.id === found.id) + 1;
+  const gapToTop = ranked.length ? ranked[0].n - monthCount : 0;
 
   const esc = escapeHtmlAttr_;
+  const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
+
+  // ── パーツ生成 ──
   const cards = [
-    ['累計', total], ['今日', dayCounts[today] || 0], ['昨日', dayCounts[yesterday] || 0],
-    ['直近7日', last7], ['直近30日', last30],
+    ['累計', total], ['今月', monthCount], ['先月', lastMonthCount],
+    ['今日', dayCounts[today] || 0], ['直近7日', last7],
   ].map(([label, v]) =>
     '<div class="card"><div class="v">' + v + '</div><div class="l">' + label + '</div></div>'
   ).join('');
 
+  // 報酬パネル（単価設定時のみ）
+  let rewardHtml = '';
+  if (found.rate > 0) {
+    rewardHtml = '<div class="panel gold"><h2>💰 見込み報酬</h2><div class="reward">' +
+      '<div><div class="rv">' + yen(found.rate * monthCount) + '</div><div class="rl">今月（' + monthCount + '件 × ' + yen(found.rate) + '）</div></div>' +
+      '<div><div class="rv sub2">' + yen(found.rate * total) + '</div><div class="rl">累計</div></div>' +
+      '</div><div class="note">※確定額はお支払い時のご案内が正となります</div></div>';
+  }
+
+  // 目標パネル（目標設定時のみ）
+  let goalHtml = '';
+  if (found.goal > 0) {
+    const pct = Math.min(100, Math.round((monthCount / found.goal) * 100));
+    goalHtml = '<div class="panel"><h2>🎯 今月の目標</h2>' +
+      '<div class="goalrow"><b>' + monthCount + '</b> / ' + found.goal + ' 件（' + pct + '%）' +
+      (pct >= 100 ? ' <span class="badge">達成🎉</span>' : '') + '</div>' +
+      '<div class="pbar"><div class="pfill" style="width:' + pct + '%"></div></div></div>';
+  }
+
+  // ランキングパネル（2人以上いるときのみ）
+  let rankHtml = '';
+  if (ranked.length >= 2) {
+    rankHtml = '<div class="panel"><h2>🏅 今月のランキング（匿名）</h2>' +
+      '<div class="rank"><span class="rankbig">' + myRank + '位</span> / ' + ranked.length + '人中</div>' +
+      '<div class="note">' + (myRank === 1
+        ? '現在トップです！このまま突っ走りましょう🔥'
+        : 'トップまであと <b>' + gapToTop + '件</b>。') + '</div></div>';
+  }
+
+  // 記録パネル
+  const recordHtml = '<div class="panel"><h2>🏆 記録</h2><div class="recs">' +
+    '<div><div class="rv2">' + (bestDay ? bestN + '件' : '—') + '</div><div class="rl">ベスト日' + (bestDay ? '（' + esc(bestDay.substring(5).replace('-', '/')) + '）' : '') + '</div></div>' +
+    '<div><div class="rv2">' + streak + '日</div><div class="rl">連続登録中</div></div>' +
+    '<div><div class="rv2">' + trendHtml + '</div><div class="rl">前週比</div></div>' +
+    '</div></div>';
+
+  // 30日グラフ
+  const maxDaily = Math.max(1, ...days.map(d => dayCounts[d] || 0));
   const bars = days.map(d => {
     const n = dayCounts[d] || 0;
     const h = Math.round((n / maxDaily) * 100);
-    const md = d.substring(5).replace('-', '/');
     return '<div class="bcol" title="' + esc(d) + '：' + n + '件">' +
       '<div class="bval">' + (n || '') + '</div>' +
       '<div class="bar" style="height:' + Math.max(h, n ? 4 : 0) + '%"></div>' +
-      '<div class="blab">' + esc(md) + '</div></div>';
+      '<div class="blab">' + esc(d.substring(5).replace('-', '/')) + '</div></div>';
   }).join('');
 
+  // 時間帯・曜日グラフ（投稿時間の参考用）
+  const maxHour = Math.max(1, ...hourCounts);
+  const hourBars = hourCounts.map((n, h) => {
+    const hh = Math.round((n / maxHour) * 100);
+    return '<div class="bcol" title="' + h + '時台：' + n + '件">' +
+      '<div class="bar alt" style="height:' + Math.max(hh, n ? 4 : 0) + '%"></div>' +
+      '<div class="blab2">' + (h % 3 === 0 ? h : '') + '</div></div>';
+  }).join('');
+  const wdLabels = ['月', '火', '水', '木', '金', '土', '日'];
+  const maxWd = Math.max(1, ...wdCounts);
+  const wdBars = wdCounts.map((n, i) => {
+    const hh = Math.round((n / maxWd) * 100);
+    return '<div class="bcol" title="' + wdLabels[i] + '曜：' + n + '件">' +
+      '<div class="bval">' + (n || '') + '</div>' +
+      '<div class="bar alt" style="height:' + Math.max(hh, n ? 4 : 0) + '%"></div>' +
+      '<div class="blab2">' + wdLabels[i] + '</div></div>';
+  }).join('');
+
+  // 表
   const tableRows = days.slice().reverse().map(d =>
     '<tr><td>' + esc(d) + '</td><td class="num">' + (dayCounts[d] || 0) + '</td></tr>'
+  ).join('');
+  const monthRows = Object.keys(monthCounts).sort().reverse().slice(0, 12).map(m =>
+    '<tr><td>' + esc(m.replace('-', '年')) + '月</td><td class="num">' + monthCounts[m] +
+    (found.rate > 0 ? '</td><td class="num">' + yen(found.rate * monthCounts[m]) : '') + '</td></tr>'
   ).join('');
 
   const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
@@ -666,27 +795,52 @@ function renderStatsPage_(key) {
     '.wrap{max-width:640px;margin:0 auto;padding:20px 14px 48px}' +
     'h1{font-size:18px;margin:6px 0 2px}' +
     '.sub{color:#5A6A61;font-size:12px;margin-bottom:14px}' +
-    '.cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}' +
-    '.card{flex:1;min-width:90px;background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:10px 6px;text-align:center}' +
-    '.card .v{font-size:22px;font-weight:800;color:#00A63E}' +
+    '.cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}' +
+    '.card{flex:1;min-width:80px;background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:10px 6px;text-align:center}' +
+    '.card .v{font-size:21px;font-weight:800;color:#00A63E}' +
     '.card .l{font-size:11px;color:#5A6A61}' +
-    '.panel{background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:14px;margin-bottom:16px}' +
+    '.panel{background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:14px;margin-bottom:14px}' +
+    '.panel.gold{border-color:#E8D9A0;background:#FFFDF4}' +
     '.panel h2{font-size:14px;margin:0 0 10px}' +
+    '.note{font-size:11px;color:#96A69C;margin-top:6px}' +
+    '.reward{display:flex;gap:24px;flex-wrap:wrap}' +
+    '.rv{font-size:26px;font-weight:800;color:#B08A1E}' +
+    '.rv.sub2{font-size:20px;color:#5A6A61}' +
+    '.rl{font-size:11px;color:#5A6A61}' +
+    '.goalrow{font-size:15px;margin-bottom:6px}' +
+    '.goalrow b{font-size:22px;color:#00A63E}' +
+    '.badge{background:#00A63E;color:#fff;border-radius:99px;font-size:11px;padding:2px 10px;font-weight:700}' +
+    '.pbar{height:14px;background:#E8EFE8;border-radius:99px;overflow:hidden}' +
+    '.pfill{height:100%;background:linear-gradient(90deg,#00A63E,#3ED47E);border-radius:99px}' +
+    '.rank{font-size:15px}.rankbig{font-size:30px;font-weight:800;color:#00A63E}' +
+    '.recs{display:flex;gap:18px;flex-wrap:wrap;text-align:center}' +
+    '.recs>div{flex:1;min-width:80px}' +
+    '.rv2{font-size:19px;font-weight:800}' +
     '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
-    '.bcol{flex:1;min-width:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
+    '.chart.small{height:100px}' +
+    '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
     '.bar{width:100%;background:#00A63E;border-radius:2px 2px 0 0;min-height:0}' +
+    '.bar.alt{background:#57B98A}' +
     '.bval{font-size:9px;color:#5A6A61;height:12px}' +
     '.blab{font-size:8px;color:#96A69C;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
+    '.blab2{font-size:9px;color:#96A69C;height:14px;margin-top:2px}' +
     'table{width:100%;border-collapse:collapse;font-size:13px}' +
     'td{padding:6px 8px;border-top:1px solid #EDF2ED}.num{text-align:right;font-weight:700}' +
     '.foot{color:#96A69C;font-size:11px;text-align:center;margin-top:18px}' +
     '</style></head><body><div class="wrap">' +
     '<h1>📈 ' + esc(found.name) + '</h1>' +
     '<div class="sub">LINE友だち登録の成果レポート（' +
-    Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + ' 時点・開くたびに最新化）</div>' +
+    Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm') + ' 時点・開くたびに最新化）</div>' +
     '<div class="cards">' + cards + '</div>' +
+    goalHtml + rewardHtml + rankHtml + recordHtml +
     '<div class="panel"><h2>日別登録数（直近30日）</h2><div class="chart">' + bars + '</div></div>' +
-    '<div class="panel"><h2>日別一覧</h2><table><tr><td style="color:#5A6A61">日付</td><td class="num" style="color:#5A6A61">登録数</td></tr>' +
+    '<div class="panel"><h2>⏰ 登録されやすい時間帯</h2><div class="chart small">' + hourBars + '</div>' +
+    '<div class="note">投稿する時間帯の参考にどうぞ（全期間の合計）</div></div>' +
+    '<div class="panel"><h2>📅 曜日別の傾向</h2><div class="chart small">' + wdBars + '</div></div>' +
+    '<div class="panel"><h2>月別実績</h2><table><tr><td style="color:#5A6A61">月</td><td class="num" style="color:#5A6A61">件数</td>' +
+    (found.rate > 0 ? '<td class="num" style="color:#5A6A61">見込み報酬</td>' : '') + '</tr>' +
+    (monthRows || '<tr><td colspan="3" style="color:#96A69C">まだデータがありません</td></tr>') + '</table></div>' +
+    '<div class="panel"><h2>日別一覧（直近30日）</h2><table><tr><td style="color:#5A6A61">日付</td><td class="num" style="color:#5A6A61">登録数</td></tr>' +
     tableRows + '</table></div>' +
     '<div class="foot">このページはあなた専用です。URLは他の方に共有しないでください。</div>' +
     '</div></body></html>';
