@@ -38,6 +38,10 @@ const SHEETS = {
 
 const TZ = 'Asia/Tokyo';
 
+// ⑤自動更新の取得元（GitHubの最新コード）
+const UPDATE_SOURCE_URL =
+  'https://raw.githubusercontent.com/maco23plas/zmk-config/claude/qr-action-inflow-zapier-18dccr/lme-inflow-tracker/gas/%E3%82%B3%E3%83%BC%E3%83%89.gs';
+
 // ────────────────────────────────────────────
 // スプレッドシートのカスタムメニュー
 // ────────────────────────────────────────────
@@ -48,6 +52,7 @@ function onOpen() {
     .addItem('② エルメ登録用URL一覧を生成', 'generateUrls')
     .addItem('③ テスト配信（今すぐレポート送信）', 'dailyReport')
     .addItem('④ ダッシュボード＆個人タブを更新', 'buildDashboards')
+    .addItem('⑤ 最新版に更新（取得→自動デプロイ）', 'selfUpdate')
     .addToUi();
 }
 
@@ -606,6 +611,99 @@ function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days) {
     .setOption('legend', { position: 'none' })
     .setOption('width', 600).setOption('height', 300)
     .build());
+}
+
+// ────────────────────────────────────────────
+// ⑤ 最新版に更新（GitHubから取得 → 保存 → 新バージョン → 本番デプロイ更新）
+//    ※初回のみ https://script.google.com/home/usersettings で
+//      「Google Apps Script API」をONにしておくこと
+// ────────────────────────────────────────────
+function selfUpdate() {
+  const token = ScriptApp.getOAuthToken();
+  const api = 'https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId();
+  const call = (url, method, payload) => UrlFetchApp.fetch(url, {
+    method: method,
+    headers: { Authorization: 'Bearer ' + token },
+    contentType: 'application/json',
+    payload: payload ? JSON.stringify(payload) : undefined,
+    muteHttpExceptions: true,
+  });
+
+  // 1. GitHubから最新コードを取得（中身の簡易チェック付き）
+  const gh = UrlFetchApp.fetch(UPDATE_SOURCE_URL, { muteHttpExceptions: true });
+  if (gh.getResponseCode() !== 200) {
+    toast_('GitHubからコードを取得できませんでした（HTTP ' + gh.getResponseCode() + '）');
+    return;
+  }
+  const src = gh.getContentText();
+  if (src.indexOf('function dailyReport') < 0 || src.indexOf('function doGet') < 0) {
+    toast_('取得したコードの中身が想定と違うため中止しました。');
+    return;
+  }
+
+  // 2. 現在のプロジェクト内容を取得（マニフェストは維持し、コードだけ差し替える）
+  let r = call(api + '/content', 'get');
+  if (r.getResponseCode() === 403) {
+    toast_('Apps Script APIが無効です。script.google.com/home/usersettings で「Google Apps Script API」をONにしてから⑤を再実行してください。');
+    return;
+  }
+  if (r.getResponseCode() !== 200) {
+    toast_('プロジェクト情報の取得に失敗: HTTP ' + r.getResponseCode());
+    return;
+  }
+  const files = JSON.parse(r.getContentText()).files || [];
+  const manifest = files.find(f => f.name === 'appsscript');
+  const js = files.find(f => f.type === 'SERVER_JS');
+  r = call(api + '/content', 'put', {
+    files: [manifest, { name: js ? js.name : 'コード', type: 'SERVER_JS', source: src }],
+  });
+  if (r.getResponseCode() !== 200) {
+    toast_('コードの保存に失敗: ' + r.getContentText().substring(0, 160));
+    return;
+  }
+
+  // 3. 新バージョンを作成
+  r = call(api + '/versions', 'post', {
+    description: '自動更新 ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'),
+  });
+  if (r.getResponseCode() !== 200) {
+    toast_('バージョン作成に失敗: HTTP ' + r.getResponseCode());
+    return;
+  }
+  const version = JSON.parse(r.getContentText()).versionNumber;
+
+  // 4. 設定シートWEB_APP_URLと同じURLを持つ本番デプロイを探して、新バージョンに更新
+  const base = String(getConfig_().WEB_APP_URL || '').trim().replace(/[?#].*$/, '');
+  if (!base) {
+    toast_('「設定」シートのWEB_APP_URLが空です。本番デプロイのURLを貼ってから⑤を再実行してください。');
+    return;
+  }
+  r = call(api + '/deployments', 'get');
+  const deps = (r.getResponseCode() === 200 && JSON.parse(r.getContentText()).deployments) || [];
+  let target = null;
+  for (const d of deps) {
+    for (const e of (d.entryPoints || [])) {
+      if (e.webApp && e.webApp.url === base) { target = d; break; }
+    }
+    if (target) break;
+  }
+  if (!target) {
+    toast_('WEB_APP_URLに一致する本番デプロイが見つかりません。「デプロイを管理」でURLを確認してWEB_APP_URLを直してください。（コードとバージョン' + version + 'の作成までは完了）');
+    return;
+  }
+  r = call(api + '/deployments/' + target.deploymentId, 'put', {
+    deploymentConfig: {
+      scriptId: ScriptApp.getScriptId(),
+      versionNumber: version,
+      manifestFileName: 'appsscript',
+      description: '本番',
+    },
+  });
+  if (r.getResponseCode() !== 200) {
+    toast_('デプロイ更新に失敗: ' + r.getContentText().substring(0, 160));
+    return;
+  }
+  toast_('✅ 最新版に更新完了（バージョン ' + version + '）。URLは変わっていません。');
 }
 
 // ────────────────────────────────────────────
