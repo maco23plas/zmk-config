@@ -101,6 +101,9 @@ function setup() {
     sh.setColumnWidth(1, 170).setColumnWidth(2, 220).setColumnWidth(3, 380);
   }
 
+  // アフィリエイター専用ページ用の閲覧キーをD列に自動生成
+  ensureQrKeys_();
+
   // ログ系シート
   ensureSheet_(ss, SHEETS.REGS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
   ensureSheet_(ss, SHEETS.CLICKS, ['日時', 'QR ID', 'QR名', '補足']);
@@ -143,19 +146,24 @@ function generateUrls() {
   let sh = ss.getSheetByName(SHEETS.URLS);
   if (sh) sh.clear(); else sh = ss.insertSheet(SHEETS.URLS);
 
+  ensureQrKeys_();
   const rows = [[
     'QR ID', '表示名',
     '★エルメ「外部連携」タブ（パラメーターエクスポート）に貼るURL',
-    '（オプション）クリック計測リダイレクタURL ※通常は使わない',
+    '★アフィリエイター専用 成果確認ページURL（本人にだけ送る）',
   ]];
   const qrs = getQrMap_();
   for (const [id, qr] of Object.entries(qrs)) {
-    rows.push([id, qr.name, base + '?ev=reg&id=' + id, base + '?id=' + id]);
+    rows.push([
+      id, qr.name,
+      base + '?ev=reg&id=' + id,
+      qr.key ? base + '?stats=' + qr.key : '(①を実行するとキーが生成されます)',
+    ]);
   }
   sh.getRange(1, 1, rows.length, 4).setValues(rows);
   sh.setFrozenRows(1);
   sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 480).setColumnWidth(4, 480);
-  toast_('URL一覧を生成しました。C列をエルメの各QRコードアクション →「外部連携」タブへ。');
+  toast_('URL一覧を生成しました。C列→エルメ外部連携タブ／D列→各アフィリエイター本人へ。');
 }
 
 // ────────────────────────────────────────────
@@ -175,11 +183,29 @@ function getQrMap_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
   const out = {};
   if (!sh || sh.getLastRow() < 2) return out;
-  for (const [id, name, url] of sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues()) {
-    const key = String(id).trim();
-    if (key) out[key] = { name: String(name).trim() || key, url: String(url).trim() };
+  for (const [id, name, url, key] of sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues()) {
+    const k = String(id).trim();
+    if (k) out[k] = { name: String(name).trim() || k, url: String(url).trim(), key: String(key).trim() };
   }
   return out;
+}
+
+/** QR設定シートのD列に、アフィリエイター専用ページ用の閲覧キーを自動生成する */
+function ensureQrKeys_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
+  if (!sh) return;
+  sh.getRange(1, 4).setValue('閲覧キー（自動生成・編集しない）');
+  if (sh.getLastRow() < 2) return;
+  const range = sh.getRange(2, 1, sh.getLastRow() - 1, 4);
+  const values = range.getValues();
+  let changed = false;
+  for (const row of values) {
+    if (String(row[0]).trim() && !String(row[3]).trim()) {
+      row[3] = Utilities.getUuid().replace(/-/g, '').substring(0, 20);
+      changed = true;
+    }
+  }
+  if (changed) range.setValues(values);
 }
 
 function ensureSheet_(ss, name, headers) {
@@ -223,6 +249,11 @@ function doGet(e) {
       console.error('登録ログ記録失敗: ' + err);
     }
     return ContentService.createTextOutput('ok');
+  }
+
+  // ② アフィリエイター専用 成果確認ページ（?stats=閲覧キー）
+  if (p.stats) {
+    return renderStatsPage_(String(p.stats).trim());
   }
 
   // ② リダイレクタ
@@ -563,4 +594,102 @@ function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days) {
     .setOption('legend', { position: 'none' })
     .setOption('width', 600).setOption('height', 300)
     .build());
+}
+
+// ────────────────────────────────────────────
+// アフィリエイター専用 成果確認ページ
+//   URL: …/exec?stats=<閲覧キー>
+//   本人の数字だけを表示（LINE ID等の個人情報は一切出さない）
+// ────────────────────────────────────────────
+function renderStatsPage_(key) {
+  const invalid = () => HtmlService.createHtmlOutput(
+    '<p style="font-family:sans-serif;text-align:center;padding-top:3em">リンクが無効です。発行元にお問い合わせください。</p>');
+  if (!key) return invalid();
+
+  // 閲覧キーからアフィリエイターを特定
+  let found = null;
+  for (const [id, qr] of Object.entries(getQrMap_())) {
+    if (qr.key && qr.key === key) { found = { id: id, name: qr.name }; break; }
+  }
+  if (!found) return invalid();
+
+  // 本人分だけ集計
+  const dayCounts = {};
+  let total = 0;
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.REGS);
+  if (sh && sh.getLastRow() > 1) {
+    for (const [when, rawId] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
+      if (!(when instanceof Date) || String(rawId).trim() !== found.id) continue;
+      const day = Utilities.formatDate(when, TZ, 'yyyy-MM-dd');
+      dayCounts[day] = (dayCounts[day] || 0) + 1;
+      total++;
+    }
+  }
+
+  // 直近30日分の日付
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    days.push(Utilities.formatDate(new Date(Date.now() - i * 86400000), TZ, 'yyyy-MM-dd'));
+  }
+  const today = days[days.length - 1];
+  const yesterday = days[days.length - 2];
+  const last7 = sumLastNDays_(dayCounts, days, 7);
+  const last30 = sumLastNDays_(dayCounts, days, 30);
+  const maxDaily = Math.max(1, ...days.map(d => dayCounts[d] || 0));
+
+  const esc = escapeHtmlAttr_;
+  const cards = [
+    ['累計', total], ['今日', dayCounts[today] || 0], ['昨日', dayCounts[yesterday] || 0],
+    ['直近7日', last7], ['直近30日', last30],
+  ].map(([label, v]) =>
+    '<div class="card"><div class="v">' + v + '</div><div class="l">' + label + '</div></div>'
+  ).join('');
+
+  const bars = days.map(d => {
+    const n = dayCounts[d] || 0;
+    const h = Math.round((n / maxDaily) * 100);
+    const md = d.substring(5).replace('-', '/');
+    return '<div class="bcol" title="' + esc(d) + '：' + n + '件">' +
+      '<div class="bval">' + (n || '') + '</div>' +
+      '<div class="bar" style="height:' + Math.max(h, n ? 4 : 0) + '%"></div>' +
+      '<div class="blab">' + esc(md) + '</div></div>';
+  }).join('');
+
+  const tableRows = days.slice().reverse().map(d =>
+    '<tr><td>' + esc(d) + '</td><td class="num">' + (dayCounts[d] || 0) + '</td></tr>'
+  ).join('');
+
+  const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + esc(found.name) + ' 成果確認</title><style>' +
+    'body{margin:0;background:#F4F8F4;color:#1B2620;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7}' +
+    '.wrap{max-width:640px;margin:0 auto;padding:20px 14px 48px}' +
+    'h1{font-size:18px;margin:6px 0 2px}' +
+    '.sub{color:#5A6A61;font-size:12px;margin-bottom:14px}' +
+    '.cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}' +
+    '.card{flex:1;min-width:90px;background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:10px 6px;text-align:center}' +
+    '.card .v{font-size:22px;font-weight:800;color:#00A63E}' +
+    '.card .l{font-size:11px;color:#5A6A61}' +
+    '.panel{background:#fff;border:1px solid #DFE8E0;border-radius:10px;padding:14px;margin-bottom:16px}' +
+    '.panel h2{font-size:14px;margin:0 0 10px}' +
+    '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
+    '.bcol{flex:1;min-width:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
+    '.bar{width:100%;background:#00A63E;border-radius:2px 2px 0 0;min-height:0}' +
+    '.bval{font-size:9px;color:#5A6A61;height:12px}' +
+    '.blab{font-size:8px;color:#96A69C;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px}' +
+    'td{padding:6px 8px;border-top:1px solid #EDF2ED}.num{text-align:right;font-weight:700}' +
+    '.foot{color:#96A69C;font-size:11px;text-align:center;margin-top:18px}' +
+    '</style></head><body><div class="wrap">' +
+    '<h1>📈 ' + esc(found.name) + '</h1>' +
+    '<div class="sub">LINE友だち登録の成果レポート（' +
+    Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + ' 時点・開くたびに最新化）</div>' +
+    '<div class="cards">' + cards + '</div>' +
+    '<div class="panel"><h2>日別登録数（直近30日）</h2><div class="chart">' + bars + '</div></div>' +
+    '<div class="panel"><h2>日別一覧</h2><table><tr><td style="color:#5A6A61">日付</td><td class="num" style="color:#5A6A61">登録数</td></tr>' +
+    tableRows + '</table></div>' +
+    '<div class="foot">このページはあなた専用です。URLは他の方に共有しないでください。</div>' +
+    '</div></body></html>';
+
+  return HtmlService.createHtmlOutput(html).setTitle(found.name + ' 成果確認');
 }
