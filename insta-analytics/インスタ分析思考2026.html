@@ -4,28 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>インスタ分析思考 2026</title>
-<meta name="description" content="Instagram運用のKPIツリー分析アプリ。週次・投稿別の数値を入力すると各種レートが自動計算され、目安値との比較で詰まり箇所を可視化し、診断フローへ直接飛べます。">
+<meta name="description" content="Instagram運用のKPI分析アプリ。連携アカウントは自動取得、それ以外は手動入力。詰まり箇所を可視化して診断フローへ。">
 </head>
 <body>
 <style>
   :root {
     --radius: 14px;
-    --bg: #f5f5f7;
-    --ink: #1d1d1f;
-    --card: #ffffff;
-    --card-2: #fbfbfd;
-    --muted: #f0f1f4;
-    --muted-ink: #6b7280;
-    --border: #e6e7ea;
-    --input: #e2e4e9;
-    --primary: #2f6fed;
-    --primary-ink: #ffffff;
-    --accent-bg: #eef3fe;
-    --ok: #17a34a; --ok-bg: #e8f6ee;
-    --warn: #d97706; --warn-bg: #fbf1e3;
+    --bg: #f5f5f7; --ink: #1d1d1f; --card: #ffffff; --card-2: #fbfbfd;
+    --muted: #f0f1f4; --muted-ink: #6b7280; --border: #e6e7ea; --input: #e2e4e9;
+    --primary: #2f6fed; --primary-ink: #ffffff; --accent-bg: #eef3fe;
+    --ok: #17a34a; --ok-bg: #e8f6ee; --warn: #d97706; --warn-bg: #fbf1e3;
     --bad: #e23b34; --bad-bg: #fbeae9;
-    --keep: #6b7280; --keep-bg: #f0f1f4;
-    --update: #2563eb; --update-bg: #e9f0fe;
+    --keep: #6b7280; --keep-bg: #f0f1f4; --update: #2563eb; --update-bg: #e9f0fe;
     --new: #b45309; --new-bg: #fbf1e0;
     --c1: #2f6fed; --c2: #17a34a; --c3: #d97706; --c4: #8b5cf6;
     --shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.06);
@@ -70,191 +60,211 @@
   }
 
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font-family: var(--sans); font-feature-settings: "palt";
-    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-    line-height: 1.55;
-  }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-feature-settings:"palt"; -webkit-font-smoothing:antialiased; line-height:1.55; }
   .tnum { font-variant-numeric: tabular-nums; }
-  a { color: inherit; }
-  button { font-family: inherit; }
-  h1,h2,h3,p { margin: 0; }
+  a { color: inherit; } button { font-family: inherit; } h1,h2,h3,p { margin:0; }
 
-  /* Layout */
-  .app { min-height: 100dvh; display: grid; grid-template-columns: 1fr; }
-  @media (min-width: 860px){ .app { grid-template-columns: 248px 1fr; } }
+  .app { min-height:100dvh; display:grid; grid-template-columns:1fr; }
+  @media (min-width:860px){ .app { grid-template-columns:248px 1fr; } }
 
-  .side {
-    display: none; position: sticky; top: 0; height: 100dvh;
-    border-right: 1px solid var(--border); background: color-mix(in srgb, var(--card) 70%, transparent);
-    backdrop-filter: blur(12px); flex-direction: column;
-  }
-  @media (min-width: 860px){ .side { display: flex; } }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 20px; }
-  .logo { width: 36px; height: 36px; border-radius: 11px; background: var(--primary);
-    color: var(--primary-ink); display: grid; place-items: center; font-weight: 700; }
-  .brand small { color: var(--muted-ink); font-size: 11px; }
-  .nav { flex: 1; padding: 0 12px; display: flex; flex-direction: column; gap: 4px; }
-  .nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
-    border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 500;
-    color: var(--muted-ink); }
-  .nav a:hover { background: var(--muted); color: var(--ink); }
-  .nav a.active { background: var(--primary); color: var(--primary-ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-  .nav a svg { width: 18px; height: 18px; }
-  .side-foot { padding: 12px; border-top: 1px solid var(--border); display: flex;
-    align-items: center; justify-content: space-between; }
-  .side-foot span { font-size: 12px; color: var(--muted-ink); padding-left: 8px; }
+  .side { display:none; position:sticky; top:0; height:100dvh; border-right:1px solid var(--border);
+    background:color-mix(in srgb,var(--card) 70%,transparent); backdrop-filter:blur(12px); flex-direction:column; }
+  @media (min-width:860px){ .side { display:flex; } }
+  .brand { display:flex; align-items:center; gap:10px; padding:20px; }
+  .logo { width:36px; height:36px; border-radius:11px; background:var(--primary); color:var(--primary-ink);
+    display:grid; place-items:center; font-weight:700; flex:none; }
+  .brand small { color:var(--muted-ink); font-size:11px; }
+  .nav { flex:1; padding:0 12px; display:flex; flex-direction:column; gap:4px; }
+  .nav a { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px;
+    text-decoration:none; font-size:14px; font-weight:500; color:var(--muted-ink); }
+  .nav a:hover { background:var(--muted); color:var(--ink); }
+  .nav a.active { background:var(--primary); color:var(--primary-ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .nav a svg { width:18px; height:18px; }
+  .side-foot { padding:12px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .side-foot span { font-size:12px; color:var(--muted-ink); padding-left:8px; }
 
-  .topbar { display: flex; align-items: center; justify-content: space-between;
-    height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--card) 82%, transparent);
-    backdrop-filter: blur(12px); }
-  @media (min-width: 860px){ .topbar { display: none; } }
+  .topbar { display:flex; align-items:center; justify-content:space-between; height:56px; padding:0 16px;
+    border-bottom:1px solid var(--border); position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb,var(--card) 82%,transparent); backdrop-filter:blur(12px); }
+  @media (min-width:860px){ .topbar { display:none; } }
 
-  main { padding: 24px 16px 96px; }
-  @media (min-width: 860px){ main { padding: 32px; padding-bottom: 32px; } }
-  .wrap { max-width: 960px; margin: 0 auto; width: 100%; }
+  main { padding:20px 16px 96px; }
+  @media (min-width:860px){ main { padding:28px 32px 32px; } }
+  .wrap { max-width:960px; margin:0 auto; width:100%; }
 
-  .btabs { display: none; }
-  @media (max-width: 859px){
-    .btabs { display: grid; grid-template-columns: repeat(6,1fr); position: fixed;
-      bottom: 0; left: 0; right: 0; z-index: 20; border-top: 1px solid var(--border);
-      background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(12px); }
-    .btabs a { display: flex; flex-direction: column; align-items: center; gap: 3px;
-      padding: 9px 2px; text-decoration: none; color: var(--muted-ink); font-size: 10px; font-weight: 500; }
-    .btabs a svg { width: 20px; height: 20px; }
-    .btabs a.active { color: var(--primary); }
+  .btabs { display:none; }
+  @media (max-width:859px){
+    .btabs { display:grid; grid-template-columns:repeat(6,1fr); position:fixed; bottom:0; left:0; right:0;
+      z-index:20; border-top:1px solid var(--border); background:color-mix(in srgb,var(--card) 92%,transparent);
+      backdrop-filter:blur(12px); padding-bottom:env(safe-area-inset-bottom); }
+    .btabs a { display:flex; flex-direction:column; align-items:center; gap:3px; padding:9px 2px;
+      text-decoration:none; color:var(--muted-ink); font-size:10px; font-weight:500; }
+    .btabs a svg { width:20px; height:20px; }
+    .btabs a.active { color:var(--primary); }
   }
 
-  /* Components */
-  .page-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
-    justify-content: space-between; margin-bottom: 24px; }
-  .page-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
-  .page-head p { font-size: 14px; color: var(--muted-ink); max-width: 640px; margin-top: 4px; }
+  /* アカウント切替バー */
+  .acct-bar { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 14px; scrollbar-width:none; }
+  .acct-bar::-webkit-scrollbar { display:none; }
+  .acct-chip { display:inline-flex; align-items:center; gap:8px; padding:7px 14px 7px 8px;
+    border-radius:999px; border:1px solid var(--border); background:var(--card); cursor:pointer;
+    font-size:13px; font-weight:600; white-space:nowrap; color:var(--muted-ink); flex:none; }
+  .acct-chip .avatar { width:24px; height:24px; border-radius:999px; display:grid; place-items:center;
+    color:#fff; font-size:11px; font-weight:700; flex:none; }
+  .acct-chip.on { border-color:var(--primary); color:var(--ink);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 18%,transparent); }
+  .acct-chip.add { padding:7px 14px; color:var(--muted-ink); border-style:dashed; font-weight:500; }
+  .mode-tag { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; }
+  .mode-tag.api { background:var(--accent-bg); color:var(--primary); }
+  .mode-tag.manual { background:var(--muted); color:var(--muted-ink); }
 
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    box-shadow: var(--shadow); }
-  .card-p { padding: 20px; }
-  .card-h { padding: 20px 20px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .card-h h3 { font-size: 15px; font-weight: 600; }
-  .grid { display: grid; gap: 14px; }
-  .stack { display: flex; flex-direction: column; gap: 20px; }
+  .page-head { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; justify-content:space-between; margin-bottom:20px; }
+  .page-head h1 { font-size:22px; font-weight:700; letter-spacing:-0.01em; }
+  .page-head p { font-size:13px; color:var(--muted-ink); max-width:640px; margin-top:4px; }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid transparent;
-    font-size: 14px; font-weight: 500; cursor: pointer; background: var(--primary);
-    color: var(--primary-ink); transition: filter .15s, transform .05s; white-space: nowrap; }
-  .btn:hover { filter: brightness(1.05); }
-  .btn:active { transform: scale(.98); }
-  .btn svg { width: 16px; height: 16px; }
-  .btn.outline { background: var(--card); color: var(--ink); border-color: var(--input); }
-  .btn.outline:hover { background: var(--muted); filter: none; }
-  .btn.ghost { background: transparent; color: var(--ink); }
-  .btn.ghost:hover { background: var(--muted); }
-  .btn.bad { background: var(--bad); color: #fff; }
-  .btn.sm { height: 32px; padding: 0 12px; font-size: 13px; }
-  .btn.icon { width: 34px; height: 34px; padding: 0; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+  .card-p { padding:18px; }
+  .card-h { padding:18px 18px 0; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .card-h h3 { font-size:15px; font-weight:600; }
+  .grid { display:grid; gap:12px; }
+  .stack { display:flex; flex-direction:column; gap:16px; }
 
-  .pill { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px;
-    font-size: 12px; font-weight: 600; white-space: nowrap; }
-  .pill.keep { background: var(--keep-bg); color: var(--keep); }
-  .pill.update { background: var(--update-bg); color: var(--update); }
-  .pill.new { background: var(--new-bg); color: var(--new); }
-  .pill.ok { background: var(--ok-bg); color: var(--ok); }
-  .pill.warn { background: var(--warn-bg); color: var(--warn); }
-  .pill.bad { background: var(--bad-bg); color: var(--bad); }
-  .pill.line { background: transparent; border: 1px solid var(--border); color: var(--muted-ink); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:42px; padding:0 18px;
+    border-radius:11px; border:1px solid transparent; font-size:14px; font-weight:600; cursor:pointer;
+    background:var(--primary); color:var(--primary-ink); transition:filter .15s, transform .05s; white-space:nowrap; }
+  .btn:hover { filter:brightness(1.05); } .btn:active { transform:scale(.98); }
+  .btn svg { width:16px; height:16px; }
+  .btn.outline { background:var(--card); color:var(--ink); border-color:var(--input); }
+  .btn.outline:hover { background:var(--muted); filter:none; }
+  .btn.ghost { background:transparent; color:var(--ink); }
+  .btn.ghost:hover { background:var(--muted); }
+  .btn.bad { background:var(--bad); color:#fff; }
+  .btn.sm { height:32px; padding:0 12px; font-size:13px; border-radius:9px; }
+  .btn.lg { height:52px; padding:0 24px; font-size:15px; border-radius:14px; }
+  .btn.icon { width:34px; height:34px; padding:0; }
+  .btn.block { width:100%; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
 
-  .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
-  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
-  .dot.bad { background: var(--bad); } .dot.none { background: color-mix(in srgb, var(--muted-ink) 45%, transparent); }
+  .pill { display:inline-flex; align-items:center; gap:4px; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .pill.keep { background:var(--keep-bg); color:var(--keep); }
+  .pill.update { background:var(--update-bg); color:var(--update); }
+  .pill.new { background:var(--new-bg); color:var(--new); }
+  .pill.ok { background:var(--ok-bg); color:var(--ok); }
+  .pill.warn { background:var(--warn-bg); color:var(--warn); }
+  .pill.bad { background:var(--bad-bg); color:var(--bad); }
+  .pill.line { background:transparent; border:1px solid var(--border); color:var(--muted-ink); }
+  .pill.api { background:var(--accent-bg); color:var(--primary); }
 
-  label.fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
-  input, select, textarea { font-family: inherit; font-size: 14px; color: var(--ink);
-    background: var(--card); border: 1px solid var(--input); border-radius: 10px;
-    padding: 9px 11px; width: 100%; outline: none; font-variant-numeric: tabular-nums; }
-  input:focus, select:focus, textarea:focus { border-color: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
-  textarea { min-height: 76px; resize: vertical; font-variant-numeric: normal; }
-  input[type="date"] { min-height: 40px; }
+  .dot { width:8px; height:8px; border-radius:999px; display:inline-block; }
+  .dot.ok{background:var(--ok);} .dot.warn{background:var(--warn);} .dot.bad{background:var(--bad);}
+  .dot.none{background:color-mix(in srgb,var(--muted-ink) 45%,transparent);}
 
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  .twrap { overflow-x: auto; }
-  th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted-ink);
-    padding: 12px; white-space: nowrap; border-bottom: 1px solid var(--border); }
-  td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: color-mix(in srgb, var(--muted) 55%, transparent); }
-  th.r, td.r { text-align: right; }
-  .sortbtn { background: none; border: none; color: inherit; font: inherit; cursor: pointer;
-    display: inline-flex; align-items: center; gap: 4px; padding: 0; }
-  .sortbtn:hover { color: var(--ink); }
+  label.fld { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:500; }
+  .fld .hint { font-weight:400; font-size:11px; color:var(--muted-ink); }
+  input, select, textarea { font-family:inherit; font-size:15px; color:var(--ink); background:var(--card);
+    border:1px solid var(--input); border-radius:10px; padding:10px 12px; width:100%; outline:none;
+    font-variant-numeric:tabular-nums; }
+  input:focus, select:focus, textarea:focus { border-color:var(--primary);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 22%,transparent); }
+  textarea { min-height:76px; resize:vertical; font-variant-numeric:normal; }
+  input[type="date"] { min-height:42px; }
 
-  .empty { display: flex; flex-direction: column; align-items: center; text-align: center;
-    padding: 64px 24px; border: 1px dashed var(--border); border-radius: 18px;
-    background: color-mix(in srgb, var(--card) 55%, transparent); }
-  .empty .eicon { width: 56px; height: 56px; border-radius: 16px; background: var(--muted);
-    color: var(--muted-ink); display: grid; place-items: center; margin-bottom: 16px; }
-  .empty h3 { font-size: 18px; font-weight: 600; }
-  .empty p { color: var(--muted-ink); font-size: 14px; max-width: 440px; margin: 6px 0 0; }
+  .fsec { border:1px solid var(--border); border-radius:12px; padding:14px; background:var(--card-2); }
+  .fsec > .fsec-t { font-size:12px; font-weight:700; color:var(--muted-ink); letter-spacing:.04em; margin-bottom:10px; }
 
-  .tabs { display: inline-flex; background: var(--muted); padding: 4px; border-radius: 12px; gap: 2px; }
-  .tabs button { border: none; background: transparent; padding: 7px 14px; border-radius: 9px;
-    font-size: 14px; font-weight: 500; color: var(--muted-ink); cursor: pointer; }
-  .tabs button.active { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .sticky-save { position:sticky; bottom:76px; z-index:10; display:flex; gap:8px; justify-content:flex-end;
+    padding:12px; margin:0 -4px; background:color-mix(in srgb,var(--bg) 80%,transparent); backdrop-filter:blur(8px); border-radius:14px; }
+  @media (min-width:860px){ .sticky-save { bottom:12px; } }
 
-  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: 16px; }
-  .kpi .lab { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-ink); }
-  .kpi .val { font-size: 26px; font-weight: 700; margin-top: 8px; }
-  .kpi .bm { font-size: 11px; color: var(--muted-ink); margin-top: 4px; }
-  .delta { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; }
-  .delta.up { color: var(--ok); } .delta.down { color: var(--bad); } .delta.flat { color: var(--muted-ink); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  .twrap { overflow-x:auto; }
+  th { text-align:left; font-size:12px; font-weight:600; color:var(--muted-ink); padding:12px; white-space:nowrap; border-bottom:1px solid var(--border); }
+  td { padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:color-mix(in srgb,var(--muted) 55%,transparent); }
+  th.r, td.r { text-align:right; }
+  .sortbtn { background:none; border:none; color:inherit; font:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px; padding:0; }
 
-  .alert { border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
-    background: color-mix(in srgb, var(--warn-bg) 60%, var(--card)); border-radius: var(--radius);
-    padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
-  .alert .ai { width: 36px; height: 36px; border-radius: 10px; background: var(--warn-bg);
-    color: var(--warn); display: grid; place-items: center; }
+  .empty { display:flex; flex-direction:column; align-items:center; text-align:center; padding:56px 24px;
+    border:1px dashed var(--border); border-radius:18px; background:color-mix(in srgb,var(--card) 55%,transparent); }
+  .empty .eicon { width:56px; height:56px; border-radius:16px; background:var(--muted); color:var(--muted-ink);
+    display:grid; place-items:center; margin-bottom:16px; }
+  .empty h3 { font-size:17px; font-weight:600; }
+  .empty p { color:var(--muted-ink); font-size:13px; max-width:440px; margin:6px 0 0; }
 
-  .step-badge { display: inline-grid; place-items: center; width: 24px; height: 24px;
-    border-radius: 999px; background: var(--primary); color: var(--primary-ink); font-size: 12px; font-weight: 700; }
-  .choice { border: 1px solid var(--border); background: var(--card); border-radius: 12px;
-    padding: 12px; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; }
-  .choice:hover { background: var(--muted); }
-  .choice.on { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
-  .chip { border: 1px solid var(--border); background: var(--card); border-radius: 999px;
-    padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; }
-  .chip:hover { background: var(--muted); }
-  .chip.on { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+  .tabs { display:inline-flex; background:var(--muted); padding:4px; border-radius:12px; gap:2px; }
+  .tabs button { border:none; background:transparent; padding:7px 14px; border-radius:9px; font-size:14px;
+    font-weight:500; color:var(--muted-ink); cursor:pointer; }
+  .tabs button.active { background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
 
-  .preview { background: color-mix(in srgb, var(--muted) 60%, var(--card)); border-radius: 12px; padding: 16px; }
-  .preview .pt { font-size: 11px; color: var(--muted-ink); }
-  .preview .pv { font-size: 14px; font-weight: 600; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px 16px; }
+  .kpi .lab { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted-ink); }
+  .kpi .val { font-size:24px; font-weight:700; margin-top:6px; }
+  .kpi .bm { font-size:11px; color:var(--muted-ink); margin-top:3px; }
+  .delta { display:inline-flex; align-items:center; gap:3px; font-size:12px; }
+  .delta.up{color:var(--ok);} .delta.down{color:var(--bad);} .delta.flat{color:var(--muted-ink);}
 
-  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.42); backdrop-filter: blur(3px);
-    display: grid; place-items: center; z-index: 50; padding: 16px; }
-  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 18px;
-    padding: 24px; max-width: 460px; width: 100%; box-shadow: var(--shadow); }
-  .modal h3 { font-size: 18px; font-weight: 600; }
-  .modal p { color: var(--muted-ink); font-size: 14px; margin-top: 8px; }
-  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+  .alert { border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
+    background:color-mix(in srgb,var(--warn-bg) 60%,var(--card)); border-radius:var(--radius); padding:14px 16px;
+    display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+  .alert .ai { width:36px; height:36px; border-radius:10px; background:var(--warn-bg); color:var(--warn); display:grid; place-items:center; flex:none; }
 
-  svg.chart text { fill: var(--muted-ink); font-size: 11px; }
-  .spark-wrap { border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .cta-hero { border:1px solid color-mix(in srgb,var(--primary) 25%,transparent);
+    background:linear-gradient(135deg, color-mix(in srgb,var(--accent-bg) 80%,var(--card)), var(--card));
+    border-radius:18px; padding:20px; display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; }
+  .cta-hero h3 { font-size:16px; font-weight:700; }
+  .cta-hero p { font-size:13px; color:var(--muted-ink); margin-top:4px; }
 
-  .muted { color: var(--muted-ink); }
-  .fs12 { font-size: 12px; } .fs13 { font-size: 13px; }
-  .flex { display: flex; } .between { justify-content: space-between; }
-  .items-center { align-items: center; } .gap8 { gap: 8px; } .gap12 { gap: 12px; }
-  .wrapf { flex-wrap: wrap; } .mt { margin-top: 16px; } .mb { margin-bottom: 16px; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px;
-    font-size: 14px; z-index: 60; box-shadow: var(--shadow); }
-  @media (prefers-reduced-motion: reduce){ * { transition: none !important; } }
-  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .step-badge { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:999px;
+    background:var(--primary); color:var(--primary-ink); font-size:12px; font-weight:700; }
+  .choice { border:1px solid var(--border); background:var(--card); border-radius:12px; padding:12px;
+    font-size:14px; font-weight:500; cursor:pointer; text-align:center; }
+  .choice:hover { background:var(--muted); }
+  .choice.on { background:var(--primary); color:var(--primary-ink); border-color:var(--primary); }
+  .chip { border:1px solid var(--border); background:var(--card); border-radius:999px; padding:8px 16px;
+    font-size:14px; font-weight:500; cursor:pointer; }
+  .chip:hover { background:var(--muted); }
+  .chip.on { background:var(--primary); color:var(--primary-ink); border-color:var(--primary); }
+
+  .preview { background:color-mix(in srgb,var(--muted) 60%,var(--card)); border-radius:12px; padding:14px; }
+  .preview .pt { font-size:11px; color:var(--muted-ink); }
+  .preview .pv { font-size:14px; font-weight:600; }
+
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.42); backdrop-filter:blur(3px);
+    display:grid; place-items:center; z-index:50; padding:16px; overflow-y:auto; }
+  .modal { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:22px;
+    max-width:520px; width:100%; box-shadow:var(--shadow); max-height:calc(100dvh - 32px); overflow-y:auto; }
+  .modal h3 { font-size:17px; font-weight:700; }
+  .modal .sub { color:var(--muted-ink); font-size:13px; margin-top:6px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; flex-wrap:wrap; }
+
+  .progress { height:8px; border-radius:999px; background:var(--muted); overflow:hidden; }
+  .progress > div { height:100%; background:var(--primary); border-radius:999px; transition:width .3s; }
+
+  .wizard { max-width:560px; margin:24px auto 0; }
+  .wizard .big-choice { display:flex; align-items:center; gap:14px; width:100%; text-align:left;
+    border:1px solid var(--border); background:var(--card); border-radius:16px; padding:18px; cursor:pointer;
+    box-shadow:var(--shadow); }
+  .wizard .big-choice:hover { border-color:var(--primary); }
+  .wizard .big-choice .ic { width:44px; height:44px; border-radius:13px; display:grid; place-items:center; flex:none; }
+  .wizard .big-choice b { font-size:15px; }
+  .wizard .big-choice p { font-size:12px; color:var(--muted-ink); margin-top:2px; }
+
+  svg.chart text { fill:var(--muted-ink); font-size:11px; }
+  .spark-wrap { border:1px solid var(--border); border-radius:12px; padding:14px; }
+
+  .muted { color:var(--muted-ink); } .fs12{font-size:12px;} .fs13{font-size:13px;}
+  .flex{display:flex;} .between{justify-content:space-between;} .items-center{align-items:center;}
+  .gap8{gap:8px;} .gap12{gap:12px;} .wrapf{flex-wrap:wrap;} .mt{margin-top:14px;} .mb{margin-bottom:14px;}
+
+  .toast { position:fixed; bottom:86px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg);
+    padding:10px 16px; border-radius:999px; font-size:14px; z-index:60; box-shadow:var(--shadow);
+    display:flex; align-items:center; gap:12px; max-width:calc(100vw - 32px); }
+  @media (min-width:860px){ .toast { bottom:24px; } }
+  .toast button { background:none; border:none; color:var(--c1); font-weight:700; font-size:14px; cursor:pointer; padding:0; }
+  @media (prefers-reduced-motion: reduce){ * { transition:none !important; } }
+  :focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
 </style>
 
 <div id="root"></div>
@@ -1140,7 +1150,7 @@ var DATA = {
   ]
 };
 
-/* ============================ アイコン (SVG) ============================ */
+/* ============================ アイコン ============================ */
 var IC = {
   dash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
   cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
@@ -1165,16 +1175,72 @@ var IC = {
   reset:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
   save:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>',
   info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>',
-  chevr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>'
+  chevr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  cloud:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9M8 17l4 4 4-4"/></svg>',
+  user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  keyb:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
 };
 
-/* ============================ ストア (localStorage) ============================ */
+/* ============================ ストレージ ============================ */
 var NS = "insta-analytics-2026";
-var KEY = { weekly: NS+":weekly", posts: NS+":posts", settings: NS+":settings", checks: NS+":checks", theme: NS+":theme" };
-function load(k, def){ try { var r = localStorage.getItem(k); return r===null? def : JSON.parse(r); } catch(e){ return def; } }
-function save(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
-function uid(){ return (crypto && crypto.randomUUID) ? crypto.randomUUID() : "id-"+Date.now()+"-"+Math.floor(Math.random()*1e9); }
+var K = {
+  accounts: NS+":accounts", current: NS+":current", api: NS+":api",
+  settings: NS+":settings", theme: NS+":theme",
+  // v1（単一アカウント時代）のキー：初回に移行する
+  v1weekly: NS+":weekly", v1posts: NS+":posts", v1checks: NS+":checks"
+};
+function load(k,def){ try{ var r=localStorage.getItem(k); return r===null?def:JSON.parse(r);}catch(e){ return def; } }
+function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+function uid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():"id-"+Date.now()+"-"+Math.floor(Math.random()*1e9); }
 function nowISO(){ return new Date().toISOString(); }
+
+var ACCT_COLORS = ["#2f6fed","#17a34a","#d97706","#8b5cf6","#e2557a","#0d9488","#c026d3","#4f46e5"];
+
+function accounts(){ return load(K.accounts, []); }
+function saveAccounts(a){ save(K.accounts, a); }
+function currentId(){
+  var id = load(K.current, null); var list = accounts();
+  if (id && list.some(function(a){return a.id===id;})) return id;
+  return list.length ? list[0].id : null;
+}
+function currentAcct(){
+  var id=currentId(); if(!id) return null;
+  return accounts().filter(function(a){return a.id===id;})[0] || null;
+}
+function setCurrent(id){ save(K.current, id); }
+function addAccount(o){
+  var list=accounts();
+  o.id = o.id || uid();
+  o.color = o.color || ACCT_COLORS[list.length % ACCT_COLORS.length];
+  o.createdAt = nowISO();
+  list.push(o); saveAccounts(list); setCurrent(o.id);
+  return o;
+}
+
+function dk(kind){ return NS+":d:"+currentId()+":"+kind; }
+function dkOf(id,kind){ return NS+":d:"+id+":"+kind; }
+function getWeekly(){ return load(dk("weekly"), []); }
+function setWeekly(v){ save(dk("weekly"), v); }
+function getPosts(){ return load(dk("posts"), []); }
+function setPosts(v){ save(dk("posts"), v); }
+function getChecks(){ return load(dk("checks"), []); }
+function setChecks(v){ save(dk("checks"), v); }
+
+/* v1 → v2 移行：既存データは「マイアカウント」として引き継ぐ */
+function migrate(){
+  if (accounts().length) return;
+  var w = load(K.v1weekly, null), p = load(K.v1posts, null), c = load(K.v1checks, null);
+  if (w || p || c) {
+    var acc = addAccount({ name:"マイアカウント", mode:"manual" });
+    if (w) save(dkOf(acc.id,"weekly"), w);
+    if (p) save(dkOf(acc.id,"posts"), p);
+    if (c) save(dkOf(acc.id,"checks"), c);
+    del(K.v1weekly); del(K.v1posts); del(K.v1checks);
+  }
+}
 
 var DEFAULT_SETTINGS = {
   benchmarks: {
@@ -1184,27 +1250,21 @@ var DEFAULT_SETTINGS = {
   verdict:{ winSaveRate:.02, winShareRate:.008, loseSaveRate:.005, loseShareRate:.002, loseLikeRate:.015 }
 };
 function getSettings(){
-  var s = load(KEY.settings, null);
+  var s = load(K.settings, null);
   if(!s) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-  // 後方互換：欠けフィールドを補完
   s.benchmarks = Object.assign({}, DEFAULT_SETTINGS.benchmarks, s.benchmarks||{});
   s.verdict = Object.assign({}, DEFAULT_SETTINGS.verdict, s.verdict||{});
   return s;
 }
 
-/* ============================ 計算 (純関数) ============================ */
-function ratio(n, d){
-  if(n===null||n===undefined||d===null||d===undefined) return null;
-  if(d===0) return null;
-  if(!isFinite(n)||!isFinite(d)) return null;
-  return n/d;
-}
-function sub(a,b){ if(a===null||b===null) return null; return a-b; }
+/* ============================ 計算・フォーマット ============================ */
+function ratio(n,d){ if(n==null||d==null) return null; if(d===0) return null; if(!isFinite(n)||!isFinite(d)) return null; return n/d; }
+function sub(a,b){ if(a==null||b==null) return null; return a-b; }
 function weeklyRates(e){
   return {
     followerGrowth: ratio(e.newFollowers, e.followersStart),
     homeRate: ratio(e.followerReach, e.followersStart),
-    nonFollowerReachRate: ratio(sub(e.reach, e.followerReach), e.reach),
+    nonFollowerReachRate: ratio(sub(e.reach,e.followerReach), e.reach),
     profileVisitRate: ratio(e.profileVisits, e.reach),
     followerConversionRate: ratio(e.newFollowers, e.profileVisits),
     saveRate: ratio(e.saves, e.reach),
@@ -1223,30 +1283,30 @@ function postRates(p){
     profileVisitRate: ratio(p.profileVisits, p.views)
   };
 }
-function suggestVerdict(r, t){
-  if((r.saveRate!==null && r.saveRate>=t.winSaveRate) || (r.shareRate!==null && r.shareRate>=t.winShareRate)) return "勝ち候補";
-  if(r.saveRate!==null && r.shareRate!==null && r.likeRate!==null){
+function suggestVerdict(r,t){
+  if((r.saveRate!=null && r.saveRate>=t.winSaveRate)||(r.shareRate!=null && r.shareRate>=t.winShareRate)) return "勝ち候補";
+  if(r.saveRate!=null && r.shareRate!=null && r.likeRate!=null){
     if(r.saveRate<t.loseSaveRate && r.shareRate<t.loseShareRate && r.likeRate<t.loseLikeRate) return "負け候補";
   }
   return null;
 }
-function rateStatus(v, good, warn){ if(v===null) return "none"; if(v>=good) return "good"; if(v>=warn) return "warn"; return "bad"; }
-
-/* ============================ フォーマット ============================ */
-function pct(v, d){ if(v===null||v===undefined||!isFinite(v)) return "—"; return (v*100).toFixed(d===undefined?1:d)+"%"; }
-function intf(v){ if(v===null||v===undefined||!isFinite(v)) return "—"; return Math.round(v).toLocaleString("ja-JP"); }
-function shortDate(iso){ if(!iso) return "—"; var p=iso.split("-"); if(p.length<3) return iso; return (+p[1])+"/"+(+p[2]); }
-function delta(cur, prev){ if(cur===null||prev===null||cur===undefined||prev===undefined) return null; return cur-prev; }
+function rateStatus(v,good,warn){ if(v==null) return "none"; if(v>=good) return "good"; if(v>=warn) return "warn"; return "bad"; }
+function pct(v,d){ if(v==null||!isFinite(v)) return "—"; return (v*100).toFixed(d===undefined?1:d)+"%"; }
+function intf(v){ if(v==null||!isFinite(v)) return "—"; return Math.round(v).toLocaleString("ja-JP"); }
+function shortDate(iso){ if(!iso) return "—"; var p=String(iso).split("-"); if(p.length<3) return iso; return (+p[1])+"/"+(+p[2].slice(0,2)); }
+function delta(c,p){ if(c==null||p==null) return null; return c-p; }
 function deltaHtml(d){
-  if(d===null||d===undefined||!isFinite(d)) return '<span class="delta flat tnum">—</span>';
+  if(d==null||!isFinite(d)) return '<span class="delta flat tnum">—</span>';
   var pts=d*100, abs=Math.abs(pts).toFixed(1);
   if(Math.abs(pts)<0.05) return '<span class="delta flat tnum">±0.0 pt</span>';
   if(pts>0) return '<span class="delta up">'+IC.tup+'<span class="tnum">'+abs+' pt</span></span>';
   return '<span class="delta down">'+IC.tdown+'<span class="tnum">'+abs+' pt</span></span>';
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function ymd(d){ var m=("0"+(d.getMonth()+1)).slice(-2), dd=("0"+d.getDate()).slice(-2); return d.getFullYear()+"-"+m+"-"+dd; }
+function todayYmd(){ return ymd(new Date()); }
 
-/* ============================ メタ情報 ============================ */
+/* ============================ メタ ============================ */
 var RATE_META = [
   {key:"homeRate",label:"ホーム率",bm:"40〜50%",bk:"homeRate",dk:"リーチ",ds:"減った"},
   {key:"saveRate",label:"保存率",bm:"1%〜（2〜3%で優秀）",bk:"saveRate",dk:"保存率",ds:"減った"},
@@ -1263,80 +1323,286 @@ var BENCH_META = RATE_META.filter(function(m){return m.bk;});
 var SPARK_KEYS = ["homeRate","saveRate","shareRate","followerConversionRate"];
 var SPARK_COLORS = ["var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
 var DIAG_KPIS = ["リーチ","プロフアクセス率","フォロワー転換率","保存率","シェア率（送信）","リンクCTR","ストーリーズ閲覧率","成約率"];
+function statesFor(kpi){ var s=[]; DATA.diagnosis.forEach(function(d){ if(d.kpi===kpi&&s.indexOf(d.state)<0)s.push(d.state); }); return s; }
+function diagFor(kpi,state){ return DATA.diagnosis.filter(function(d){return d.kpi===kpi&&d.state===state;}); }
 
-function statesFor(kpi){ var seen=[]; DATA.diagnosis.forEach(function(d){ if(d.kpi===kpi && seen.indexOf(d.state)<0) seen.push(d.state); }); return seen; }
-function diagFor(kpi, state){ return DATA.diagnosis.filter(function(d){ return d.kpi===kpi && d.state===state; }); }
-
-/* ============================ チャート (inline SVG) ============================ */
-function sparkline(points, color){
-  var vals = points.map(function(p){return p.value;});
-  var nn = vals.filter(function(v){return v!==null;});
-  if(nn.length===0) return '<svg class="chart" width="100%" height="44"></svg>';
+/* ============================ チャート ============================ */
+function sparkline(points,color){
+  var nn=points.map(function(p){return p.value;}).filter(function(v){return v!=null;});
+  if(!nn.length) return '<svg class="chart" width="100%" height="44"></svg>';
   var min=Math.min.apply(null,nn), max=Math.max.apply(null,nn);
-  var W=100,H=44,pad=4; if(max===min){max=min+1;}
-  var n=points.length;
-  var pts=[];
+  var W=100,H=44,pad=4; if(max===min)max=min+1;
+  var n=points.length, pts=[];
   points.forEach(function(p,i){
-    if(p.value===null) return;
-    var x = n<=1? W/2 : pad + (W-2*pad)*i/(n-1);
-    var y = H-pad - (H-2*pad)*(p.value-min)/(max-min);
+    if(p.value==null) return;
+    var x=n<=1?W/2:pad+(W-2*pad)*i/(n-1), y=H-pad-(H-2*pad)*(p.value-min)/(max-min);
     pts.push(x.toFixed(1)+","+y.toFixed(1));
   });
-  return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" width="100%" height="44">'+
-    '<polyline fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="'+pts.join(" ")+'"/></svg>';
+  return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" width="100%" height="44"><polyline fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="'+pts.join(" ")+'"/></svg>';
 }
-function lineChart(points, benchmark, benchLabel, color){
-  color = color||"var(--c1)";
-  var vals = points.map(function(p){return p.value;}).filter(function(v){return v!==null;});
+function lineChart(points,benchmark,benchLabel,color){
+  color=color||"var(--c1)";
+  var vals=points.map(function(p){return p.value;}).filter(function(v){return v!=null;});
   if(benchmark!=null) vals.push(benchmark);
-  if(vals.length===0) return '<p class="muted fs13" style="text-align:center;padding:32px 0">データが不足しています。</p>';
-  var maxV=Math.max.apply(null,vals); var top = maxV*1.25 || 0.01; if(top<=0) top=0.01;
-  var W=560,H=240,L=44,R=16,T=12,B=28;
-  var iw=W-L-R, ih=H-T-B, n=points.length;
-  function X(i){ return n<=1? L+iw/2 : L + iw*i/(n-1); }
-  function Y(v){ return T + ih*(1 - v/top); }
-  var grid=""; var ticks=4;
-  for(var g=0; g<=ticks; g++){
-    var v=top*g/ticks, y=Y(v);
-    grid += '<line x1="'+L+'" y1="'+y.toFixed(1)+'" x2="'+(W-R)+'" y2="'+y.toFixed(1)+'" stroke="var(--border)" stroke-dasharray="3 3"/>';
-    grid += '<text x="'+(L-6)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end">'+Math.round(v*100)+'%</text>';
-  }
-  var xlab=""; points.forEach(function(p,i){ xlab += '<text x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+esc(p.label)+'</text>'; });
-  var line="", dots="", prev=null;
+  if(!vals.length) return '<p class="muted fs13" style="text-align:center;padding:32px 0">データが不足しています。</p>';
+  var top=Math.max.apply(null,vals)*1.25||0.01; if(top<=0)top=0.01;
+  var W=560,H=240,L=44,R=16,T=12,B=28, iw=W-L-R, ih=H-T-B, n=points.length;
+  function X(i){ return n<=1?L+iw/2:L+iw*i/(n-1); }
+  function Y(v){ return T+ih*(1-v/top); }
+  var grid=""; for(var g=0;g<=4;g++){ var v=top*g/4,y=Y(v);
+    grid+='<line x1="'+L+'" y1="'+y.toFixed(1)+'" x2="'+(W-R)+'" y2="'+y.toFixed(1)+'" stroke="var(--border)" stroke-dasharray="3 3"/>';
+    grid+='<text x="'+(L-6)+'" y="'+(y+3).toFixed(1)+'" text-anchor="end">'+Math.round(v*100)+'%</text>'; }
+  var xlab=""; points.forEach(function(p,i){ xlab+='<text x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle">'+esc(p.label)+'</text>'; });
+  var line="",dots="",prev=null;
   points.forEach(function(p,i){
-    if(p.value===null){ prev=null; return; }
-    var x=X(i), y=Y(p.value);
-    if(prev) line += '<line x1="'+prev.x.toFixed(1)+'" y1="'+prev.y.toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round"/>';
-    dots += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3.2" fill="'+color+'"><title>'+esc(p.label)+'：'+pct(p.value)+'</title></circle>';
+    if(p.value==null){prev=null;return;}
+    var x=X(i),y=Y(p.value);
+    if(prev) line+='<line x1="'+prev.x.toFixed(1)+'" y1="'+prev.y.toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round"/>';
+    dots+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3.2" fill="'+color+'"><title>'+esc(p.label)+'：'+pct(p.value)+'</title></circle>';
     prev={x:x,y:y};
   });
   var bench="";
-  if(benchmark!=null){
-    var by=Y(benchmark);
-    bench = '<line x1="'+L+'" y1="'+by.toFixed(1)+'" x2="'+(W-R)+'" y2="'+by.toFixed(1)+'" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 4"/>'+
-      '<text x="'+(W-R)+'" y="'+(by-4).toFixed(1)+'" text-anchor="end" style="fill:var(--warn)">'+esc(benchLabel||"目安")+'</text>';
-  }
+  if(benchmark!=null){ var by=Y(benchmark);
+    bench='<line x1="'+L+'" y1="'+by.toFixed(1)+'" x2="'+(W-R)+'" y2="'+by.toFixed(1)+'" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 4"/>'+
+      '<text x="'+(W-R)+'" y="'+(by-4).toFixed(1)+'" text-anchor="end" style="fill:var(--warn)">'+esc(benchLabel||"目安")+'</text>'; }
   return '<div class="twrap"><svg class="chart" viewBox="0 0 '+W+' '+H+'" width="100%" style="min-width:480px;height:auto">'+grid+xlab+bench+line+dots+'</svg></div>';
 }
 
-/* ============================ ルーター ============================ */
-var routes = ["dashboard","weekly","posts","diagnosis","kpis","settings"];
-function parseHash(){
-  var h = location.hash.replace(/^#\/?/, "");
-  var qi = h.indexOf("?"); var path=h, qs="";
-  if(qi>=0){ path=h.slice(0,qi); qs=h.slice(qi+1); }
-  if(!path) path="dashboard";
-  var params={}; qs.split("&").forEach(function(kv){ if(!kv) return; var p=kv.split("="); params[decodeURIComponent(p[0])]=decodeURIComponent(p[1]||""); });
-  return { path: routes.indexOf(path)>=0? path : "dashboard", params: params };
+/* ============================ Graph API クライアント ============================ */
+var GRAPH = "https://graph.facebook.com/v23.0";
+function apiCfg(){ return load(K.api, {token:"",savedAt:null}); }
+function saveApiCfg(c){ save(K.api, c); }
+
+function gfetch(pathOrUrl){
+  var url = pathOrUrl.indexOf("http")===0 ? pathOrUrl : GRAPH + pathOrUrl +
+    (pathOrUrl.indexOf("?")>=0 ? "&" : "?") + "access_token=" + encodeURIComponent(apiCfg().token);
+  return fetch(url).then(function(r){ return r.json(); }).catch(function(e){ return {error:{message:String(e)}}; });
 }
-function navigate(path, params){
-  var q="";
-  if(params){ var arr=[]; for(var k in params) arr.push(encodeURIComponent(k)+"="+encodeURIComponent(params[k])); if(arr.length) q="?"+arr.join("&"); }
-  location.hash = "#/"+path+q;
+function gAll(path){ // ページネーションを全部たどる
+  var out=[];
+  function step(url){
+    return gfetch(url).then(function(res){
+      if(!res || res.error) return Promise.reject(res && res.error ? res.error.message : "通信エラー");
+      out = out.concat(res.data||[]);
+      if(res.paging && res.paging.next) return step(res.paging.next);
+      return out;
+    });
+  }
+  return step(path);
+}
+function friendlyApiError(msg){
+  msg = String(msg||"");
+  if(/expired|invalid|session/i.test(msg)) return "トークンが無効か期限切れのようです。設定 > Instagram連携 でトークンを更新してください。";
+  if(/permission|scope/i.test(msg)) return "権限が不足しています。トークンに instagram_manage_insights 等の権限が付いているか確認してください。";
+  return "取得に失敗しました：" + msg.slice(0,200);
 }
 
-/* ============================ ナビ描画 ============================ */
-var NAV = [
+/** 権限のあるIGプロアカウント一覧 */
+function listIgAccounts(){
+  return gAll("/me/accounts?fields=name,instagram_business_account{id,username,followers_count}&limit=100")
+    .then(function(pages){
+      return pages.filter(function(p){return p.instagram_business_account;}).map(function(p){
+        var ig=p.instagram_business_account;
+        return { igId: ig.id, username: ig.username || p.name, followers: ig.followers_count||0, pageName: p.name };
+      });
+    });
+}
+
+/** アカウント週次インサイト（取れない指標は黙ってスキップ） */
+function fetchAccountWeek(igId, sinceSec, untilSec){
+  var metrics=["views","reach","total_interactions","saves","shares","profile_links_taps"];
+  var url="/"+igId+"/insights?metric="+metrics.join(",")+"&period=day&metric_type=total_value&since="+sinceSec+"&until="+untilSec;
+  return gfetch(url).then(function(res){
+    if(res && !res.error){
+      var out={}; (res.data||[]).forEach(function(d){ out[d.name]=(d.total_value&&d.total_value.value!==undefined)?d.total_value.value:null; });
+      return out;
+    }
+    // まとめて失敗 → 1個ずつ
+    var out2={};
+    var chain=Promise.resolve();
+    metrics.forEach(function(m){
+      chain=chain.then(function(){
+        return gfetch("/"+igId+"/insights?metric="+m+"&period=day&metric_type=total_value&since="+sinceSec+"&until="+untilSec)
+          .then(function(r2){ if(r2&&!r2.error&&r2.data&&r2.data.length){ var d=r2.data[0]; out2[m]=(d.total_value&&d.total_value.value!==undefined)?d.total_value.value:null; } });
+      });
+    });
+    return chain.then(function(){ return out2; });
+  });
+}
+/** 日次時系列の合計（フォロワー純増など） */
+function sumSeries(igId, metric, sinceSec, untilSec){
+  return gfetch("/"+igId+"/insights?metric="+metric+"&period=day&since="+sinceSec+"&until="+untilSec)
+    .then(function(res){
+      if(!res||res.error||!res.data||!res.data.length) return null;
+      var sum=0; (res.data[0].values||[]).forEach(function(v){ sum+=(v.value||0); });
+      return sum;
+    });
+}
+/** メディア一覧（期間内） */
+function fetchMedia(igId, sinceSec, untilSec){
+  return gAll("/"+igId+"/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count&since="+sinceSec+"&until="+untilSec+"&limit=50");
+}
+/** メディア単位インサイト */
+function fetchMediaInsights(mediaId, isReel){
+  var metrics = isReel
+    ? ["views","reach","saved","shares","profile_visits","follows","ig_reels_avg_watch_time"]
+    : ["views","reach","saved","shares","profile_visits","follows"];
+  return gfetch("/"+mediaId+"/insights?metric="+metrics.join(",")).then(function(res){
+    var out={};
+    if(res && !res.error){
+      (res.data||[]).forEach(function(d){
+        var v=null;
+        if(d.values&&d.values.length) v=d.values[0].value;
+        if(d.total_value&&d.total_value.value!==undefined) v=d.total_value.value;
+        out[d.name]=v;
+      });
+      return out;
+    }
+    // 個別リトライ（タイプ非対応の指標をスキップ）
+    var chain=Promise.resolve();
+    metrics.forEach(function(m){
+      chain=chain.then(function(){
+        return gfetch("/"+mediaId+"/insights?metric="+m).then(function(r2){
+          if(r2&&!r2.error&&r2.data&&r2.data.length){
+            var d=r2.data[0], v=null;
+            if(d.values&&d.values.length) v=d.values[0].value;
+            if(d.total_value&&d.total_value.value!==undefined) v=d.total_value.value;
+            out[m]=v;
+          }
+        });
+      });
+    });
+    return chain.then(function(){ return out; });
+  });
+}
+
+/* ============================ 週レンジ ============================ */
+function weekRange(offset){ // offset=1: 先週, 2: 2週前, 0: 今週(途中)
+  var now=new Date(), day=(now.getDay()+6)%7; // 月=0
+  var mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-day-7*offset);
+  var end=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+7);
+  return { since:mon, untilEx:end, label: ymd(mon)+" 〜 "+ymd(new Date(end.getTime()-86400000)) };
+}
+
+/* ============================ 取り込み本体 ============================ */
+function importWeek(acc, offset, onStep){
+  var r=weekRange(offset);
+  var sinceSec=Math.floor(r.since.getTime()/1000), untilSec=Math.floor(r.untilEx.getTime()/1000);
+  var result={ weekStart: ymd(r.since), filled:[], missing:[], posts:0 };
+
+  onStep("アカウント指標を取得中…", 10);
+  return fetchAccountWeek(acc.igId, sinceSec, untilSec).then(function(totals){
+    onStep("フォロワー推移を取得中…", 30);
+    return sumSeries(acc.igId,"follower_count",sinceSec,untilSec).then(function(newFollowers){
+      return gfetch("/"+acc.igId+"?fields=followers_count").then(function(prof){
+        onStep("投稿一覧を取得中…", 45);
+        return fetchMedia(acc.igId,sinceSec,untilSec).then(function(medias){
+          // 投稿インサイトを順に取得
+          var posts=getPosts();
+          var chain=Promise.resolve();
+          var weekSaves=0, weekShares=0, hasMediaAgg=medias.length>0;
+          medias.forEach(function(m,idx){
+            chain=chain.then(function(){
+              onStep("投稿を取り込み中… "+(idx+1)+"/"+medias.length, 45+Math.round(45*(idx+1)/Math.max(1,medias.length)));
+              var isReel=m.media_product_type==="REELS";
+              return fetchMediaInsights(m.id,isReel).then(function(ins){
+                weekSaves += (ins.saved||0); weekShares += (ins.shares||0);
+                var fmt = isReel?"リール":(m.media_type==="CAROUSEL_ALBUM"?"カルーセル":"フィード単枚");
+                var entry={
+                  igMediaId:m.id,
+                  date:(m.timestamp||"").slice(0,10)||result.weekStart,
+                  format:fmt,
+                  title:((m.caption||"").split("\n")[0]||"（キャプションなし）").slice(0,40),
+                  hook:"",
+                  views:ins.views!=null?ins.views:null,
+                  reach:ins.reach!=null?ins.reach:null,
+                  nonFollowerReachPct:null,
+                  videoSec:null,
+                  avgWatchSec:(isReel&&ins.ig_reels_avg_watch_time!=null)?Math.round(ins.ig_reels_avg_watch_time)/1000:null,
+                  likes:m.like_count!=null?m.like_count:null,
+                  comments:m.comments_count!=null?m.comments_count:null,
+                  saves:ins.saved!=null?ins.saved:null,
+                  shares:ins.shares!=null?ins.shares:null,
+                  profileVisits:ins.profile_visits!=null?ins.profile_visits:null,
+                  follows:ins.follows!=null?ins.follows:null,
+                  memo:"", verdict:"普通",
+                  permalink:m.permalink||""
+                };
+                var i=posts.findIndex(function(x){return x.igMediaId===m.id;});
+                if(i>=0){ // 再取り込み：数値だけ更新、判定・メモ・手入力は残す
+                  ["views","reach","likes","comments","saves","shares","profileVisits","follows","avgWatchSec"].forEach(function(kk){
+                    if(entry[kk]!=null) posts[i][kk]=entry[kk];
+                  });
+                  posts[i].updatedAt=nowISO();
+                } else {
+                  entry.id=uid(); entry.createdAt=nowISO(); entry.updatedAt=nowISO();
+                  posts.push(entry);
+                }
+                result.posts++;
+              });
+            });
+          });
+          return chain.then(function(){
+            setPosts(posts);
+            onStep("週次データを保存中…", 95);
+            // 週次エントリを組み立て（取れない項目は null のまま＝手入力欄）
+            var followersNow=(prof&&!prof.error&&prof.followers_count!=null)?prof.followers_count:acc.followers||null;
+            var e={
+              weekStart:result.weekStart,
+              followersStart: followersNow!=null&&newFollowers!=null ? followersNow-newFollowers : followersNow,
+              newFollowers:newFollowers,
+              posts:medias.length,
+              stories:null,
+              views: totals.views!=null?totals.views:null,
+              reach: totals.reach!=null?totals.reach:null,
+              followerReach:null,
+              profileVisits:null,
+              saves: totals.saves!=null?totals.saves:(hasMediaAgg?weekSaves:null),
+              shares: totals.shares!=null?totals.shares:(hasMediaAgg?weekShares:null),
+              linkClicks: totals.profile_links_taps!=null?totals.profile_links_taps:null,
+              storyViews:null,
+              conversions:null
+            };
+            var weekly=getWeekly();
+            var wi=weekly.findIndex(function(x){return x.weekStart===e.weekStart;});
+            if(wi>=0){
+              Object.keys(e).forEach(function(kk){ if(e[kk]!=null) weekly[wi][kk]=e[kk]; });
+              weekly[wi].updatedAt=nowISO(); weekly[wi].source="api";
+            } else {
+              e.id=uid(); e.createdAt=nowISO(); e.updatedAt=nowISO(); e.source="api";
+              weekly.push(e);
+            }
+            setWeekly(weekly);
+            // 埋まった/欠けの一覧
+            var labelMap={views:"ビュー数",reach:"リーチ",saves:"保存",shares:"シェア",linkClicks:"リンクタップ",newFollowers:"新規フォロワー",followersStart:"週初フォロワー",posts:"投稿数"};
+            Object.keys(labelMap).forEach(function(kk){ if(e[kk]!=null) result.filled.push(labelMap[kk]); });
+            [["stories","ストーリーズ本数"],["storyViews","ストーリーズ閲覧"],["followerReach","フォロワーリーチ"],["profileVisits","プロフィールアクセス"],["conversions","CV数"]]
+              .forEach(function(pair){ if(e[pair[0]]==null) result.missing.push(pair[1]); });
+            if(e.linkClicks==null) result.missing.push("外部リンククリック");
+            onStep("完了", 100);
+            return result;
+          });
+        });
+      });
+    });
+  });
+}
+
+/* ============================ ルーター・ナビ ============================ */
+var routes=["dashboard","weekly","posts","diagnosis","kpis","settings"];
+function parseHash(){
+  var h=location.hash.replace(/^#\/?/,""), qi=h.indexOf("?"), path=h, qs="";
+  if(qi>=0){ path=h.slice(0,qi); qs=h.slice(qi+1); }
+  if(!path) path="dashboard";
+  var params={}; qs.split("&").forEach(function(kv){ if(!kv)return; var p=kv.split("="); params[decodeURIComponent(p[0])]=decodeURIComponent(p[1]||""); });
+  return { path: routes.indexOf(path)>=0?path:"dashboard", params:params };
+}
+function navigate(path,params){
+  var q="";
+  if(params){ var a=[]; for(var k in params) a.push(encodeURIComponent(k)+"="+encodeURIComponent(params[k])); if(a.length) q="?"+a.join("&"); }
+  location.hash="#/"+path+q;
+}
+var NAV=[
   {p:"dashboard",l:"ダッシュボード",i:IC.dash,s:"ホーム"},
   {p:"weekly",l:"週次分析",i:IC.cal,s:"週次"},
   {p:"posts",l:"投稿別分析",i:IC.img,s:"投稿"},
@@ -1344,267 +1610,443 @@ var NAV = [
   {p:"kpis",l:"KPI辞典",i:IC.book,s:"辞典"},
   {p:"settings",l:"設定",i:IC.gear,s:"設定"}
 ];
-function themeIcon(){ return currentTheme()==="dark"? IC.sun : IC.moon; }
-function currentTheme(){ return document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"); }
-function toggleTheme(){ var t=currentTheme()==="dark"?"light":"dark"; document.documentElement.setAttribute("data-theme",t); save(KEY.theme,t); renderChrome(); }
-
+function currentTheme(){ return document.documentElement.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"); }
+function toggleTheme(){ var t=currentTheme()==="dark"?"light":"dark"; document.documentElement.setAttribute("data-theme",t); save(K.theme,t); renderChrome(); }
 function renderChrome(){
-  var cur = parseHash().path;
-  var side = NAV.map(function(n){ return '<a href="#/'+n.p+'" class="'+(cur===n.p?"active":"")+'">'+n.i+n.l+'</a>'; }).join("");
-  var bottom = NAV.map(function(n){ return '<a href="#/'+n.p+'" class="'+(cur===n.p?"active":"")+'">'+n.i+'<span>'+n.s+'</span></a>'; }).join("");
-  document.getElementById("side-nav").innerHTML = side;
-  document.getElementById("btabs").innerHTML = bottom;
-  document.getElementById("theme-btn").innerHTML = themeIcon();
-  document.getElementById("theme-btn-m").innerHTML = themeIcon();
+  var cur=parseHash().path;
+  document.getElementById("side-nav").innerHTML=NAV.map(function(n){return '<a href="#/'+n.p+'" class="'+(cur===n.p?"active":"")+'">'+n.i+n.l+'</a>';}).join("");
+  document.getElementById("btabs").innerHTML=NAV.map(function(n){return '<a href="#/'+n.p+'" class="'+(cur===n.p?"active":"")+'">'+n.i+'<span>'+n.s+'</span></a>';}).join("");
+  document.getElementById("theme-btn").innerHTML=currentTheme()==="dark"?IC.sun:IC.moon;
+  document.getElementById("theme-btn-m").innerHTML=currentTheme()==="dark"?IC.sun:IC.moon;
 }
 
-/* ============================ トースト / モーダル ============================ */
-function toast(msg){
-  var t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t);
-  setTimeout(function(){ t.style.opacity="0"; t.style.transition="opacity .3s"; }, 1800);
-  setTimeout(function(){ t.remove(); }, 2200);
+/* ============================ トースト・モーダル ============================ */
+var lastDeleted=null; // {kind:"weekly"|"post", item}
+function toast(msg, actionLabel, actionFn){
+  var old=document.querySelector(".toast"); if(old) old.remove();
+  var t=document.createElement("div"); t.className="toast";
+  t.innerHTML='<span>'+esc(msg)+'</span>'+(actionLabel?'<button type="button">'+esc(actionLabel)+'</button>':"");
+  if(actionLabel){ t.querySelector("button").addEventListener("click",function(){ t.remove(); actionFn&&actionFn(); }); }
+  document.body.appendChild(t);
+  setTimeout(function(){ if(t.parentNode){ t.style.opacity="0"; t.style.transition="opacity .3s"; } }, actionLabel?5000:1800);
+  setTimeout(function(){ t.remove(); }, actionLabel?5400:2200);
 }
-function confirmModal(title, desc, confirmLabel, onOk){
+function confirmModal(title,desc,confirmLabel,onOk){
   var bg=document.createElement("div"); bg.className="modal-bg";
-  bg.innerHTML = '<div class="modal"><h3>'+esc(title)+'</h3><p>'+esc(desc)+'</p>'+
+  bg.innerHTML='<div class="modal"><h3>'+esc(title)+'</h3><p class="sub">'+esc(desc)+'</p>'+
     '<div class="modal-foot"><button class="btn ghost" data-c="cancel">キャンセル</button>'+
     '<button class="btn bad" data-c="ok">'+esc(confirmLabel||"削除する")+'</button></div></div>';
-  function close(){ bg.remove(); }
-  bg.addEventListener("click", function(e){
-    if(e.target===bg || e.target.getAttribute("data-c")==="cancel") close();
-    if(e.target.getAttribute("data-c")==="ok"){ close(); onOk(); }
+  bg.addEventListener("click",function(e){
+    if(e.target===bg||e.target.getAttribute("data-c")==="cancel") bg.remove();
+    if(e.target.getAttribute("data-c")==="ok"){ bg.remove(); onOk(); }
   });
   document.body.appendChild(bg);
 }
+function closeModals(){ document.querySelectorAll(".modal-bg").forEach(function(m){m.remove();}); }
+
+/* ============================ 連携モーダル ============================ */
+function openConnectModal(fromWizard){
+  var cfg=apiCfg();
+  var bg=document.createElement("div"); bg.className="modal-bg";
+  bg.innerHTML='<div class="modal">'+
+    '<h3>Instagramと連携する</h3>'+
+    '<p class="sub">Metaのアクセストークンを貼り付けると、権限のあるアカウントが一覧に出ます。トークンは<b>この端末のブラウザ内にだけ</b>保存されます。</p>'+
+    '<div class="mt"><label class="fld">アクセストークン'+
+    '<textarea id="cm-token" placeholder="EAAG… で始まる長い文字列" style="min-height:88px">'+esc(cfg.token||"")+'</textarea>'+
+    '<span class="hint">取得方法：developers.facebook.com → Graph APIエクスプローラ → 権限 instagram_basic / instagram_manage_insights / pages_show_list / pages_read_engagement / business_management を付けて発行（詳しくは設定画面の手順を参照）</span></label></div>'+
+    '<div class="mt"><button class="btn block" id="cm-connect">'+IC.link+'接続してアカウントを取得</button></div>'+
+    '<div id="cm-result" class="mt"></div>'+
+    '<div class="modal-foot"><button class="btn ghost" id="cm-close">閉じる</button></div>'+
+    '</div>';
+  document.body.appendChild(bg);
+  bg.addEventListener("click",function(e){ if(e.target===bg) bg.remove(); });
+  bg.querySelector("#cm-close").addEventListener("click",function(){ bg.remove(); if(fromWizard) render(); });
+  bg.querySelector("#cm-connect").addEventListener("click",function(){
+    var tokenEl=bg.querySelector("#cm-token"), token=tokenEl.value.trim();
+    var out=bg.querySelector("#cm-result");
+    if(!token){ out.innerHTML='<p class="fs13" style="color:var(--bad)">トークンを貼り付けてください。</p>'; return; }
+    saveApiCfg({token:token, savedAt:nowISO()});
+    out.innerHTML='<p class="fs13 muted">接続中…</p>';
+    listIgAccounts().then(function(list){
+      if(!list.length){ out.innerHTML='<p class="fs13" style="color:var(--bad)">IGプロアカウントが見つかりませんでした。ページ権限とトークンの権限を確認してください。</p>'; return; }
+      var existing=accounts();
+      out.innerHTML='<div class="fs13" style="font-weight:600;margin-bottom:8px">見つかったアカウント（タップして追加）</div>'+
+        '<div class="stack" style="gap:8px">'+list.map(function(a,i){
+          var added=existing.some(function(x){return x.igId===a.igId;});
+          return '<button class="big-choice" data-ig="'+i+'" '+(added?'disabled style="opacity:.5"':'')+' style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--border);background:var(--card);border-radius:12px;padding:12px;cursor:pointer">'+
+            '<span class="avatar" style="width:32px;height:32px;border-radius:999px;background:'+ACCT_COLORS[i%ACCT_COLORS.length]+';color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none">'+esc((a.username||"?").slice(0,1).toUpperCase())+'</span>'+
+            '<span style="flex:1;min-width:0"><b style="font-size:14px">@'+esc(a.username)+'</b><span class="muted fs12" style="display:block">フォロワー '+intf(a.followers)+(added?"・追加済み":"")+'</span></span>'+
+            (added?'<span class="pill ok">✓</span>':'<span class="pill api">追加</span>')+'</button>';
+        }).join("")+'</div>';
+      out.querySelectorAll("[data-ig]").forEach(function(btn){
+        btn.addEventListener("click",function(){
+          var a=list[+btn.getAttribute("data-ig")];
+          addAccount({ name:"@"+a.username, mode:"api", igId:a.igId, username:a.username, followers:a.followers });
+          btn.disabled=true; btn.style.opacity=".5"; btn.querySelector(".pill").outerHTML='<span class="pill ok">✓</span>';
+          toast("@"+a.username+" を追加しました");
+          render();
+        });
+      });
+    }).catch(function(err){
+      out.innerHTML='<p class="fs13" style="color:var(--bad)">'+esc(friendlyApiError(err))+'</p>';
+    });
+  });
+}
+
+/* ============================ 取り込みモーダル ============================ */
+function openImportModal(){
+  var acc=currentAcct();
+  if(!acc||acc.mode!=="api"){ toast("このアカウントは手動入力です"); return; }
+  var bg=document.createElement("div"); bg.className="modal-bg";
+  var w1=weekRange(1), w2=weekRange(2), w0=weekRange(0);
+  bg.innerHTML='<div class="modal">'+
+    '<h3>'+IC.cloud.replace('width:16px','')+' データを取り込む</h3>'+
+    '<p class="sub">@'+esc(acc.username||acc.name)+' のインサイトを取得して、週次と投稿に自動入力します。</p>'+
+    '<div class="mt stack" style="gap:8px">'+
+    '<button class="choice on" data-w="1">先週（'+w1.label+'）</button>'+
+    '<button class="choice" data-w="2">2週前（'+w2.label+'）</button>'+
+    '<button class="choice" data-w="0">今週の途中経過（'+w0.label+'）</button>'+
+    '</div>'+
+    '<div class="mt" id="im-body"><button class="btn block lg" id="im-go">'+IC.cloud+'取り込みを開始</button></div>'+
+    '<div class="modal-foot"><button class="btn ghost" id="im-close">閉じる</button></div>'+
+    '</div>';
+  document.body.appendChild(bg);
+  var selOffset=1;
+  bg.querySelectorAll("[data-w]").forEach(function(b){
+    b.addEventListener("click",function(){
+      bg.querySelectorAll("[data-w]").forEach(function(x){x.classList.remove("on");});
+      b.classList.add("on"); selOffset=+b.getAttribute("data-w");
+    });
+  });
+  bg.addEventListener("click",function(e){ if(e.target===bg) bg.remove(); });
+  bg.querySelector("#im-close").addEventListener("click",function(){ bg.remove(); });
+  bg.querySelector("#im-go").addEventListener("click",function(){
+    var body=bg.querySelector("#im-body");
+    body.innerHTML='<div class="fs13 muted" id="im-step">開始します…</div><div class="progress mt"><div id="im-bar" style="width:0%"></div></div>';
+    importWeek(acc, selOffset, function(step,pctv){
+      var s=bg.querySelector("#im-step"), b=bg.querySelector("#im-bar");
+      if(s) s.textContent=step; if(b) b.style.width=pctv+"%";
+    }).then(function(res){
+      body.innerHTML='<div class="fs13" style="font-weight:700;color:var(--ok)">✓ 取り込み完了（週：'+esc(res.weekStart)+'）</div>'+
+        '<div class="fs13 mt">自動入力：'+res.filled.map(function(f){return '<span class="pill ok" style="margin:2px">'+esc(f)+'</span>';}).join("")+
+        (res.posts?'<span class="pill api" style="margin:2px">投稿 '+res.posts+'件</span>':"")+'</div>'+
+        (res.missing.length?'<div class="fs13 mt">手入力で補完：'+res.missing.map(function(f){return '<span class="pill warn" style="margin:2px">'+esc(f)+'</span>';}).join("")+'</div>':"")+
+        '<div class="mt flex gap8 wrapf"><button class="btn" id="im-fill">残りを入力する</button><button class="btn outline" id="im-done">閉じる</button></div>';
+      bg.querySelector("#im-done").addEventListener("click",function(){ bg.remove(); render(); });
+      bg.querySelector("#im-fill").addEventListener("click",function(){
+        bg.remove();
+        editWeekStart=res.weekStart; weeklyFormOpen=true;
+        navigate("weekly"); render();
+      });
+    }).catch(function(err){
+      body.innerHTML='<p class="fs13" style="color:var(--bad)">'+esc(friendlyApiError(err))+'</p>'+
+        '<div class="mt"><button class="btn outline" id="im-retry">やり直す</button></div>';
+      bg.querySelector("#im-retry").addEventListener("click",function(){ bg.remove(); openImportModal(); });
+    });
+  });
+}
+
+/* ============================ アカウント追加モーダル（手動） ============================ */
+function openManualAddModal(){
+  var bg=document.createElement("div"); bg.className="modal-bg";
+  bg.innerHTML='<div class="modal"><h3>手動アカウントを追加</h3>'+
+    '<p class="sub">連携できないアカウントは、数値を手で入力して管理します。あとから連携に切り替えることもできます。</p>'+
+    '<div class="mt"><label class="fld">アカウント名<input id="ma-name" placeholder="例：@client_shop / 自社アカウント"></label></div>'+
+    '<div class="modal-foot"><button class="btn ghost" data-c="x">キャンセル</button><button class="btn" id="ma-add">追加する</button></div></div>';
+  document.body.appendChild(bg);
+  bg.addEventListener("click",function(e){ if(e.target===bg||e.target.getAttribute("data-c")==="x") bg.remove(); });
+  var input=bg.querySelector("#ma-name"); input.focus();
+  function doAdd(){
+    var name=input.value.trim();
+    if(!name){ input.focus(); return; }
+    addAccount({name:name, mode:"manual"});
+    bg.remove(); toast("「"+name+"」を追加しました"); render();
+  }
+  bg.querySelector("#ma-add").addEventListener("click",doAdd);
+  input.addEventListener("keydown",function(e){ if(e.key==="Enter") doAdd(); });
+}
+
+/* ============================ アカウント切替チップ選択モーダル不要：チップ直押し ============================ */
+function acctBarHtml(){
+  var list=accounts(), cur=currentId();
+  if(!list.length) return "";
+  return '<div class="acct-bar">'+list.map(function(a){
+    var initial=(a.username||a.name||"?").replace("@","").slice(0,1).toUpperCase();
+    return '<button class="acct-chip'+(a.id===cur?" on":"")+'" data-act="switch-acct" data-id="'+a.id+'">'+
+      '<span class="avatar" style="background:'+a.color+'">'+esc(initial)+'</span>'+esc(a.name)+
+      '<span class="mode-tag '+(a.mode==="api"?"api":"manual")+'">'+(a.mode==="api"?"連携":"手動")+'</span></button>';
+  }).join("")+'<button class="acct-chip add" data-act="add-acct">'+IC.plus+' 追加</button></div>';
+}
+
+/* ============================ 画面：オンボーディング ============================ */
+function viewWizard(){
+  return '<div class="wizard">'+
+    '<div style="text-align:center;margin-bottom:28px">'+
+    '<div class="logo" style="width:56px;height:56px;border-radius:16px;margin:0 auto 16px;font-size:22px">イ</div>'+
+    '<h1 style="font-size:24px;font-weight:700">インスタ分析思考 2026</h1>'+
+    '<p class="muted fs13" style="margin-top:8px">数字を入れる → どこが悪いか分かる → 何をすべきか分かる。<br>まずはアカウントを1つ追加しましょう（あとで何個でも追加できます）。</p></div>'+
+    '<div class="stack">'+
+    '<button class="big-choice" data-act="wiz-api"><span class="ic" style="background:var(--accent-bg);color:var(--primary)">'+IC.link+'</span>'+
+    '<span><b>Instagram連携ではじめる</b><p>プロアカウント＆権限があれば、数値を自動で取り込めます（おすすめ）</p></span></button>'+
+    '<button class="big-choice" data-act="wiz-manual"><span class="ic" style="background:var(--muted);color:var(--muted-ink)">'+IC.keyb+'</span>'+
+    '<span><b>手動入力ではじめる</b><p>連携なしでOK。インサイトの数値を手で入力して分析します</p></span></button>'+
+    '<button class="big-choice" data-act="wiz-sample"><span class="ic" style="background:var(--ok-bg);color:var(--ok)">'+IC.spark+'</span>'+
+    '<span><b>サンプルデータで試す</b><p>まず触ってみたい方はこちら。1タップでデモ用データが入ります</p></span></button>'+
+    '</div></div>';
+}
 
 /* ============================ 画面：ダッシュボード ============================ */
+function pageHead(title,desc,action){
+  return '<div class="page-head"><div><h1>'+esc(title)+'</h1>'+(desc?'<p>'+esc(desc)+'</p>':"")+'</div>'+(action?'<div>'+action+'</div>':"")+'</div>';
+}
 function viewDashboard(){
-  var weekly = load(KEY.weekly, []);
-  var settings = getSettings();
-  if(weekly.length===0){
-    return pageHead("ダッシュボード","週次・投稿別の数値を入力すると、各レートの達成状況と詰まり箇所がここに表示されます。")+
-      '<div class="empty">'+'<div class="eicon">'+IC.dash+'</div>'+
-      '<h3>まだデータがありません</h3><p>週次分析から数値を入力すると、KPIカード・トレンド・アラートが表示されます。まずはお試しでサンプルデータを入れてみるのもおすすめです。</p>'+
-      '<div class="flex wrapf gap12" style="margin-top:24px;justify-content:center">'+
-      '<button class="btn" data-act="go-weekly">週次分析から入力を始める'+IC.up+'</button>'+
-      '<button class="btn outline" data-act="seed">'+IC.spark+'サンプルデータを投入</button></div></div>';
-  }
-  var asc = weekly.slice().sort(function(a,b){return a.weekStart.localeCompare(b.weekStart);});
-  var latest = asc[asc.length-1], prev = asc[asc.length-2];
-  var lr = weeklyRates(latest), pr = prev? weeklyRates(prev):null;
+  var acc=currentAcct();
+  var weekly=getWeekly();
+  var settings=getSettings();
+  var isApi=acc&&acc.mode==="api";
 
-  var cards = BENCH_META.map(function(m){
+  // 今週入力済み？先週入力済み？
+  var lastW=weekRange(1), lastKey=ymd(lastW.since);
+  var hasLastWeek=weekly.some(function(e){return e.weekStart===lastKey;});
+  var cta="";
+  if(!hasLastWeek){
+    cta='<div class="cta-hero mb"><div><h3>'+(isApi?"先週ぶんをワンタップで取り込めます":"先週ぶんの数値を入力しましょう")+'</h3>'+
+      '<p>'+lastW.label+' のデータが未登録です。'+(isApi?"連携済みなので自動で入ります。":"5分で終わります。")+'</p></div>'+
+      (isApi?'<button class="btn lg" data-act="open-import">'+IC.cloud+'先週ぶんを取り込む</button>'
+            :'<button class="btn lg" data-act="w-new-go">'+IC.pen+'先週ぶんを入力する</button>')+'</div>';
+  } else if(isApi){
+    cta='<div class="flex" style="justify-content:flex-end;margin-bottom:14px"><button class="btn outline sm" data-act="open-import">'+IC.cloud+'データを取り込む</button></div>';
+  }
+
+  if(weekly.length===0){
+    return pageHead("ダッシュボード", acc?("アカウント：「"+acc.name+"」"):"")+cta+
+      '<div class="empty"><div class="eicon">'+IC.dash+'</div><h3>まだデータがありません</h3>'+
+      '<p>'+(isApi?"「取り込む」を押すと先週の数値が自動で入ります。":"週次分析から数値を入力すると、KPIカード・トレンド・アラートが表示されます。")+'</p>'+
+      '<div class="flex wrapf gap12 mt" style="justify-content:center">'+
+      (isApi?'<button class="btn" data-act="open-import">'+IC.cloud+'先週ぶんを取り込む</button>':'<button class="btn" data-act="w-new-go">'+IC.pen+'週次分析で入力する</button>')+
+      '<button class="btn outline" data-act="seed">'+IC.spark+'サンプルデータを入れる</button></div></div>';
+  }
+
+  var asc=weekly.slice().sort(function(a,b){return a.weekStart.localeCompare(b.weekStart);});
+  var latest=asc[asc.length-1], prev=asc[asc.length-2];
+  var lr=weeklyRates(latest), pr=prev?weeklyRates(prev):null;
+
+  var cards=BENCH_META.map(function(m){
     var v=lr[m.key], pv=pr?pr[m.key]:null, th=settings.benchmarks[m.bk];
-    var st=rateStatus(v, th.good, th.warn);
+    var st=rateStatus(v,th.good,th.warn);
     return '<div class="kpi"><div class="lab"><span class="dot '+st+'"></span>'+m.label+'</div>'+
-      '<div class="val tnum">'+pct(v)+'</div>'+
-      '<div class="bm">'+deltaHtml(delta(v,pv))+' ・ 目安 '+m.bm+'</div></div>';
+      '<div class="val tnum">'+pct(v)+'</div><div class="bm">'+deltaHtml(delta(v,pv))+' ・ 目安 '+m.bm+'</div></div>';
   }).join("");
 
-  // アラート：2週連続低下
   var alerts="";
   if(asc.length>=3){
     var l3=asc.slice(-3).map(weeklyRates);
     BENCH_META.forEach(function(m){
       var a=l3[0][m.key],b=l3[1][m.key],c=l3[2][m.key];
-      if(a!==null&&b!==null&&c!==null&&a>b&&b>c){
-        alerts += '<div class="alert"><div class="flex gap12 items-center"><div class="ai">'+IC.warn+'</div>'+
+      if(a!=null&&b!=null&&c!=null&&a>b&&b>c){
+        alerts+='<div class="alert"><div class="flex gap12 items-center"><div class="ai">'+IC.warn+'</div>'+
           '<div><div style="font-weight:600;font-size:14px">「'+m.label+'」が2週連続で低下しています</div>'+
           '<div class="muted fs12 tnum" style="margin-top:2px">'+[a,b,c].map(function(x){return pct(x);}).join(" → ")+'</div></div></div>'+
-          (m.dk? '<button class="btn outline sm" data-act="go-diag" data-kpi="'+esc(m.dk)+'" data-state="'+esc(m.ds||"減った")+'">診断フローを見る'+IC.up+'</button>':'')+'</div>';
+          (m.dk?'<button class="btn outline sm" data-act="go-diag" data-kpi="'+esc(m.dk)+'" data-state="'+esc(m.ds||"減った")+'">診断フローを見る'+IC.up+'</button>':"")+'</div>';
       }
     });
   }
 
-  var last8 = asc.slice(-8);
-  var sparks = SPARK_KEYS.map(function(k,i){
-    var series = last8.map(function(e){ return {label:shortDate(e.weekStart), value:weeklyRates(e)[k]}; });
-    var meta = RATE_META.filter(function(m){return m.key===k;})[0];
+  var last8=asc.slice(-8);
+  var sparks=SPARK_KEYS.map(function(k,i){
+    var series=last8.map(function(e){return {label:shortDate(e.weekStart),value:weeklyRates(e)[k]};});
+    var meta=RATE_META.filter(function(m){return m.key===k;})[0];
     var lastv=series.length?series[series.length-1].value:null;
     var prevv=series.length>1?series[series.length-2].value:null;
-    return '<div class="spark-wrap"><div class="flex between items-center mb"><span class="muted fs13">'+meta.label+'</span>'+deltaHtml(delta(lastv,prevv))+'</div>'+
-      '<div class="tnum" style="font-size:20px;font-weight:700;margin-bottom:8px">'+pct(lastv)+'</div>'+
-      sparkline(series, SPARK_COLORS[i])+'</div>';
+    return '<div class="spark-wrap"><div class="flex between items-center" style="margin-bottom:6px"><span class="muted fs13">'+meta.label+'</span>'+deltaHtml(delta(lastv,prevv))+'</div>'+
+      '<div class="tnum" style="font-size:20px;font-weight:700;margin-bottom:8px">'+pct(lastv)+'</div>'+sparkline(series,SPARK_COLORS[i])+'</div>';
   }).join("");
 
-  var homeSeries = last8.map(function(e){ return {label:shortDate(e.weekStart), value:weeklyRates(e).homeRate}; });
-
-  return pageHead("ダッシュボード","最新週："+latest.weekStart+"（全"+weekly.length+"週）")+
-    (alerts? '<div class="stack" style="margin-bottom:20px">'+alerts+'</div>':"")+
-    '<div class="grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:20px" id="kpi-grid">'+cards+'</div>'+
-    '<div class="card" style="margin-bottom:20px"><div class="card-h"><h3>'+IC.spark+' 主要レートの推移 <span class="muted fs12" style="font-weight:400">直近'+last8.length+'週</span></h3></div>'+
+  return pageHead("ダッシュボード","最新週："+latest.weekStart+"（全"+weekly.length+"週）"+(latest.source==="api"?"・自動取得":""))+
+    cta+
+    (alerts?'<div class="stack mb">'+alerts+'</div>':"")+
+    '<div class="grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:16px" id="kpi-grid">'+cards+'</div>'+
+    '<div class="card mb"><div class="card-h"><h3>'+IC.spark+' 主要レートの推移 <span class="muted fs12" style="font-weight:400">直近'+last8.length+'週</span></h3></div>'+
     '<div class="card-p grid" style="grid-template-columns:repeat(2,1fr)">'+sparks+'</div></div>'+
     '<div class="card"><div class="card-h"><h3>ホーム率のトレンド</h3></div><div class="card-p">'+
-    lineChart(homeSeries, settings.benchmarks.homeRate.good, "目安 "+pct(settings.benchmarks.homeRate.good,0))+'</div></div>'+
-    '<p class="flex items-center gap8 muted fs12" style="margin-top:20px"><span class="pill new">新規</span>シェア率（送信）と視聴時間は現アルゴリズムの重要シグナル。絶対値より前週比・投稿間の相対比較を優先してください。</p>';
+    lineChart(last8.map(function(e){return {label:shortDate(e.weekStart),value:weeklyRates(e).homeRate};}), settings.benchmarks.homeRate.good, "目安 "+pct(settings.benchmarks.homeRate.good,0))+'</div></div>';
 }
 
-/* ============================ 画面：週次分析 ============================ */
-var WEEKLY_FIELDS = [
-  ["followersStart","週初フォロワー数"],["newFollowers","新規フォロワー数（純増）"],["posts","投稿数"],
-  ["stories","ストーリーズ本数"],["views","ビュー数"],["reach","リーチ"],["followerReach","うちフォロワーリーチ"],
-  ["profileVisits","プロフィールアクセス"],["saves","保存"],["shares","シェア（送信）"],
-  ["linkClicks","外部リンククリック"],["storyViews","ストーリーズ閲覧（平均）"],["conversions","CV数"]
+/* ============================ 画面：週次 ============================ */
+var WEEKLY_SECTIONS=[
+  {t:"フォロワー", fields:[["followersStart","週初フォロワー数"],["newFollowers","新規フォロワー数（純増）"]]},
+  {t:"投稿量", fields:[["posts","投稿数"],["stories","ストーリーズ本数"]]},
+  {t:"リーチ・ビュー", fields:[["views","ビュー数"],["reach","リーチ"],["followerReach","うちフォロワーリーチ"],["storyViews","ストーリーズ閲覧（平均）"]]},
+  {t:"アクション", fields:[["profileVisits","プロフィールアクセス"],["saves","保存"],["shares","シェア（送信）"]]},
+  {t:"成果", fields:[["linkClicks","外部リンククリック"],["conversions","CV数"]]}
 ];
-var weeklyEditId = null, weeklyFormOpen = false, weeklyChartKey = "homeRate";
+var WEEKLY_FIELDS=[]; WEEKLY_SECTIONS.forEach(function(s){ s.fields.forEach(function(f){ WEEKLY_FIELDS.push(f); }); });
+var weeklyFormOpen=false, editWeekStart=null, weeklyChartKey="homeRate";
 
 function readWeeklyForm(){
-  var e = { weekStart: (document.getElementById("f-weekStart")||{}).value || "" };
-  WEEKLY_FIELDS.forEach(function(f){ var el=document.getElementById("f-"+f[0]); var val=el?el.value.trim():""; e[f[0]] = val===""? null : Number(val); });
+  var e={ weekStart:(document.getElementById("f-weekStart")||{}).value||"" };
+  WEEKLY_FIELDS.forEach(function(f){ var el=document.getElementById("f-"+f[0]); var v=el?el.value.trim():""; e[f[0]]=v===""?null:Number(v); });
   return e;
 }
 function weeklyPreview(){
-  var e=readWeeklyForm(); var r=weeklyRates(e);
+  var e=readWeeklyForm(), r=weeklyRates(e);
   var host=document.getElementById("weekly-preview"); if(!host) return;
-  host.innerHTML = RATE_META.map(function(m){ return '<div><div class="pt">'+m.label+'</div><div class="pv tnum">'+pct(r[m.key])+'</div></div>'; }).join("");
+  host.innerHTML=RATE_META.map(function(m){return '<div><div class="pt">'+m.label+'</div><div class="pv tnum">'+pct(r[m.key])+'</div></div>';}).join("");
 }
 function viewWeekly(){
-  var weekly = load(KEY.weekly, []);
-  var settings = getSettings();
-  var asc = weekly.slice().sort(function(a,b){return a.weekStart.localeCompare(b.weekStart);});
-  var desc = weekly.slice().sort(function(a,b){return b.weekStart.localeCompare(a.weekStart);});
-  var editing = weeklyEditId? weekly.filter(function(w){return w.id===weeklyEditId;})[0] : null;
+  var acc=currentAcct(), weekly=getWeekly(), settings=getSettings();
+  var isApi=acc&&acc.mode==="api";
+  var asc=weekly.slice().sort(function(a,b){return a.weekStart.localeCompare(b.weekStart);});
+  var desc=weekly.slice().sort(function(a,b){return b.weekStart.localeCompare(a.weekStart);});
+  var editing=editWeekStart?weekly.filter(function(w){return w.weekStart===editWeekStart;})[0]:null;
 
-  var head = pageHead("週次分析","14項目の数値を入力すると10種のレートが自動計算されます。分母ゼロ・未入力は「—」表示です。",
-    weeklyFormOpen? '<button class="btn ghost" data-act="w-close">'+IC.x+'閉じる</button>' : '<button class="btn" data-act="w-new">'+IC.plus+'週を追加</button>');
+  var actions=(weeklyFormOpen?'<button class="btn ghost" data-act="w-close">'+IC.x+'閉じる</button>'
+    :(isApi?'<button class="btn outline" data-act="open-import" style="margin-right:8px">'+IC.cloud+'取り込む</button>':"")+
+     '<button class="btn" data-act="w-new">'+IC.plus+'週を追加</button>');
+  var head=pageHead("週次分析","数値を入れると10種のレートが自動計算。未入力・分母ゼロは「—」になります。",actions);
 
-  var form = "";
+  var form="";
   if(weeklyFormOpen){
-    var v = editing || {};
-    var today = new Date().toISOString().slice(0,10);
-    var fields = '<label class="fld" style="grid-column:span 2">週開始日<input type="date" id="f-weekStart" value="'+esc(editing?editing.weekStart:today)+'"></label>';
-    WEEKLY_FIELDS.forEach(function(f){
-      fields += '<label class="fld">'+f[1]+'<input type="number" min="0" step="any" id="f-'+f[0]+'" placeholder="—" value="'+(v[f[0]]==null?"":v[f[0]])+'"></label>';
-    });
-    form = '<div class="card" style="margin-bottom:20px"><div class="card-p">'+
-      '<h3 style="font-size:15px;font-weight:600;margin-bottom:16px">'+(editing?"週次データを編集":"週次データを追加")+'</h3>'+
-      '<div class="grid" style="grid-template-columns:repeat(2,1fr)" id="weekly-fields">'+fields+'</div>'+
-      '<div class="preview" style="margin-top:20px"><div class="pt" style="margin-bottom:12px;font-weight:500">自動計算レート（プレビュー）</div>'+
-      '<div class="grid" id="weekly-preview" style="grid-template-columns:repeat(2,1fr);gap:12px 16px"></div></div>'+
-      '<div class="flex gap8" style="justify-content:flex-end;margin-top:20px"><button class="btn ghost" data-act="w-close">キャンセル</button>'+
-      '<button class="btn" data-act="w-save">'+(editing?"更新する":"追加する")+'</button></div></div></div>';
+    var v=editing||{};
+    var prevWeek=null;
+    if(editing){ var idx=asc.findIndex(function(x){return x.weekStart===editing.weekStart;}); if(idx>0) prevWeek=asc[idx-1]; }
+    else if(asc.length) prevWeek=asc[asc.length-1];
+    var defDate=editing?editing.weekStart:ymd(weekRange(1).since);
+    var secs=WEEKLY_SECTIONS.map(function(s){
+      return '<div class="fsec"><div class="fsec-t">'+s.t+'</div><div class="grid" style="grid-template-columns:repeat(2,1fr)">'+
+        s.fields.map(function(f){
+          var ph=prevWeek&&prevWeek[f[0]]!=null?"前週 "+prevWeek[f[0]]:"—";
+          return '<label class="fld">'+f[1]+'<input type="number" inputmode="decimal" min="0" step="any" id="f-'+f[0]+'" placeholder="'+esc(ph)+'" value="'+(v[f[0]]==null?"":v[f[0]])+'"></label>';
+        }).join("")+'</div></div>';
+    }).join("");
+    form='<div class="card mb"><div class="card-p">'+
+      '<h3 style="font-size:15px;font-weight:600;margin-bottom:14px">'+(editing?"週次データを編集":"週次データを追加")+(editing&&editing.source==="api"?' <span class="pill api">自動取得ぶんを補完中</span>':"")+'</h3>'+
+      '<div class="stack" id="weekly-fields" style="gap:12px">'+
+      '<label class="fld" style="max-width:220px">週開始日（月曜）<input type="date" id="f-weekStart" value="'+esc(defDate)+'"'+(editing?" disabled":"")+'></label>'+
+      secs+
+      '<div class="preview"><div class="pt" style="margin-bottom:10px;font-weight:600">自動計算レート（入力すると即反映）</div>'+
+      '<div class="grid" id="weekly-preview" style="grid-template-columns:repeat(2,1fr);gap:10px 16px"></div></div>'+
+      '</div>'+
+      '<div class="sticky-save"><button class="btn ghost" data-act="w-close">キャンセル</button>'+
+      '<button class="btn lg" data-act="w-save">'+IC.save+(editing?"更新する":"保存する")+'</button></div>'+
+      '</div></div>';
   }
 
   var body="";
-  if(weekly.length===0 && !weeklyFormOpen){
-    body = '<div class="empty"><div class="eicon">'+IC.cal+'</div><h3>週次データがありません</h3><p>「週を追加」から最初の1週を入力してください。</p>'+
-      '<div style="margin-top:24px"><button class="btn" data-act="w-new">'+IC.plus+'週を追加</button></div></div>';
+  if(weekly.length===0&&!weeklyFormOpen){
+    body='<div class="empty"><div class="eicon">'+IC.cal+'</div><h3>週次データがありません</h3>'+
+      '<p>'+(isApi?"「取り込む」で自動入力するか、「週を追加」で手入力できます。":"「週を追加」から最初の1週を入力してください。")+'</p>'+
+      '<div class="flex gap8 wrapf mt" style="justify-content:center">'+
+      (isApi?'<button class="btn" data-act="open-import">'+IC.cloud+'取り込む</button>':"")+
+      '<button class="btn outline" data-act="w-new">'+IC.plus+'週を追加</button></div></div>';
   } else if(weekly.length>0){
-    var mSel = RATE_META.map(function(m){ return '<option value="'+m.key+'"'+(m.key===weeklyChartKey?" selected":"")+'>'+m.label+'</option>'; }).join("");
-    var chartMeta = RATE_META.filter(function(m){return m.key===weeklyChartKey;})[0];
-    var bench = chartMeta.bk? settings.benchmarks[chartMeta.bk].good : null;
-    var series = asc.map(function(e){ return {label:shortDate(e.weekStart), value:weeklyRates(e)[weeklyChartKey]}; });
-    var chart = asc.length>=2? lineChart(series, bench, bench!=null?"目安 "+pct(bench,0):"目安") : '<p class="muted fs13" style="text-align:center;padding:32px 0">2週以上のデータでグラフを表示します。</p>';
-
-    var rows = desc.map(function(e){
+    var mSel=RATE_META.map(function(m){return '<option value="'+m.key+'"'+(m.key===weeklyChartKey?" selected":"")+'>'+m.label+'</option>';}).join("");
+    var cm=RATE_META.filter(function(m){return m.key===weeklyChartKey;})[0];
+    var bench=cm.bk?settings.benchmarks[cm.bk].good:null;
+    var series=asc.map(function(e){return {label:shortDate(e.weekStart),value:weeklyRates(e)[weeklyChartKey]};});
+    var chart=asc.length>=2?lineChart(series,bench,bench!=null?"目安 "+pct(bench,0):"目安"):'<p class="muted fs13" style="text-align:center;padding:32px 0">2週以上のデータでグラフを表示します。</p>';
+    var rows=desc.map(function(e){
       var r=weeklyRates(e);
-      return '<tr><td class="tnum" style="font-weight:500">'+shortDate(e.weekStart)+'</td>'+
-        ['homeRate','saveRate','shareRate','followerConversionRate','profileVisitRate','storyViewRate','linkCtr','conversionRate']
-          .map(function(k){return '<td class="r tnum">'+pct(r[k])+'</td>';}).join("")+
+      return '<tr><td class="tnum" style="font-weight:500;white-space:nowrap">'+shortDate(e.weekStart)+(e.source==="api"?' <span class="pill api" style="font-size:10px;padding:0 6px">auto</span>':"")+'</td>'+
+        ["homeRate","saveRate","shareRate","followerConversionRate","profileVisitRate","storyViewRate","linkCtr","conversionRate"].map(function(k){return '<td class="r tnum">'+pct(r[k])+'</td>';}).join("")+
         '<td class="r"><div class="flex gap8" style="justify-content:flex-end">'+
-        '<button class="btn icon ghost" data-act="w-edit" data-id="'+e.id+'" aria-label="編集">'+IC.pen+'</button>'+
+        '<button class="btn icon ghost" data-act="w-edit" data-ws="'+e.weekStart+'" aria-label="編集">'+IC.pen+'</button>'+
         '<button class="btn icon ghost" data-act="w-del" data-id="'+e.id+'" style="color:var(--bad)" aria-label="削除">'+IC.trash+'</button></div></td></tr>';
     }).join("");
-
-    body = '<div class="card" style="margin-bottom:20px"><div class="card-h"><h3>レート推移</h3>'+
-      '<select id="weekly-chart-key" style="width:auto;min-width:180px">'+mSel+'</select></div><div class="card-p">'+chart+'</div></div>'+
+    body='<div class="card mb"><div class="card-h"><h3>レート推移</h3><select id="weekly-chart-key" style="width:auto;min-width:180px">'+mSel+'</select></div>'+
+      '<div class="card-p">'+chart+'</div></div>'+
       '<div class="card"><div class="card-h"><h3>週一覧（新しい順）</h3></div><div class="twrap"><table><thead><tr>'+
-      '<th>週</th><th class="r">ホーム率</th><th class="r">保存率</th><th class="r">シェア率</th><th class="r">転換率</th>'+
-      '<th class="r">プロフ率</th><th class="r">ストーリーズ</th><th class="r">CTR</th><th class="r">成約率</th><th class="r">操作</th>'+
+      '<th>週</th><th class="r">ホーム率</th><th class="r">保存率</th><th class="r">シェア率</th><th class="r">転換率</th><th class="r">プロフ率</th><th class="r">ストーリーズ</th><th class="r">CTR</th><th class="r">成約率</th><th class="r">操作</th>'+
       '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }
   return head+form+body;
 }
 
-/* ============================ 画面：投稿別分析 ============================ */
+/* ============================ 画面：投稿 ============================ */
 var POST_FORMATS=["リール","カルーセル","フィード単枚","ストーリーズ","ライブ"];
 var POST_VERDICTS=["勝ち","普通","負け"];
-var POST_NUM=[
-  ["views","ビュー数"],["reach","リーチ"],["nonFollowerReachPct","フォロワー外リーチ率（%）"],
-  ["videoSec","動画尺（秒）"],["avgWatchSec","平均視聴時間（秒）"],["likes","いいね"],["comments","コメント"],
-  ["saves","保存"],["shares","シェア"],["profileVisits","プロフィールアクセス"],["follows","フォロー数"]
-];
+var POST_NUM=[["views","ビュー数"],["reach","リーチ"],["nonFollowerReachPct","フォロワー外リーチ率（%）"],["videoSec","動画尺（秒）"],["avgWatchSec","平均視聴時間（秒）"],["likes","いいね"],["comments","コメント"],["saves","保存"],["shares","シェア"],["profileVisits","プロフィールアクセス"],["follows","フォロー数"]];
 var postEditId=null, postFormOpen=false, postTab="list", postFmtFilter="all", postVerdictFilter="all", postSort={key:"date",dir:"desc"};
 
 function readPostForm(){
   function val(id){ var el=document.getElementById(id); return el?el.value:""; }
-  var p={ date:val("p-date"), format:val("p-format"), title:val("p-title"), hook:val("p-hook"),
-    memo:val("p-memo"), verdict:val("p-verdict") };
-  POST_NUM.forEach(function(f){ var s=val("p-"+f[0]).trim(); p[f[0]] = s===""? null : Number(s); });
+  var p={ date:val("p-date"), format:val("p-format"), title:val("p-title"), hook:val("p-hook"), memo:val("p-memo"), verdict:val("p-verdict") };
+  POST_NUM.forEach(function(f){ var s=val("p-"+f[0]).trim(); p[f[0]]=s===""?null:Number(s); });
   return p;
 }
 function postPreview(){
-  var p=readPostForm(); var r=postRates(p); var s=getSettings();
+  var p=readPostForm(), r=postRates(p), s=getSettings();
   var host=document.getElementById("post-preview"); if(!host) return;
   var items=[["維持率",r.retentionRate],["いいね率",r.likeRate],["保存率",r.saveRate],["シェア率",r.shareRate],["プロフ率",r.profileVisitRate]];
-  host.innerHTML = items.map(function(it){ return '<div><div class="pt">'+it[0]+'</div><div class="pv tnum">'+pct(it[1])+'</div></div>'; }).join("");
-  var sug=suggestVerdict(r,s.verdict); var badge=document.getElementById("post-suggest");
-  if(badge) badge.innerHTML = sug? '<span class="pill '+(sug==="勝ち候補"?"ok":"bad")+'">サジェスト：'+sug+'</span>' : "";
+  host.innerHTML=items.map(function(it){return '<div><div class="pt">'+it[0]+'</div><div class="pv tnum">'+pct(it[1])+'</div></div>';}).join("");
+  var sug=suggestVerdict(r,s.verdict), badge=document.getElementById("post-suggest");
+  if(badge) badge.innerHTML=sug?'<span class="pill '+(sug==="勝ち候補"?"ok":"bad")+'">サジェスト：'+sug+'</span>':"";
 }
 function viewPosts(){
-  var posts = load(KEY.posts, []);
-  var editing = postEditId? posts.filter(function(p){return p.id===postEditId;})[0] : null;
-  var head = pageHead("投稿別分析","投稿ごとの数値からレートを自動計算。勝ち／負けをサジェストし、勝ちパターンをネタ帳として蓄積します。",
-    postFormOpen? '<button class="btn ghost" data-act="p-close">'+IC.x+'閉じる</button>' : '<button class="btn" data-act="p-new">'+IC.plus+'投稿を追加</button>');
+  var posts=getPosts();
+  var editing=postEditId?posts.filter(function(p){return p.id===postEditId;})[0]:null;
+  var head=pageHead("投稿別分析","投稿ごとのレートを自動計算。勝ちパターンをネタ帳として蓄積します。",
+    postFormOpen?'<button class="btn ghost" data-act="p-close">'+IC.x+'閉じる</button>':'<button class="btn" data-act="p-new">'+IC.plus+'投稿を追加</button>');
 
   var form="";
   if(postFormOpen){
-    var v=editing||{}; var today=new Date().toISOString().slice(0,10);
+    var v=editing||{};
     var fSel=POST_FORMATS.map(function(f){return '<option'+(v.format===f?" selected":"")+'>'+f+'</option>';}).join("");
     var vSel=POST_VERDICTS.map(function(f){return '<option'+((v.verdict||"普通")===f?" selected":"")+'>'+f+'</option>';}).join("");
-    var nums=POST_NUM.map(function(f){ return '<label class="fld">'+f[1]+'<input type="number" min="0" step="any" id="p-'+f[0]+'" placeholder="—" value="'+(v[f[0]]==null?"":v[f[0]])+'"></label>'; }).join("");
-    form = '<div class="card" style="margin-bottom:20px"><div class="card-p">'+
-      '<h3 style="font-size:15px;font-weight:600;margin-bottom:16px">'+(editing?"投稿を編集":"投稿を追加")+'</h3>'+
+    var nums=POST_NUM.map(function(f){return '<label class="fld">'+f[1]+'<input type="number" inputmode="decimal" min="0" step="any" id="p-'+f[0]+'" placeholder="—" value="'+(v[f[0]]==null?"":v[f[0]])+'"></label>';}).join("");
+    form='<div class="card mb"><div class="card-p">'+
+      '<h3 style="font-size:15px;font-weight:600;margin-bottom:14px">'+(editing?"投稿を編集":"投稿を追加")+(editing&&editing.igMediaId?' <span class="pill api">自動取得</span>':"")+'</h3>'+
       '<div class="grid" style="grid-template-columns:repeat(2,1fr)">'+
-      '<label class="fld">投稿日<input type="date" id="p-date" value="'+esc(editing?editing.date:today)+'"></label>'+
+      '<label class="fld">投稿日<input type="date" id="p-date" value="'+esc(editing?editing.date:todayYmd())+'"></label>'+
       '<label class="fld">形式<select id="p-format">'+fSel+'</select></label>'+
       '<label class="fld" style="grid-column:span 2">企画名<input id="p-title" placeholder="例：朝ルーティン時短術" value="'+esc(v.title||"")+'"></label>'+
-      '<label class="fld" style="grid-column:span 2">フック（冒頭文言）<input id="p-hook" placeholder="例：実は9割が損してる朝の3分" value="'+esc(v.hook||"")+'"></label>'+
-      '</div>'+
+      '<label class="fld" style="grid-column:span 2">フック（冒頭文言）<input id="p-hook" placeholder="例：実は9割が損してる朝の3分" value="'+esc(v.hook||"")+'"></label></div>'+
       '<div class="grid mt" style="grid-template-columns:repeat(2,1fr)">'+nums+'</div>'+
-      '<div class="preview mt"><div class="flex between items-center" style="margin-bottom:12px"><span class="pt" style="font-weight:500">自動計算レート（プレビュー）</span><span id="post-suggest"></span></div>'+
+      '<div class="preview mt"><div class="flex between items-center" style="margin-bottom:10px"><span class="pt" style="font-weight:600">自動計算レート</span><span id="post-suggest"></span></div>'+
       '<div class="grid" id="post-preview" style="grid-template-columns:repeat(3,1fr);gap:10px 16px"></div></div>'+
       '<div class="grid mt" style="grid-template-columns:160px 1fr">'+
       '<label class="fld">判定（最終）<select id="p-verdict">'+vSel+'</select></label>'+
-      '<label class="fld">学びメモ<textarea id="p-memo" placeholder="勝ち／負けの理由、横展開のアイデアなど">'+esc(v.memo||"")+'</textarea></label></div>'+
-      '<div class="flex gap8" style="justify-content:flex-end;margin-top:20px"><button class="btn ghost" data-act="p-close">キャンセル</button>'+
-      '<button class="btn" data-act="p-save">'+(editing?"更新する":"追加する")+'</button></div></div></div>';
+      '<label class="fld">学びメモ<textarea id="p-memo" placeholder="勝ち/負けの理由、横展開のアイデアなど">'+esc(v.memo||"")+'</textarea></label></div>'+
+      '<div class="sticky-save"><button class="btn ghost" data-act="p-close">キャンセル</button><button class="btn lg" data-act="p-save">'+IC.save+(editing?"更新する":"保存する")+'</button></div>'+
+      '</div></div>';
   }
 
   var body="";
-  if(posts.length===0 && !postFormOpen){
-    body='<div class="empty"><div class="eicon">'+IC.img+'</div><h3>投稿データがありません</h3><p>「投稿を追加」から最初の投稿を記録してください。</p>'+
-      '<div style="margin-top:24px"><button class="btn" data-act="p-new">'+IC.plus+'投稿を追加</button></div></div>';
+  if(posts.length===0&&!postFormOpen){
+    var acc=currentAcct(), isApi=acc&&acc.mode==="api";
+    body='<div class="empty"><div class="eicon">'+IC.img+'</div><h3>投稿データがありません</h3>'+
+      '<p>'+(isApi?"「取り込む」を実行すると期間内の投稿が自動で入ります。":"「投稿を追加」から最初の投稿を記録してください。")+'</p>'+
+      '<div class="flex gap8 wrapf mt" style="justify-content:center">'+
+      (isApi?'<button class="btn" data-act="open-import">'+IC.cloud+'取り込む</button>':"")+
+      '<button class="btn outline" data-act="p-new">'+IC.plus+'投稿を追加</button></div></div>';
   } else if(posts.length>0){
-    var wins = posts.filter(function(p){return p.verdict==="勝ち";});
-    var tabs = '<div class="tabs" style="margin-bottom:16px"><button class="'+(postTab==="list"?"active":"")+'" data-act="p-tab" data-tab="list">一覧</button>'+
-      '<button class="'+(postTab==="wins"?"active":"")+'" data-act="p-tab" data-tab="wins">勝ちパターン'+(wins.length?' ('+wins.length+')':"")+'</button></div>';
-
+    var wins=posts.filter(function(p){return p.verdict==="勝ち";});
+    var tabs='<div class="tabs mb"><button class="'+(postTab==="list"?"active":"")+'" data-act="p-tab" data-tab="list">一覧</button>'+
+      '<button class="'+(postTab==="wins"?"active":"")+'" data-act="p-tab" data-tab="wins">勝ちパターン'+(wins.length?" ("+wins.length+")":"")+'</button></div>';
     if(postTab==="list"){
-      var withRates = posts.map(function(p){return {post:p, rates:postRates(p)};});
-      var filtered = withRates.filter(function(o){
-        return (postFmtFilter==="all"||o.post.format===postFmtFilter) && (postVerdictFilter==="all"||o.post.verdict===postVerdictFilter);
+      var withRates=posts.map(function(p){return {post:p,rates:postRates(p)};});
+      var filtered=withRates.filter(function(o){
+        return (postFmtFilter==="all"||o.post.format===postFmtFilter)&&(postVerdictFilter==="all"||o.post.verdict===postVerdictFilter);
       });
-      function cmp(a,b,dir){ if(a===null&&b===null)return 0; if(a===null)return 1; if(b===null)return -1; return dir==="asc"?a-b:b-a; }
+      function cmp(a,b,dir){ if(a==null&&b==null)return 0; if(a==null)return 1; if(b==null)return -1; return dir==="asc"?a-b:b-a; }
       filtered.sort(function(x,y){
         var k=postSort.key,d=postSort.dir;
-        if(k==="date") return d==="asc"? x.post.date.localeCompare(y.post.date): y.post.date.localeCompare(x.post.date);
+        if(k==="date") return d==="asc"?x.post.date.localeCompare(y.post.date):y.post.date.localeCompare(x.post.date);
         if(k==="views") return cmp(x.post.views,y.post.views,d);
         return cmp(x.rates[k],y.rates[k],d);
       });
       var fmtOpts=["all"].concat(POST_FORMATS).map(function(f){return '<option value="'+f+'"'+(postFmtFilter===f?" selected":"")+'>'+(f==="all"?"全形式":f)+'</option>';}).join("");
       var vOpts=["all"].concat(POST_VERDICTS).map(function(f){return '<option value="'+f+'"'+(postVerdictFilter===f?" selected":"")+'>'+(f==="all"?"全判定":f)+'</option>';}).join("");
       function sh(label,key,align){
-        var ar = postSort.key===key? (postSort.dir==="asc"?IC.up:IC.tdown) : "";
-        return '<th class="'+(align||"r")+'"><button class="sortbtn" data-act="p-sort" data-key="'+key+'">'+label+(postSort.key===key?'<span style="width:12px;height:12px;display:inline-flex">'+(postSort.dir==="asc"?"▲":"▼")+'</span>':"")+'</button></th>';
+        return '<th class="'+(align||"r")+'"><button class="sortbtn" data-act="p-sort" data-key="'+key+'">'+label+(postSort.key===key?(postSort.dir==="asc"?" ▲":" ▼"):"")+'</button></th>';
       }
       var rateCols=[["retentionRate","維持率"],["likeRate","いいね率"],["saveRate","保存率"],["shareRate","シェア率"],["profileVisitRate","プロフ率"]];
-      var rows = filtered.map(function(o){
+      var rows=filtered.map(function(o){
         var p=o.post,r=o.rates;
-        var vb = p.verdict==="勝ち"?'<span class="pill ok">勝ち</span>':p.verdict==="負け"?'<span class="pill bad">負け</span>':'<span class="pill line">普通</span>';
-        var bg = p.verdict==="勝ち"?' style="background:color-mix(in srgb,var(--ok-bg) 45%,transparent)"':p.verdict==="負け"?' style="background:color-mix(in srgb,var(--bad-bg) 45%,transparent)"':"";
+        var vb=p.verdict==="勝ち"?'<span class="pill ok">勝ち</span>':p.verdict==="負け"?'<span class="pill bad">負け</span>':'<span class="pill line">普通</span>';
+        var bg=p.verdict==="勝ち"?' style="background:color-mix(in srgb,var(--ok-bg) 45%,transparent)"':p.verdict==="負け"?' style="background:color-mix(in srgb,var(--bad-bg) 45%,transparent)"':"";
         return '<tr'+bg+'><td class="tnum" style="font-weight:500;white-space:nowrap">'+shortDate(p.date)+'</td>'+
-          '<td><div style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.title||"（無題）")+'</div><div class="muted fs12">'+esc(p.format)+'</div></td>'+
+          '<td><div style="font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.title||"（無題）")+'</div><div class="muted fs12">'+esc(p.format)+(p.igMediaId?" ・auto":"")+'</div></td>'+
           '<td class="r tnum">'+intf(p.views)+'</td>'+
           rateCols.map(function(c){return '<td class="r tnum">'+pct(r[c[0]])+'</td>';}).join("")+
           '<td>'+vb+'</td>'+
@@ -1612,81 +2054,74 @@ function viewPosts(){
           '<button class="btn icon ghost" data-act="p-edit" data-id="'+p.id+'" aria-label="編集">'+IC.pen+'</button>'+
           '<button class="btn icon ghost" data-act="p-del" data-id="'+p.id+'" style="color:var(--bad)" aria-label="削除">'+IC.trash+'</button></div></td></tr>';
       }).join("");
-      body = tabs + '<div class="card"><div class="card-h" style="flex-wrap:wrap;gap:12px">'+
-        '<div class="flex gap8 wrapf items-center">'+
+      body=tabs+'<div class="card"><div class="card-h" style="flex-wrap:wrap;gap:12px"><div class="flex gap8 wrapf items-center">'+
         '<select id="p-fmt-filter" style="width:auto;min-width:130px">'+fmtOpts+'</select>'+
         '<select id="p-verdict-filter" style="width:auto;min-width:120px">'+vOpts+'</select>'+
         '<span class="muted fs12 tnum">'+filtered.length+'件</span></div></div>'+
         '<div class="twrap"><table><thead><tr>'+sh("投稿日","date","")+'<th>企画 / 形式</th>'+sh("ビュー","views")+
         rateCols.map(function(c){return sh(c[1],c[0]);}).join("")+'<th>判定</th><th class="r">操作</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
     } else {
-      if(wins.length===0){
-        body = tabs + '<div class="empty"><div class="eicon">'+IC.trophy+'</div><h3>勝ち投稿がまだありません</h3><p>判定を「勝ち」にした投稿が、横展開用のネタ帳としてここに並びます。</p></div>';
+      if(!wins.length){
+        body=tabs+'<div class="empty"><div class="eicon">'+IC.trophy+'</div><h3>勝ち投稿がまだありません</h3><p>判定を「勝ち」にした投稿が、横展開用のネタ帳としてここに並びます。</p></div>';
       } else {
-        var cards = wins.map(function(p){
+        var cards=wins.map(function(p){
           var r=postRates(p);
           return '<div class="card"><div class="card-p">'+
-            '<div class="flex between items-center gap8"><span class="pill ok">勝ち</span><span class="muted fs12">'+esc(p.format)+'・'+shortDate(p.date)+'</span></div>'+
-            '<div style="margin-top:12px"><div style="font-weight:600">'+esc(p.title||"（無題）")+'</div>'+
+            '<div class="flex between items-center gap8"><span class="pill ok">勝ち</span><span class="muted fs12">'+esc(p.format)+"・"+shortDate(p.date)+'</span></div>'+
+            '<div class="mt"><div style="font-weight:600">'+esc(p.title||"（無題）")+'</div>'+
             (p.hook?'<div class="muted fs13" style="margin-top:2px">フック：'+esc(p.hook)+'</div>':"")+'</div>'+
-            '<div class="flex wrapf muted fs12 tnum" style="gap:4px 16px;margin-top:12px"><span>保存 '+pct(r.saveRate)+'</span><span>シェア '+pct(r.shareRate)+'</span><span>維持 '+pct(r.retentionRate)+'</span><span>いいね '+pct(r.likeRate)+'</span></div>'+
-            (p.memo?'<p class="fs13" style="background:color-mix(in srgb,var(--muted) 60%,var(--card));border-radius:10px;padding:12px;margin-top:12px">'+esc(p.memo)+'</p>':"")+
+            '<div class="flex wrapf muted fs12 tnum" style="gap:4px 16px;margin-top:10px"><span>保存 '+pct(r.saveRate)+'</span><span>シェア '+pct(r.shareRate)+'</span><span>維持 '+pct(r.retentionRate)+'</span><span>いいね '+pct(r.likeRate)+'</span></div>'+
+            (p.memo?'<p class="fs13" style="background:color-mix(in srgb,var(--muted) 60%,var(--card));border-radius:10px;padding:12px;margin-top:10px">'+esc(p.memo)+'</p>':"")+
             '</div></div>';
         }).join("");
-        body = tabs + '<div class="grid" style="grid-template-columns:repeat(2,1fr)">'+cards+'</div>';
+        body=tabs+'<div class="grid" style="grid-template-columns:repeat(2,1fr)">'+cards+'</div>';
       }
     }
   }
   return head+form+body;
 }
 
-/* ============================ 画面：診断フロー ============================ */
+/* ============================ 画面：診断 ============================ */
 var diagKpi=null, diagState=null;
 function viewDiagnosis(params){
-  if(params && params.kpi && DIAG_KPIS.indexOf(params.kpi)>=0 && diagKpi===null){
+  if(params&&params.kpi&&DIAG_KPIS.indexOf(params.kpi)>=0&&diagKpi===null){
     diagKpi=params.kpi;
-    if(params.state && statesFor(params.kpi).indexOf(params.state)>=0) diagState=params.state;
+    if(params.state&&statesFor(params.kpi).indexOf(params.state)>=0) diagState=params.state;
   }
-  var checks = load(KEY.checks, []);
-  var head = pageHead("診断フロー","① KPIを選ぶ → ② 状態を選ぶ → ③ 該当する打ち手を確認。試した施策はチェックして記録できます。",
-    diagKpi? '<button class="btn ghost" data-act="d-reset">'+IC.reset+'最初から</button>':"");
-
-  var kpiBtns = DIAG_KPIS.map(function(k){ return '<button class="choice '+(diagKpi===k?"on":"")+'" data-act="d-kpi" data-kpi="'+esc(k)+'">'+k+'</button>'; }).join("");
-  var step1 = '<div class="card" style="margin-bottom:20px"><div class="card-p">'+
-    '<div class="flex items-center gap8" style="margin-bottom:16px"><span class="step-badge">1</span><b style="font-size:14px">KPIを選ぶ</b></div>'+
+  var checks=getChecks();
+  var head=pageHead("診断フロー","① KPIを選ぶ → ② 状態を選ぶ → ③ 打ち手を確認。試した施策はチェックで記録。",
+    diagKpi?'<button class="btn ghost" data-act="d-reset">'+IC.reset+'最初から</button>':"");
+  var kpiBtns=DIAG_KPIS.map(function(k){return '<button class="choice '+(diagKpi===k?"on":"")+'" data-act="d-kpi" data-kpi="'+esc(k)+'">'+k+'</button>';}).join("");
+  var step1='<div class="card mb"><div class="card-p"><div class="flex items-center gap8 mb"><span class="step-badge">1</span><b style="font-size:14px">KPIを選ぶ</b></div>'+
     '<div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">'+kpiBtns+'</div></div></div>';
-
   var step2="";
   if(diagKpi){
-    var stateBtns = statesFor(diagKpi).map(function(s){ return '<button class="chip '+(diagState===s?"on":"")+'" data-act="d-state" data-state="'+esc(s)+'">'+esc(s)+'</button>'; }).join("");
-    step2 = '<div class="card" style="margin-bottom:20px"><div class="card-p">'+
-      '<div class="flex items-center gap8" style="margin-bottom:16px"><span class="step-badge">2</span><b style="font-size:14px">状態を選ぶ</b></div>'+
-      '<div class="flex wrapf gap8">'+stateBtns+'</div></div></div>';
+    var sBtns=statesFor(diagKpi).map(function(s){return '<button class="chip '+(diagState===s?"on":"")+'" data-act="d-state" data-state="'+esc(s)+'">'+esc(s)+'</button>';}).join("");
+    step2='<div class="card mb"><div class="card-p"><div class="flex items-center gap8 mb"><span class="step-badge">2</span><b style="font-size:14px">状態を選ぶ</b></div>'+
+      '<div class="flex wrapf gap8">'+sBtns+'</div></div></div>';
   }
-
   var step3="";
-  if(diagKpi && diagState){
-    var cards = diagFor(diagKpi,diagState);
-    var list = cards.map(function(d){
-      var chk = checks.filter(function(c){return c.diagnosisId===d.id;})[0];
-      var on = !!chk;
-      var catCls = d.category==="継続"?"keep":d.category==="更新"?"update":"new";
+  if(diagKpi&&diagState){
+    var cards=diagFor(diagKpi,diagState);
+    var list=cards.map(function(d){
+      var chk=checks.filter(function(c){return c.diagnosisId===d.id;})[0], on=!!chk;
+      var cat=d.category==="継続"?"keep":d.category==="更新"?"update":"new";
       return '<div class="card"'+(on?' style="border-color:color-mix(in srgb,var(--ok) 40%,transparent);background:color-mix(in srgb,var(--ok-bg) 35%,var(--card))"':"")+'><div class="card-p">'+
-        '<div class="flex wrapf items-center gap8"><h3 style="font-size:15px;font-weight:600">'+esc(d.checkpoint)+'</h3><span class="pill '+catCls+'">'+d.category+'</span></div>'+
+        '<div class="flex wrapf items-center gap8"><h3 style="font-size:15px;font-weight:600">'+esc(d.checkpoint)+'</h3><span class="pill '+cat+'">'+d.category+'</span></div>'+
         '<p class="fs13" style="margin-top:8px">'+esc(d.action)+'</p>'+
         (d.criteria?'<p class="muted fs12" style="margin-top:8px">'+esc(d.criteria)+'</p>':"")+
-        '<button class="flex items-center gap8" data-act="d-check" data-id="'+d.id+'" style="background:none;border:none;cursor:pointer;margin-top:16px;padding:0;font:inherit">'+
-        '<span style="width:20px;height:20px;border-radius:6px;border:1px solid var(--input);display:grid;place-items:center;'+(on?'background:var(--ok);border-color:var(--ok);color:#fff':'')+'">'+(on?'✓':'')+'</span>'+
-        (on? '<span style="color:var(--ok);font-weight:500;font-size:14px">試した（'+shortDate((chk.checkedAt||"").slice(0,10))+'）</span>' : '<span class="muted fs13">試した施策にする</span>')+
+        '<button class="flex items-center gap8" data-act="d-check" data-id="'+d.id+'" style="background:none;border:none;cursor:pointer;margin-top:14px;padding:0;font:inherit">'+
+        '<span style="width:20px;height:20px;border-radius:6px;border:1px solid var(--input);display:grid;place-items:center;'+(on?"background:var(--ok);border-color:var(--ok);color:#fff":"")+'">'+(on?"✓":"")+'</span>'+
+        (on?'<span style="color:var(--ok);font-weight:500;font-size:14px">試した（'+shortDate((chk.checkedAt||"").slice(0,10))+'）</span>':'<span class="muted fs13">試した施策にする</span>')+
         '</button></div></div>';
     }).join("");
-    step3 = '<div class="flex items-center gap8 muted fs13" style="margin-bottom:12px"><b style="color:var(--ink)">'+esc(diagKpi)+'</b>'+
+    step3='<div class="flex items-center gap8 muted fs13 mb"><b style="color:var(--ink)">'+esc(diagKpi)+'</b>'+
       '<span style="width:14px;height:14px;display:inline-flex">'+IC.chevr+'</span><b style="color:var(--ink)">'+esc(diagState)+'</b><span class="tnum">・'+cards.length+'件</span></div>'+
       '<div class="stack">'+list+'</div>';
   } else if(diagKpi){
-    step3 = '<p class="muted fs13" style="text-align:center;padding:24px 0">状態を選ぶと打ち手が表示されます。</p>';
+    step3='<p class="muted fs13" style="text-align:center;padding:24px 0">状態を選ぶと打ち手が表示されます。</p>';
   } else {
-    step3 = '<div class="flex" style="flex-direction:column;align-items:center;padding:32px 0;color:var(--muted-ink)"><span style="width:32px;height:32px;margin-bottom:8px">'+IC.steth+'</span><p class="fs13">まずは詰まっているKPIを選んでください。</p></div>';
+    step3='<div class="flex" style="flex-direction:column;align-items:center;padding:24px 0;color:var(--muted-ink)"><span style="width:32px;height:32px;margin-bottom:8px">'+IC.steth+'</span><p class="fs13">まずは詰まっているKPIを選んでください。</p></div>';
   }
   return head+step1+step2+step3;
 }
@@ -1694,13 +2129,13 @@ function viewDiagnosis(params){
 /* ============================ 画面：KPI辞典 ============================ */
 var kpiTab="dict";
 function viewKpis(){
-  var head = pageHead("KPI辞典","各指標の定義・計算式・確認場所・2026年の目安をまとめています。");
-  var note = '<div class="card" style="border-color:color-mix(in srgb,var(--primary) 30%,transparent);background:color-mix(in srgb,var(--accent-bg) 55%,var(--card));margin-bottom:20px"><div class="card-p flex gap12" style="align-items:flex-start"><span style="color:var(--primary);width:20px;height:20px;flex:none;margin-top:2px">'+IC.info+'</span><p class="fs13">'+esc(DATA.meta.benchmark_note)+'</p></div></div>';
-  var tabs='<div class="tabs" style="margin-bottom:16px"><button class="'+(kpiTab==="dict"?"active":"")+'" data-act="k-tab" data-tab="dict">KPI辞典</button>'+
+  var head=pageHead("KPI辞典","各指標の定義・計算式・確認場所・2026年の目安。");
+  var note='<div class="card mb" style="border-color:color-mix(in srgb,var(--primary) 30%,transparent);background:color-mix(in srgb,var(--accent-bg) 55%,var(--card))"><div class="card-p flex gap12" style="align-items:flex-start"><span style="color:var(--primary);width:20px;height:20px;flex:none;margin-top:2px">'+IC.info+'</span><p class="fs13">'+esc(DATA.meta.benchmark_note)+'</p></div></div>';
+  var tabs='<div class="tabs mb"><button class="'+(kpiTab==="dict"?"active":"")+'" data-act="k-tab" data-tab="dict">KPI辞典</button>'+
     '<button class="'+(kpiTab==="updates"?"active":"")+'" data-act="k-tab" data-tab="updates">2026年に変わったこと</button></div>';
   var body="";
   if(kpiTab==="dict"){
-    var rows = DATA.kpis.map(function(k){
+    var rows=DATA.kpis.map(function(k){
       return '<tr><td style="font-weight:600;white-space:nowrap;vertical-align:top">'+esc(k.name)+'</td>'+
         '<td style="min-width:200px;vertical-align:top">'+esc(k.definition)+'</td>'+
         '<td class="muted" style="min-width:150px;vertical-align:top">'+esc(k.where)+'</td>'+
@@ -1709,12 +2144,12 @@ function viewKpis(){
     }).join("");
     body='<div class="card"><div class="twrap"><table><thead><tr><th>指標</th><th>定義・計算式</th><th>確認場所</th><th>2026年の目安</th><th>補足</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   } else {
-    var rows2 = DATA.updates2026.map(function(u){
-      var catCls = u.category==="継続"?"keep":u.category==="更新"?"update":"new";
+    var rows2=DATA.updates2026.map(function(u){
+      var cat=u.category==="継続"?"keep":u.category==="更新"?"update":"new";
       return '<tr><td style="font-weight:600;white-space:nowrap;vertical-align:top">'+esc(u.area)+'</td>'+
         '<td class="muted" style="min-width:150px;vertical-align:top">'+esc(u.before)+'</td>'+
         '<td style="min-width:260px;vertical-align:top">'+esc(u.after)+'</td>'+
-        '<td style="vertical-align:top"><span class="pill '+catCls+'">'+u.category+'</span></td></tr>';
+        '<td style="vertical-align:top"><span class="pill '+cat+'">'+u.category+'</span></td></tr>';
     }).join("");
     body='<div class="card"><div class="twrap"><table><thead><tr><th>領域</th><th>元の常識</th><th>2026年の評価・更新</th><th>区分</th></tr></thead><tbody>'+rows2+'</tbody></table></div></div>';
   }
@@ -1726,192 +2161,330 @@ var BENCH_ROWS=[["homeRate","ホーム率"],["saveRate","保存率"],["shareRate
 var VERDICT_ROWS=[["winSaveRate","勝ち：保存率 ≥"],["winShareRate","勝ち：シェア率 ≥"],["loseSaveRate","負け：保存率 <"],["loseShareRate","負け：シェア率 <"],["loseLikeRate","負け：いいね率 <"]];
 function toPctN(r){ return Math.round(r*1000)/10; }
 function viewSettings(){
-  var s = getSettings();
-  var head = pageHead("設定","目安値（ベンチマーク）と判定サジェストのしきい値を調整できます。すべてローカル（この端末）にのみ保存されます。");
-  var benchRows = BENCH_ROWS.map(function(row){
-    return '<div class="grid" style="grid-template-columns:1fr 96px 96px;gap:12px 16px;align-items:center">'+
+  var s=getSettings(), list=accounts(), cfg=apiCfg();
+  var head=pageHead("設定","アカウント・連携・目安値・データ管理。すべてこの端末の中だけに保存されます。");
+
+  var acctRows=list.map(function(a){
+    return '<div class="flex between items-center" style="padding:10px 0;border-bottom:1px solid var(--border)">'+
+      '<div class="flex items-center gap12"><span class="avatar" style="width:32px;height:32px;border-radius:999px;background:'+a.color+';color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px">'+esc((a.username||a.name||"?").replace("@","").slice(0,1).toUpperCase())+'</span>'+
+      '<div><b style="font-size:14px">'+esc(a.name)+'</b> <span class="mode-tag '+(a.mode==="api"?"api":"manual")+'">'+(a.mode==="api"?"連携":"手動")+'</span>'+
+      (a.followers?'<div class="muted fs12 tnum">フォロワー '+intf(a.followers)+'</div>':"")+'</div></div>'+
+      '<button class="btn icon ghost" data-act="acct-del" data-id="'+a.id+'" style="color:var(--bad)" aria-label="削除">'+IC.trash+'</button></div>';
+  }).join("");
+
+  var acctCard='<div class="card mb"><div class="card-p">'+
+    '<h3 style="font-size:15px;font-weight:600">アカウント管理</h3>'+
+    '<p class="muted fs13" style="margin:6px 0 10px">連携できるアカウントは「Instagram連携」から、できないアカウントは「手動追加」で。</p>'+
+    (acctRows||'<p class="muted fs13">アカウントがありません。</p>')+
+    '<div class="flex gap8 wrapf mt">'+
+    '<button class="btn" data-act="open-connect">'+IC.link+'Instagram連携でアカウント追加</button>'+
+    '<button class="btn outline" data-act="add-manual">'+IC.plus+'手動アカウントを追加</button></div></div></div>';
+
+  var tokenInfo=cfg.token?('保存済み（'+(cfg.savedAt?cfg.savedAt.slice(0,10):"")+' 登録・約60日で要更新）'):"未設定";
+  var apiCard='<div class="card mb"><div class="card-p">'+
+    '<h3 style="font-size:15px;font-weight:600">Instagram連携（Graph API）</h3>'+
+    '<p class="muted fs13" style="margin:6px 0 10px">アクセストークン：'+esc(tokenInfo)+'。トークンはこの端末のブラウザ内にのみ保存され、外部には送信されません（Meta APIとの通信を除く）。</p>'+
+    '<details class="fs13" style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:600">トークンの取り方（クリックで開く）</summary>'+
+    '<ol style="margin:8px 0 0;padding-left:20px;line-height:1.9">'+
+    '<li>developers.facebook.com でアプリを作成（開発モードのままでOK・審査不要）</li>'+
+    '<li>ツール > Graph APIエクスプローラ を開き、自分のアプリを選択</li>'+
+    '<li>権限に instagram_basic / instagram_manage_insights / pages_show_list / pages_read_engagement / business_management を追加して「Generate Access Token」</li>'+
+    '<li>出てきたトークンを「連携」画面に貼り付け</li></ol>'+
+    '<p class="muted" style="margin-top:6px">※取得できるのはプロアカウント＋あなたがページ権限を持つアカウントのみ。トークンは約60日で切れるので、切れたら同じ手順で再発行してください。</p></details>'+
+    '<button class="btn outline" data-act="open-connect">'+IC.link+'トークンを設定 / アカウントを取得</button></div></div>';
+
+  var benchRows=BENCH_ROWS.map(function(row){
+    return '<div class="grid" style="grid-template-columns:1fr 90px 90px;gap:12px 16px;align-items:center">'+
       '<label class="fs13" style="font-weight:500">'+row[1]+'</label>'+
       '<input type="number" min="0" step="any" class="r" data-bench="'+row[0]+'" data-field="good" value="'+toPctN(s.benchmarks[row[0]].good)+'">'+
       '<input type="number" min="0" step="any" class="r" data-bench="'+row[0]+'" data-field="warn" value="'+toPctN(s.benchmarks[row[0]].warn)+'"></div>';
   }).join("");
-  var verdictRows = VERDICT_ROWS.map(function(row){
-    return '<div class="grid" style="grid-template-columns:1fr 96px;gap:12px 16px;align-items:center">'+
+  var verdictRows=VERDICT_ROWS.map(function(row){
+    return '<div class="grid" style="grid-template-columns:1fr 90px;gap:12px 16px;align-items:center">'+
       '<label class="fs13" style="font-weight:500">'+row[1]+'</label>'+
       '<input type="number" min="0" step="any" class="r" data-verdict="'+row[0]+'" value="'+toPctN(s.verdict[row[0]])+'"></div>';
   }).join("");
 
-  return head+
-    '<div class="card" style="margin-bottom:20px"><div class="card-p">'+
-    '<h3 style="font-size:15px;font-weight:600">目安値（ベンチマーク）</h3>'+
-    '<p class="muted fs13" style="margin:6px 0 16px">達成ライン以上で「達成（緑）」、注意ライン以上〜達成未満で「注意（黄）」、それ未満で「未達（赤）」。単位は%。</p>'+
-    '<div class="grid" style="grid-template-columns:1fr 96px 96px;gap:8px 16px;margin-bottom:8px"><span class="muted fs12" style="font-weight:500">指標</span><span class="muted fs12 r" style="font-weight:500">達成(%)</span><span class="muted fs12 r" style="font-weight:500">注意(%)</span></div>'+
+  return head+acctCard+apiCard+
+    '<div class="card mb"><div class="card-p"><h3 style="font-size:15px;font-weight:600">目安値（ベンチマーク）</h3>'+
+    '<p class="muted fs13" style="margin:6px 0 14px">達成以上=緑、注意以上=黄、未満=赤。単位は%。全アカウント共通。</p>'+
+    '<div class="grid" style="grid-template-columns:1fr 90px 90px;gap:8px 16px;margin-bottom:6px"><span class="muted fs12" style="font-weight:600">指標</span><span class="muted fs12 r" style="font-weight:600">達成(%)</span><span class="muted fs12 r" style="font-weight:600">注意(%)</span></div>'+
     '<div class="stack" style="gap:10px">'+benchRows+'</div></div></div>'+
-    '<div class="card" style="margin-bottom:20px"><div class="card-p">'+
-    '<h3 style="font-size:15px;font-weight:600">勝ち／負け 判定サジェストのしきい値</h3>'+
-    '<p class="muted fs13" style="margin:6px 0 16px">投稿別分析での「勝ち候補／負け候補」バッジの判定基準。単位は%。</p>'+
+    '<div class="card mb"><div class="card-p"><h3 style="font-size:15px;font-weight:600">勝ち／負け判定サジェストのしきい値</h3>'+
+    '<p class="muted fs13" style="margin:6px 0 14px">投稿別分析の「勝ち候補／負け候補」バッジの基準。単位は%。</p>'+
     '<div class="stack" style="gap:10px">'+verdictRows+'</div></div></div>'+
-    '<div class="flex gap8 wrapf" style="margin-bottom:20px"><button class="btn" data-act="s-save">'+IC.save+'設定を保存</button>'+
+    '<div class="flex gap8 wrapf mb"><button class="btn" data-act="s-save">'+IC.save+'設定を保存</button>'+
     '<button class="btn outline" data-act="s-reset">'+IC.reset+'初期値に戻す</button></div>'+
-    '<div class="card"><div class="card-p">'+
-    '<h3 style="font-size:15px;font-weight:600">データ管理</h3>'+
-    '<p class="muted fs13" style="margin:6px 0 16px">バックアップ・移行用のエクスポート／インポート、CSV出力、全削除。</p>'+
+    '<div class="card"><div class="card-p"><h3 style="font-size:15px;font-weight:600">データ管理</h3>'+
+    '<p class="muted fs13" style="margin:6px 0 14px">バックアップ・移行・CSV出力・全削除（全アカウントぶん）。</p>'+
     '<div class="flex gap8 wrapf mb"><button class="btn outline" data-act="ex-json">'+IC.dl+'全データJSON書き出し</button>'+
     '<button class="btn outline" data-act="im-json">'+IC.ul+'JSON読み込み</button></div>'+
-    '<div class="flex gap8 wrapf mb"><button class="btn outline" data-act="ex-weekly">'+IC.dl+'週次CSV</button>'+
-    '<button class="btn outline" data-act="ex-posts">'+IC.dl+'投稿別CSV</button></div>'+
+    '<div class="flex gap8 wrapf mb"><button class="btn outline" data-act="ex-weekly">'+IC.dl+'週次CSV（現在のアカウント）</button>'+
+    '<button class="btn outline" data-act="ex-posts">'+IC.dl+'投稿別CSV（現在のアカウント）</button></div>'+
     '<div style="padding-top:8px;border-top:1px solid var(--border)"><button class="btn bad" data-act="clear-all">'+IC.trash+'全データを削除</button></div>'+
     '</div></div>';
 }
 
-/* ============================ CSV / エクスポート ============================ */
-function csvCell(v){ if(v===null||v===undefined) return ""; var s=String(v); return /[",\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s; }
+/* ============================ CSV / バックアップ ============================ */
+function csvCell(v){ if(v==null) return ""; var s=String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
 function toCsv(rows){ return "﻿"+rows.map(function(r){return r.map(csvCell).join(",");}).join("\r\n"); }
-function rp(v){ return v===null?"":(v*100).toFixed(2); }
+function rp(v){ return v==null?"":(v*100).toFixed(2); }
 function weeklyCsv(){
-  var h=["週開始日","週初フォロワー数","新規フォロワー","投稿数","ストーリーズ本数","ビュー数","リーチ","フォロワーリーチ","プロフィールアクセス","保存","シェア","外部リンククリック","ストーリーズ閲覧","CV数","フォロワー増加率%","ホーム率%","フォロワー外リーチ率%","プロフアクセス率%","フォロワー転換率%","保存率%","シェア率%","リンクCTR%","ストーリーズ閲覧率%","成約率%"];
-  var rows = load(KEY.weekly,[]).slice().sort(function(a,b){return b.weekStart.localeCompare(a.weekStart);}).map(function(e){
+  var h=["週開始日","週初フォロワー数","新規フォロワー","投稿数","ストーリーズ本数","ビュー数","リーチ","フォロワーリーチ","プロフィールアクセス","保存","シェア","外部リンククリック","ストーリーズ閲覧","CV数","ホーム率%","保存率%","シェア率%","転換率%","プロフ率%","ストーリーズ閲覧率%","CTR%","成約率%"];
+  var rows=getWeekly().slice().sort(function(a,b){return b.weekStart.localeCompare(a.weekStart);}).map(function(e){
     var r=weeklyRates(e);
-    return [e.weekStart,e.followersStart,e.newFollowers,e.posts,e.stories,e.views,e.reach,e.followerReach,e.profileVisits,e.saves,e.shares,e.linkClicks,e.storyViews,e.conversions,rp(r.followerGrowth),rp(r.homeRate),rp(r.nonFollowerReachRate),rp(r.profileVisitRate),rp(r.followerConversionRate),rp(r.saveRate),rp(r.shareRate),rp(r.linkCtr),rp(r.storyViewRate),rp(r.conversionRate)];
+    return [e.weekStart,e.followersStart,e.newFollowers,e.posts,e.stories,e.views,e.reach,e.followerReach,e.profileVisits,e.saves,e.shares,e.linkClicks,e.storyViews,e.conversions,rp(r.homeRate),rp(r.saveRate),rp(r.shareRate),rp(r.followerConversionRate),rp(r.profileVisitRate),rp(r.storyViewRate),rp(r.linkCtr),rp(r.conversionRate)];
   });
   return toCsv([h].concat(rows));
 }
 function postsCsv(){
-  var h=["投稿日","形式","企画名","フック","判定","ビュー数","リーチ","フォロワー外リーチ率%","動画尺秒","平均視聴秒","いいね","コメント","保存","シェア","プロフィールアクセス","フォロー数","維持率%","いいね率%","保存率%","シェア率%","プロフアクセス率%","学びメモ"];
-  var rows = load(KEY.posts,[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);}).map(function(p){
+  var h=["投稿日","形式","企画名","フック","判定","ビュー数","リーチ","いいね","コメント","保存","シェア","プロフィールアクセス","フォロー数","維持率%","いいね率%","保存率%","シェア率%","プロフ率%","学びメモ"];
+  var rows=getPosts().slice().sort(function(a,b){return b.date.localeCompare(a.date);}).map(function(p){
     var r=postRates(p);
-    return [p.date,p.format,p.title,p.hook,p.verdict,p.views,p.reach,p.nonFollowerReachPct,p.videoSec,p.avgWatchSec,p.likes,p.comments,p.saves,p.shares,p.profileVisits,p.follows,rp(r.retentionRate),rp(r.likeRate),rp(r.saveRate),rp(r.shareRate),rp(r.profileVisitRate),p.memo];
+    return [p.date,p.format,p.title,p.hook,p.verdict,p.views,p.reach,p.likes,p.comments,p.saves,p.shares,p.profileVisits,p.follows,rp(r.retentionRate),rp(r.likeRate),rp(r.saveRate),rp(r.shareRate),rp(r.profileVisitRate),p.memo];
   });
   return toCsv([h].concat(rows));
 }
-function download(name, text, mime){
+function download(name,text,mime){
   var blob=new Blob([text],{type:mime||"text/plain;charset=utf-8"});
   var url=URL.createObjectURL(blob), a=document.createElement("a");
   a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function exportAll(){
+  var accs=accounts(), data={};
+  accs.forEach(function(a){
+    data[a.id]={ weekly:load(dkOf(a.id,"weekly"),[]), posts:load(dkOf(a.id,"posts"),[]), checks:load(dkOf(a.id,"checks"),[]) };
+  });
+  return { app:"インスタ分析思考2026", version:2, exportedAt:nowISO(), accounts:accs, current:currentId(), settings:getSettings(), data:data };
+}
+function importAll(b){
+  if(b.version===2 && Array.isArray(b.accounts)){
+    saveAccounts(b.accounts);
+    if(b.current) setCurrent(b.current);
+    if(b.settings) save(K.settings,b.settings);
+    Object.keys(b.data||{}).forEach(function(id){
+      var d=b.data[id];
+      if(d.weekly) save(dkOf(id,"weekly"),d.weekly);
+      if(d.posts) save(dkOf(id,"posts"),d.posts);
+      if(d.checks) save(dkOf(id,"checks"),d.checks);
+    });
+    return true;
+  }
+  // v1形式：現在のアカウント（なければ新規）に読み込み
+  if(Array.isArray(b.weekly)||Array.isArray(b.posts)){
+    if(!accounts().length) addAccount({name:"マイアカウント",mode:"manual"});
+    if(Array.isArray(b.weekly)) setWeekly(b.weekly);
+    if(Array.isArray(b.posts)) setPosts(b.posts);
+    if(Array.isArray(b.checks)) setChecks(b.checks);
+    if(b.settings) save(K.settings,b.settings);
+    return true;
+  }
+  return false;
+}
 
 /* ============================ サンプルデータ ============================ */
-function seedData(){
+function seedInto(){
   var now=nowISO();
-  function w(weekStart,o){ o.id=uid(); o.weekStart=weekStart; o.createdAt=now; o.updatedAt=now; return o; }
-  var weekly=[
+  function w(ws,o){ o.id=uid(); o.weekStart=ws; o.createdAt=now; o.updatedAt=now; return o; }
+  setWeekly([
     w("2026-07-06",{followersStart:5000,newFollowers:120,posts:5,stories:20,views:40000,reach:22000,followerReach:9700,profileVisits:900,saves:480,shares:130,linkClicks:210,storyViews:260,conversions:6}),
     w("2026-07-13",{followersStart:5120,newFollowers:90,posts:4,stories:18,views:35000,reach:19000,followerReach:7900,profileVisits:700,saves:300,shares:80,linkClicks:150,storyViews:210,conversions:3}),
     w("2026-07-20",{followersStart:5210,newFollowers:150,posts:6,stories:24,views:52000,reach:27000,followerReach:12400,profileVisits:1100,saves:700,shares:90,linkClicks:300,storyViews:320,conversions:9})
-  ];
+  ]);
   function p(o){ o.id=uid(); o.createdAt=now; o.updatedAt=now; return o; }
-  var posts=[
+  setPosts([
     p({date:"2026-07-20",format:"リール",title:"朝ルーティン時短術",hook:"実は9割が損してる朝の3分",views:60000,reach:42000,nonFollowerReachPct:78,videoSec:30,avgWatchSec:18,likes:1500,comments:90,saves:1400,shares:620,profileVisits:900,follows:210,verdict:"勝ち",memo:"冒頭2秒の損失フックが効いた。同型でシリーズ化する。"}),
     p({date:"2026-07-18",format:"カルーセル",title:"保存版・便利家電100選",hook:"永久保存推奨のまとめ",views:22000,reach:20000,nonFollowerReachPct:45,videoSec:null,avgWatchSec:null,likes:380,comments:25,saves:900,shares:120,profileVisits:400,follows:60,verdict:"勝ち",memo:"枚数多め×まとめ企画は保存に強い。100選フォーマットを横展開。"}),
     p({date:"2026-07-16",format:"リール",title:"失敗あるある集",hook:"共感しかないやつ",views:45000,reach:33000,nonFollowerReachPct:70,videoSec:25,avgWatchSec:11,likes:900,comments:60,saves:500,shares:400,profileVisits:500,follows:90,verdict:"勝ち",memo:"「送りたくなる」あるある系はシェアが伸びる。維持率は要改善。"}),
     p({date:"2026-07-14",format:"ストーリーズ",title:"アンケート企画",hook:"AとBどっち派？",views:3000,reach:2900,nonFollowerReachPct:5,videoSec:null,avgWatchSec:null,likes:0,comments:0,saves:20,shares:15,profileVisits:60,follows:5,verdict:"普通",memo:"2択は反応率高め。親密度シグナル狙いで継続。"}),
     p({date:"2026-07-12",format:"フィード単枚",title:"新商品告知",hook:"ついに発売しました",views:8000,reach:7500,nonFollowerReachPct:20,videoSec:null,avgWatchSec:null,likes:100,comments:12,saves:35,shares:10,profileVisits:120,follows:8,verdict:"負け",memo:"告知単体は広告感が強く伸びにくい。ベネフィット訴求へ作り替える。"})
-  ];
-  save(KEY.weekly, weekly); save(KEY.posts, posts);
-}
-
-/* ============================ 共通ヘッダー ============================ */
-function pageHead(title, desc, action){
-  return '<div class="page-head"><div><h1>'+esc(title)+'</h1>'+(desc?'<p>'+esc(desc)+'</p>':"")+'</div>'+(action?'<div>'+action+'</div>':"")+'</div>';
+  ]);
 }
 
 /* ============================ レンダリング ============================ */
 function render(){
-  var r = parseHash();
-  var host = document.getElementById("view");
+  var r=parseHash(), host=document.getElementById("view");
+  if(!accounts().length){
+    host.innerHTML=viewWizard();
+    document.getElementById("acct-host").innerHTML="";
+    renderChrome();
+    return;
+  }
+  document.getElementById("acct-host").innerHTML=acctBarHtml();
   var html;
   if(r.path==="dashboard") html=viewDashboard();
   else if(r.path==="weekly") html=viewWeekly();
   else if(r.path==="posts") html=viewPosts();
   else if(r.path==="diagnosis") html=viewDiagnosis(r.params);
   else if(r.path==="kpis") html=viewKpis();
-  else if(r.path==="settings") html=viewSettings();
-  host.innerHTML = html;
+  else html=viewSettings();
+  host.innerHTML=html;
   renderChrome();
-  window.scrollTo(0,0);
-  // フォームのプレビュー初期化＋入力監視
-  if(r.path==="weekly" && weeklyFormOpen){ weeklyPreview(); bindLive("weekly-fields", weeklyPreview); }
-  if(r.path==="posts" && postFormOpen){ postPreview(); bindLive2(postPreview); }
-}
-function bindLive(id, fn){ var host=document.getElementById(id); if(host) host.addEventListener("input", fn); }
-function bindLive2(fn){
-  POST_NUM.forEach(function(f){ var el=document.getElementById("p-"+f[0]); if(el) el.addEventListener("input", fn); });
+  if(r.path==="weekly"&&weeklyFormOpen){ weeklyPreview(); var wf=document.getElementById("weekly-fields"); if(wf) wf.addEventListener("input",weeklyPreview); }
+  if(r.path==="posts"&&postFormOpen){ postPreview(); POST_NUM.forEach(function(f){ var el=document.getElementById("p-"+f[0]); if(el) el.addEventListener("input",postPreview); }); }
 }
 
-/* ============================ イベント委譲 ============================ */
-document.addEventListener("click", function(e){
-  var t = e.target.closest("[data-act]"); if(!t) return;
-  var act = t.getAttribute("data-act");
-  var weekly = load(KEY.weekly, []), posts = load(KEY.posts, []);
+/* ============================ イベント ============================ */
+document.addEventListener("click",function(e){
+  var t=e.target.closest("[data-act]"); if(!t) return;
+  var act=t.getAttribute("data-act");
 
   if(act==="theme"){ toggleTheme(); return; }
-  if(act==="go-weekly"){ navigate("weekly"); return; }
-  if(act==="seed"){ seedData(); render(); toast("サンプルデータを投入しました"); return; }
-  if(act==="go-diag"){ diagKpi=null; diagState=null; navigate("diagnosis",{kpi:t.getAttribute("data-kpi"),state:t.getAttribute("data-state")||"減った"}); return; }
 
-  // 週次
-  if(act==="w-new"){ weeklyEditId=null; weeklyFormOpen=true; render(); return; }
-  if(act==="w-close"){ weeklyFormOpen=false; weeklyEditId=null; render(); return; }
-  if(act==="w-edit"){ weeklyEditId=t.getAttribute("data-id"); weeklyFormOpen=true; render(); return; }
-  if(act==="w-del"){ var id=t.getAttribute("data-id"); confirmModal("この週のデータを削除しますか？","削除すると元に戻せません。","削除する",function(){ save(KEY.weekly, weekly.filter(function(x){return x.id!==id;})); render(); toast("削除しました"); }); return; }
+  /* ウィザード */
+  if(act==="wiz-api"){ openConnectModal(true); return; }
+  if(act==="wiz-manual"){ openManualAddModal(); return; }
+  if(act==="wiz-sample"){
+    addAccount({name:"サンプル",mode:"manual"});
+    seedInto(); render(); toast("サンプルデータを入れました。自由に触ってみてください");
+    return;
+  }
+
+  /* アカウント */
+  if(act==="switch-acct"){ setCurrent(t.getAttribute("data-id")); weeklyFormOpen=false; postFormOpen=false; editWeekStart=null; postEditId=null; render(); return; }
+  if(act==="add-acct"){
+    // 選択肢：連携 or 手動
+    var bg=document.createElement("div"); bg.className="modal-bg";
+    bg.innerHTML='<div class="modal"><h3>アカウントを追加</h3><div class="stack mt">'+
+      '<button class="big-choice" data-w="api" style="display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--border);background:var(--card);border-radius:14px;padding:16px;cursor:pointer"><span style="width:40px;height:40px;border-radius:12px;background:var(--accent-bg);color:var(--primary);display:grid;place-items:center;flex:none">'+IC.link+'</span><span><b>Instagram連携で追加</b><p class="muted fs12" style="margin-top:2px">数値を自動で取り込めます</p></span></button>'+
+      '<button class="big-choice" data-w="manual" style="display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--border);background:var(--card);border-radius:14px;padding:16px;cursor:pointer"><span style="width:40px;height:40px;border-radius:12px;background:var(--muted);color:var(--muted-ink);display:grid;place-items:center;flex:none">'+IC.keyb+'</span><span><b>手動アカウントを追加</b><p class="muted fs12" style="margin-top:2px">連携できないアカウントはこちら</p></span></button>'+
+      '</div><div class="modal-foot"><button class="btn ghost" data-w="x">閉じる</button></div></div>';
+    document.body.appendChild(bg);
+    bg.addEventListener("click",function(ev){
+      var b=ev.target.closest("[data-w]");
+      if(ev.target===bg){ bg.remove(); return; }
+      if(!b) return;
+      var w=b.getAttribute("data-w"); bg.remove();
+      if(w==="api") openConnectModal(false);
+      else if(w==="manual") openManualAddModal();
+    });
+    return;
+  }
+  if(act==="acct-del"){
+    var aid=t.getAttribute("data-id");
+    var a=accounts().filter(function(x){return x.id===aid;})[0];
+    confirmModal("「"+(a?a.name:"")+"」を削除しますか？","このアカウントの週次・投稿・チェックの記録もすべて消えます。元に戻せません。","削除する",function(){
+      saveAccounts(accounts().filter(function(x){return x.id!==aid;}));
+      del(dkOf(aid,"weekly")); del(dkOf(aid,"posts")); del(dkOf(aid,"checks"));
+      if(currentId()===null||load(K.current,null)===aid){ var rest=accounts(); if(rest.length) setCurrent(rest[0].id); else del(K.current); }
+      render(); toast("削除しました");
+    });
+    return;
+  }
+  if(act==="open-connect"){ openConnectModal(false); return; }
+  if(act==="add-manual"){ openManualAddModal(); return; }
+  if(act==="open-import"){ openImportModal(); return; }
+
+  if(act==="seed"){ seedInto(); render(); toast("サンプルデータを入れました"); return; }
+  if(act==="go-diag"){ diagKpi=null; diagState=null; navigate("diagnosis",{kpi:t.getAttribute("data-kpi"),state:t.getAttribute("data-state")||"減った"}); return; }
+  if(act==="w-new-go"){ weeklyFormOpen=true; editWeekStart=null; navigate("weekly"); render(); return; }
+
+  /* 週次 */
+  if(act==="w-new"){ editWeekStart=null; weeklyFormOpen=true; render(); return; }
+  if(act==="w-close"){ weeklyFormOpen=false; editWeekStart=null; render(); return; }
+  if(act==="w-edit"){ editWeekStart=t.getAttribute("data-ws"); weeklyFormOpen=true; render(); window.scrollTo({top:0,behavior:"smooth"}); return; }
+  if(act==="w-del"){
+    var wid=t.getAttribute("data-id");
+    var weekly=getWeekly(); var item=weekly.filter(function(x){return x.id===wid;})[0];
+    confirmModal("この週のデータを削除しますか？","","削除する",function(){
+      setWeekly(getWeekly().filter(function(x){return x.id!==wid;}));
+      lastDeleted={kind:"weekly",item:item};
+      render();
+      toast("削除しました","元に戻す",function(){
+        if(lastDeleted&&lastDeleted.kind==="weekly"){ var w2=getWeekly(); w2.push(lastDeleted.item); setWeekly(w2); lastDeleted=null; render(); }
+      });
+    });
+    return;
+  }
   if(act==="w-save"){
     var e2=readWeeklyForm();
+    if(!e2.weekStart&&editWeekStart) e2.weekStart=editWeekStart;
     if(!e2.weekStart){ toast("週開始日を入力してください"); return; }
-    var now=nowISO();
-    if(weeklyEditId){ var idx=weekly.findIndex(function(x){return x.id===weeklyEditId;}); if(idx>=0){ e2.id=weeklyEditId; e2.createdAt=weekly[idx].createdAt; e2.updatedAt=now; weekly[idx]=e2; } }
-    else { e2.id=uid(); e2.createdAt=now; e2.updatedAt=now; weekly.push(e2); }
-    save(KEY.weekly, weekly); weeklyFormOpen=false; weeklyEditId=null; render(); toast(weeklyEditId?"更新しました":"追加しました");
+    var list2=getWeekly();
+    var idx2=list2.findIndex(function(x){return x.weekStart===e2.weekStart;});
+    var wasEdit=!!editWeekStart;
+    if(idx2>=0){
+      Object.keys(e2).forEach(function(kk){ list2[idx2][kk]=e2[kk]; });
+      list2[idx2].updatedAt=nowISO();
+    } else {
+      e2.id=uid(); e2.createdAt=nowISO(); e2.updatedAt=nowISO();
+      list2.push(e2);
+    }
+    setWeekly(list2); weeklyFormOpen=false; editWeekStart=null; render(); toast(wasEdit?"更新しました":"保存しました");
     return;
   }
 
-  // 投稿
+  /* 投稿 */
   if(act==="p-new"){ postEditId=null; postFormOpen=true; postTab="list"; render(); return; }
   if(act==="p-close"){ postFormOpen=false; postEditId=null; render(); return; }
-  if(act==="p-edit"){ postEditId=t.getAttribute("data-id"); postFormOpen=true; render(); return; }
-  if(act==="p-del"){ var pid=t.getAttribute("data-id"); confirmModal("この投稿を削除しますか？","削除すると元に戻せません。","削除する",function(){ save(KEY.posts, posts.filter(function(x){return x.id!==pid;})); render(); toast("削除しました"); }); return; }
+  if(act==="p-edit"){ postEditId=t.getAttribute("data-id"); postFormOpen=true; render(); window.scrollTo({top:0,behavior:"smooth"}); return; }
+  if(act==="p-del"){
+    var pid=t.getAttribute("data-id");
+    var posts=getPosts(); var pitem=posts.filter(function(x){return x.id===pid;})[0];
+    confirmModal("この投稿を削除しますか？","","削除する",function(){
+      setPosts(getPosts().filter(function(x){return x.id!==pid;}));
+      lastDeleted={kind:"post",item:pitem};
+      render();
+      toast("削除しました","元に戻す",function(){
+        if(lastDeleted&&lastDeleted.kind==="post"){ var p2=getPosts(); p2.push(lastDeleted.item); setPosts(p2); lastDeleted=null; render(); }
+      });
+    });
+    return;
+  }
   if(act==="p-tab"){ postTab=t.getAttribute("data-tab"); render(); return; }
-  if(act==="p-sort"){ var k=t.getAttribute("data-key"); if(postSort.key===k){ postSort.dir=postSort.dir==="asc"?"desc":"asc"; } else { postSort.key=k; postSort.dir="desc"; } render(); return; }
+  if(act==="p-sort"){ var k2=t.getAttribute("data-key"); if(postSort.key===k2){ postSort.dir=postSort.dir==="asc"?"desc":"asc"; } else { postSort.key=k2; postSort.dir="desc"; } render(); return; }
   if(act==="p-save"){
-    var p2=readPostForm(); if(!p2.date){ toast("投稿日を入力してください"); return; }
-    var now2=nowISO();
-    if(postEditId){ var pidx=posts.findIndex(function(x){return x.id===postEditId;}); if(pidx>=0){ p2.id=postEditId; p2.createdAt=posts[pidx].createdAt; p2.updatedAt=now2; posts[pidx]=p2; } }
-    else { p2.id=uid(); p2.createdAt=now2; p2.updatedAt=now2; posts.push(p2); }
-    save(KEY.posts, posts); postFormOpen=false; postEditId=null; render(); toast(postEditId?"更新しました":"追加しました");
+    var p3=readPostForm(); if(!p3.date){ toast("投稿日を入力してください"); return; }
+    var plist=getPosts();
+    if(postEditId){
+      var pi=plist.findIndex(function(x){return x.id===postEditId;});
+      if(pi>=0){ var keep=plist[pi]; Object.keys(p3).forEach(function(kk){ keep[kk]=p3[kk]; }); keep.updatedAt=nowISO(); }
+      toast("更新しました");
+    } else {
+      p3.id=uid(); p3.createdAt=nowISO(); p3.updatedAt=nowISO(); plist.push(p3);
+      toast("保存しました");
+    }
+    setPosts(plist); postFormOpen=false; postEditId=null; render();
     return;
   }
 
-  // 診断
+  /* 診断 */
   if(act==="d-kpi"){ diagKpi=t.getAttribute("data-kpi"); diagState=null; render(); return; }
   if(act==="d-state"){ diagState=t.getAttribute("data-state"); render(); return; }
   if(act==="d-reset"){ diagKpi=null; diagState=null; render(); return; }
   if(act==="d-check"){
-    var did=+t.getAttribute("data-id"); var checks=load(KEY.checks,[]);
+    var did=+t.getAttribute("data-id"); var checks=getChecks();
     if(checks.some(function(c){return c.diagnosisId===did;})) checks=checks.filter(function(c){return c.diagnosisId!==did;});
-    else checks.push({diagnosisId:did, checkedAt:nowISO()});
-    save(KEY.checks, checks); render(); return;
+    else checks.push({diagnosisId:did,checkedAt:nowISO()});
+    setChecks(checks); render(); return;
   }
 
-  // KPI辞典
   if(act==="k-tab"){ kpiTab=t.getAttribute("data-tab"); render(); return; }
 
-  // 設定
+  /* 設定 */
   if(act==="s-save"){
     var s=getSettings();
-    document.querySelectorAll("[data-bench]").forEach(function(el){ var b=el.getAttribute("data-bench"),f=el.getAttribute("data-field"); var n=Number(el.value); s.benchmarks[b][f]= isFinite(n)? n/100 : 0; });
-    document.querySelectorAll("[data-verdict]").forEach(function(el){ var v=el.getAttribute("data-verdict"); var n=Number(el.value); s.verdict[v]= isFinite(n)? n/100 : 0; });
-    save(KEY.settings, s); toast("設定を保存しました");
+    document.querySelectorAll("[data-bench]").forEach(function(el){ var b=el.getAttribute("data-bench"),f=el.getAttribute("data-field"); var n=Number(el.value); s.benchmarks[b][f]=isFinite(n)?n/100:0; });
+    document.querySelectorAll("[data-verdict]").forEach(function(el){ var v=el.getAttribute("data-verdict"); var n=Number(el.value); s.verdict[v]=isFinite(n)?n/100:0; });
+    save(K.settings,s); toast("設定を保存しました");
     return;
   }
-  if(act==="s-reset"){ save(KEY.settings, JSON.parse(JSON.stringify(DEFAULT_SETTINGS))); render(); toast("初期値に戻しました"); return; }
-  if(act==="ex-json"){ var bundle={app:"インスタ分析思考2026",version:1,exportedAt:nowISO(),weekly:load(KEY.weekly,[]),posts:load(KEY.posts,[]),settings:getSettings(),checks:load(KEY.checks,[])}; download("insta-analytics-"+todayStr()+".json", JSON.stringify(bundle,null,2), "application/json"); return; }
+  if(act==="s-reset"){ save(K.settings,JSON.parse(JSON.stringify(DEFAULT_SETTINGS))); render(); toast("初期値に戻しました"); return; }
+  if(act==="ex-json"){ download("insta-analytics-"+todayYmd()+".json", JSON.stringify(exportAll(),null,2), "application/json"); return; }
   if(act==="im-json"){ document.getElementById("file-input").click(); return; }
-  if(act==="ex-weekly"){ download("weekly-"+todayStr()+".csv", weeklyCsv(), "text/csv;charset=utf-8"); return; }
-  if(act==="ex-posts"){ download("posts-"+todayStr()+".csv", postsCsv(), "text/csv;charset=utf-8"); return; }
-  if(act==="clear-all"){ confirmModal("すべてのデータを削除しますか？","週次・投稿別・診断チェックがすべて消え、設定は初期値に戻ります。この操作は元に戻せません。先にJSON書き出しをおすすめします。","すべて削除する",function(){ save(KEY.weekly,[]); save(KEY.posts,[]); save(KEY.checks,[]); save(KEY.settings, JSON.parse(JSON.stringify(DEFAULT_SETTINGS))); render(); toast("全データを削除しました"); }); return; }
+  if(act==="ex-weekly"){ download("weekly-"+todayYmd()+".csv", weeklyCsv(), "text/csv;charset=utf-8"); return; }
+  if(act==="ex-posts"){ download("posts-"+todayYmd()+".csv", postsCsv(), "text/csv;charset=utf-8"); return; }
+  if(act==="clear-all"){
+    confirmModal("すべてのデータを削除しますか？","全アカウントの週次・投稿・チェック・連携設定が消えます。元に戻せません。先にJSON書き出しをおすすめします。","すべて削除する",function(){
+      accounts().forEach(function(a){ del(dkOf(a.id,"weekly")); del(dkOf(a.id,"posts")); del(dkOf(a.id,"checks")); });
+      del(K.accounts); del(K.current); del(K.api); save(K.settings,JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+      render(); toast("全データを削除しました");
+    });
+    return;
+  }
 });
 
-// select 変更
-document.addEventListener("change", function(e){
+document.addEventListener("change",function(e){
   var el=e.target;
   if(el.id==="weekly-chart-key"){ weeklyChartKey=el.value; render(); return; }
   if(el.id==="p-fmt-filter"){ postFmtFilter=el.value; render(); return; }
@@ -1919,38 +2492,34 @@ document.addEventListener("change", function(e){
   if(el.id==="file-input"){
     var file=el.files&&el.files[0]; if(!file) return;
     var reader=new FileReader();
-    reader.onload=function(){ try{ var b=JSON.parse(String(reader.result));
-      if(Array.isArray(b.weekly)) save(KEY.weekly,b.weekly);
-      if(Array.isArray(b.posts)) save(KEY.posts,b.posts);
-      if(b.settings) save(KEY.settings,b.settings);
-      if(Array.isArray(b.checks)) save(KEY.checks,b.checks);
-      render(); toast("データを読み込みました");
-    }catch(err){ toast("読み込みに失敗しました（JSON形式を確認してください）"); } };
+    reader.onload=function(){
+      try{
+        var ok=importAll(JSON.parse(String(reader.result)));
+        render(); toast(ok?"データを読み込みました":"対応していない形式です");
+      }catch(err){ toast("読み込みに失敗しました（JSON形式を確認）"); }
+    };
     reader.readAsText(file); el.value="";
-    return;
   }
 });
 
-window.addEventListener("hashchange", render);
+window.addEventListener("hashchange",function(){ weeklyFormOpen=false; postFormOpen=false; editWeekStart=null; postEditId=null; render(); });
 
 /* ============================ 起動 ============================ */
 (function init(){
-  // テーマ初期化（保存値 or OS 設定）
-  var stored = load(KEY.theme, null);
-  if(stored) document.documentElement.setAttribute("data-theme", stored);
-
-  document.getElementById("root").innerHTML =
+  var stored=load(K.theme,null);
+  if(stored) document.documentElement.setAttribute("data-theme",stored);
+  migrate();
+  document.getElementById("root").innerHTML=
     '<div class="app">'+
     '<aside class="side"><div class="brand"><div class="logo">イ</div><div><div style="font-size:14px;font-weight:600">インスタ分析思考</div><small class="tnum">2026</small></div></div>'+
     '<nav class="nav" id="side-nav"></nav>'+
-    '<div class="side-foot"><span>ローカル保存のみ</span><button class="btn icon ghost" id="theme-btn" data-act="theme" aria-label="テーマ切替"></button></div></aside>'+
+    '<div class="side-foot"><span>データはこの端末内のみ</span><button class="btn icon ghost" id="theme-btn" data-act="theme" aria-label="テーマ切替"></button></div></aside>'+
     '<div style="min-width:0;display:flex;flex-direction:column">'+
     '<header class="topbar"><div class="brand" style="padding:0"><div class="logo" style="width:32px;height:32px">イ</div><div><div style="font-size:14px;font-weight:600">インスタ分析思考 2026</div></div></div>'+
     '<button class="btn icon ghost" id="theme-btn-m" data-act="theme" aria-label="テーマ切替"></button></header>'+
-    '<main><div class="wrap" id="view"></div></main></div>'+
+    '<main><div class="wrap"><div id="acct-host"></div><div id="view"></div></div></main></div>'+
     '<nav class="btabs" id="btabs"></nav></div>'+
     '<input type="file" id="file-input" accept="application/json,.json" style="display:none">';
-
   render();
 })();
 
