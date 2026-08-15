@@ -62,6 +62,7 @@ function onOpen() {
 // 設定シートの既定行（①実行のたびに、足りない行だけ追記される）
 const CONFIG_DEFAULTS = [
   ['WEB_APP_URL', '', '★デプロイ完了画面の「ウェブアプリ」URL（https://script.google.com/macros/s/…/exec）をそのまま貼る。②のURL生成で使用'],
+  ['ADMIN_KEY', '', '管理者ダッシュボードの閲覧キー（①実行で自動生成・編集しない・共有しない）'],
   ['DISCORD_WEBHOOK_URL', '', 'Discord: チャンネル名横の⚙️ → 連携サービス → ウェブフック作成 → URLコピー'],
   ['CHATWORK_API_TOKEN', '', 'Chatwork: 右上の自分の名前 → サービス連携 → APIトークン'],
   ['CHATWORK_ROOM_ID', '', '送りたいチャットのURLの「#!rid」の後ろの数字'],
@@ -87,6 +88,14 @@ function setup() {
   );
   for (const row of CONFIG_DEFAULTS) {
     if (!existingKeys.has(row[0])) conf.appendRow(row);
+  }
+
+  // 管理者ダッシュボードの閲覧キーが空なら自動生成
+  const cvals = conf.getRange(2, 1, conf.getLastRow() - 1, 2).getValues();
+  for (let i = 0; i < cvals.length; i++) {
+    if (String(cvals[i][0]).trim() === 'ADMIN_KEY' && !String(cvals[i][1]).trim()) {
+      conf.getRange(i + 2, 2).setValue('adm' + Utilities.getUuid().replace(/-/g, '').substring(0, 20));
+    }
   }
 
   // QR設定シート（計測するQRコードの一覧。行の追加・削除は自由）
@@ -165,6 +174,10 @@ function generateUrls() {
       qr.key ? base + '?stats=' + qr.key : '(①を実行するとキーが生成されます)',
     ]);
   }
+  const ak = String(getConfig_().ADMIN_KEY || '').trim();
+  rows.push(['', '', '', '']);
+  rows.push(['(管理者)', '全体ダッシュボード ※自分専用・共有禁止', '',
+    ak ? base + '?admin=' + ak : '(①を実行するとキーが生成されます)']);
   sh.getRange(1, 1, rows.length, 4).setValues(rows);
   sh.setFrozenRows(1);
   sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 480).setColumnWidth(4, 480);
@@ -268,9 +281,16 @@ function doGet(e) {
     return ContentService.createTextOutput('ok');
   }
 
-  // ② アフィリエイター専用 成果確認ページ（?stats=閲覧キー）
+  // ② アフィリエイター専用 成果確認ページ（?stats=閲覧キー&p=期間）
   if (p.stats) {
-    return renderStatsPage_(String(p.stats).trim());
+    return renderStatsPage_(String(p.stats).trim(), Number(p.p));
+  }
+
+  // ③ 管理者ダッシュボード（?admin=管理キー）
+  if (p.admin) {
+    const ak = String(getConfig_().ADMIN_KEY || '').trim();
+    if (ak && String(p.admin).trim() === ak) return renderAdminPage_();
+    return invalidPage_();
   }
 
   // ② リダイレクタ
@@ -707,95 +727,198 @@ function selfUpdate() {
 }
 
 // ────────────────────────────────────────────
+// Web分析ページ 共通部品
+// ────────────────────────────────────────────
+function invalidPage_() {
+  return HtmlService.createHtmlOutput(
+    '<p style="font-family:sans-serif;text-align:center;padding-top:3em">リンクが無効です。発行元にお問い合わせください。</p>');
+}
+
+/** 登録ログを {id, day, hour, wd} の配列で返す（1回読むだけ） */
+function collectRegRows_() {
+  const out = [];
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.REGS);
+  if (!sh || sh.getLastRow() < 2) return out;
+  for (const [when, rawId] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
+    if (!(when instanceof Date)) continue;
+    out.push({
+      id: String(rawId).trim(),
+      day: Utilities.formatDate(when, TZ, 'yyyy-MM-dd'),
+      hour: Number(Utilities.formatDate(when, TZ, 'H')),
+      wd: Number(Utilities.formatDate(when, TZ, 'u')) - 1,
+    });
+  }
+  return out;
+}
+
+/** offset日前の 'yyyy-MM-dd' */
+function gDay_(offset) {
+  return Utilities.formatDate(new Date(Date.now() - offset * 86400000), TZ, 'yyyy-MM-dd');
+}
+
+/** 日別カウント表から offset from〜to 日前の合計 */
+function sumOffsets_(dayCounts, from, to) {
+  let s = 0;
+  for (let i = from; i <= to; i++) s += dayCounts[gDay_(i)] || 0;
+  return s;
+}
+
+/** 増減チップ（前期間比） */
+function deltaChip_(cur, prev) {
+  if (prev > 0) {
+    const pct = Math.round(((cur - prev) / prev) * 100);
+    if (pct > 0) return '<span class="chip up">↑ +' + pct + '%</span>';
+    if (pct < 0) return '<span class="chip dn">↓ ' + pct + '%</span>';
+    return '<span class="chip nt">±0%</span>';
+  }
+  return cur > 0 ? '<span class="chip up">NEW</span>' : '<span class="chip nt">—</span>';
+}
+
+/** WEB_APP_URL（設定シート優先）→ 素の …/exec */
+function webAppBase_() {
+  const base = String(getConfig_().WEB_APP_URL || '').trim().replace(/[?#].*$/, '');
+  return base || ScriptApp.getService().getUrl() || '';
+}
+
+// 白ベースの共通スタイル（クリエイター/管理者ページ共用）
+const PAGE_CSS =
+  'body{margin:0;background:#F7F9F7;color:#17211B;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased}' +
+  '.wrap{max-width:680px;margin:0 auto;padding:26px 16px 56px}' +
+  '.eyebrow{font-size:10px;letter-spacing:.24em;color:#00A63E;font-weight:700}' +
+  'h1{font-size:22px;margin:4px 0 2px;letter-spacing:.01em}' +
+  '.upd{color:#98A69E;font-size:11px;font-variant-numeric:tabular-nums;margin-bottom:4px}' +
+  '.hero{margin:14px 0 12px;padding:20px;border-radius:18px;border:1px solid rgba(0,166,62,.22);' +
+  'background:radial-gradient(120% 160% at 0% 0%,rgba(0,166,62,.10),rgba(0,166,62,.02) 60%),#fff;' +
+  'box-shadow:0 1px 3px rgba(16,40,26,.05)}' +
+  '.hv{font-size:52px;font-weight:800;color:#00A63E;line-height:1.15;font-variant-numeric:tabular-nums}' +
+  '.hl{font-size:12px;color:#6B7A72;letter-spacing:.08em}' +
+  '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
+  '.stat{background:#fff;border:1px solid #E6ECE7;border-radius:14px;padding:10px 4px;text-align:center;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
+  '.sv{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}' +
+  '.sl{font-size:10px;color:#8A968E}' +
+  '.chip{display:inline-block;font-size:10px;font-weight:800;border-radius:99px;padding:0 7px;line-height:1.6;vertical-align:middle}' +
+  '.chip.up{background:#E3F6EA;color:#00842F}' +
+  '.chip.dn{background:#FBE9E5;color:#B23A28}' +
+  '.chip.nt{background:#EFF2EF;color:#8A968E}' +
+  '.pills{display:flex;gap:6px;margin:4px 0 12px}' +
+  '.pill{padding:4px 14px;border-radius:99px;border:1px solid #E6ECE7;background:#fff;color:#6B7A72;font-size:12px;text-decoration:none;font-weight:700}' +
+  '.pill.on{background:#00A63E;color:#fff;border-color:#00A63E}' +
+  '.panel{background:#fff;border:1px solid #E6ECE7;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
+  '.ph{font-size:11px;letter-spacing:.18em;color:#8A968E;font-weight:700;margin-bottom:10px}' +
+  '.note{font-size:11px;color:#98A69E;margin-top:8px}' +
+  '.reward{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}' +
+  '.rv{font-size:28px;font-weight:800;color:#B08A1E;font-variant-numeric:tabular-nums}' +
+  '.rv.dim{font-size:20px;color:#6B7A72}' +
+  '.rl{font-size:11px;color:#8A968E}' +
+  '.goalrow{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}' +
+  '.gnum{font-size:30px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
+  '.gden{color:#8A968E;font-size:14px}' +
+  '.gpct{margin-left:auto;font-weight:700;color:#00A63E;font-size:14px}' +
+  '.pbar{height:10px;background:#EAF1EB;border-radius:99px;overflow:hidden}' +
+  '.pfill{height:100%;background:linear-gradient(90deg,#00A63E,#3ED47A);border-radius:99px}' +
+  '.rankrow{display:flex;align-items:baseline;gap:4px}' +
+  '.rankbig{font-size:40px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
+  '.rankunit{font-size:16px;font-weight:700}' +
+  '.rankden{color:#8A968E;margin-left:4px}' +
+  '.recs{display:flex;gap:14px;text-align:center}' +
+  '.recs>div{flex:1}' +
+  '.rv2{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
+  '.unit{font-size:12px;font-weight:600;color:#8A968E;margin-left:1px}' +
+  '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
+  '.chart.small{height:96px}' +
+  '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
+  '.bar{width:100%;background:linear-gradient(180deg,#3ED47A,#00A63E);border-radius:3px 3px 1px 1px;min-height:0}' +
+  '.bar.alt{background:linear-gradient(180deg,#7FD9AC,#2FA168)}' +
+  '.stack{width:100%;height:100%;display:flex;flex-direction:column;justify-content:flex-end}' +
+  '.seg{width:100%}' +
+  '.stack .seg:first-child{border-radius:3px 3px 0 0}' +
+  '.bval{font-size:9px;color:#6B7A72;height:12px;font-variant-numeric:tabular-nums}' +
+  '.blab{font-size:8px;color:#98A69E;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
+  '.blab2{font-size:9px;color:#98A69E;height:14px;margin-top:2px}' +
+  '.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}' +
+  '.legend span{font-size:11px;color:#6B7A72;white-space:nowrap}' +
+  '.dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:4px}' +
+  '.tbox{overflow-x:auto}' +
+  'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
+  'td,th{padding:7px 8px;border-top:1px solid #EEF2EF;text-align:left;white-space:nowrap}' +
+  '.num{text-align:right;font-weight:700}' +
+  'tr.thead td,tr.thead th{color:#8A968E;border-top:none;font-size:11px;font-weight:700}' +
+  'a.open{color:#00A63E;font-weight:700;text-decoration:none;font-size:12px}' +
+  '.foot{color:#98A69E;font-size:11px;text-align:center;margin-top:20px}';
+
+function pageHead_(title) {
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + escapeHtmlAttr_(title) + '</title><style>' + PAGE_CSS + '</style></head><body><div class="wrap">';
+}
+
+// ────────────────────────────────────────────
 // アフィリエイター専用 成果確認ページ
-//   URL: …/exec?stats=<閲覧キー>
+//   URL: …/exec?stats=<閲覧キー>&p=<7|30|90>
 //   本人の数字だけを表示（LINE ID等の個人情報は一切出さない）
 // ────────────────────────────────────────────
-function renderStatsPage_(key) {
-  const invalid = () => HtmlService.createHtmlOutput(
-    '<p style="font-family:sans-serif;text-align:center;padding-top:3em">リンクが無効です。発行元にお問い合わせください。</p>');
-  if (!key) return invalid();
+function renderStatsPage_(key, period) {
+  if (!key) return invalidPage_();
 
-  // 閲覧キーからアフィリエイターを特定
   const qrs = getQrMap_();
   let found = null;
   for (const [id, qr] of Object.entries(qrs)) {
     if (qr.key && qr.key === key) {
-      found = { id: id, name: qr.name, rate: qr.rate, goal: qr.goal };
+      found = { id: id, name: qr.name, rate: qr.rate, goal: qr.goal, key: key };
       break;
     }
   }
-  if (!found) return invalid();
+  if (!found) return invalidPage_();
+  const p = [7, 30, 90].indexOf(period) >= 0 ? period : 30;
 
   const now = new Date();
   const thisMonth = Utilities.formatDate(now, TZ, 'yyyy-MM');
 
-  // 1回の走査で全部集計（本人の日別/時間帯/曜日 ＋ ランキング用の全員今月件数）
-  const dayCounts = {};
+  // 集計（本人の日別/時間帯/曜日 ＋ ランキング用の全員今月件数）
+  const dc = {};
   const hourCounts = new Array(24).fill(0);
-  const wdCounts = new Array(7).fill(0); // 月〜日
+  const wdCounts = new Array(7).fill(0);
   let total = 0;
-  const monthTotals = {}; // 全員分（今月・匿名ランキング用）
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.REGS);
-  if (sh && sh.getLastRow() > 1) {
-    for (const [when, rawId] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
-      if (!(when instanceof Date)) continue;
-      const rid = String(rawId).trim();
-      const day = Utilities.formatDate(when, TZ, 'yyyy-MM-dd');
-      if (day.substring(0, 7) === thisMonth) monthTotals[rid] = (monthTotals[rid] || 0) + 1;
-      if (rid !== found.id) continue;
-      dayCounts[day] = (dayCounts[day] || 0) + 1;
-      hourCounts[Number(Utilities.formatDate(when, TZ, 'H'))]++;
-      wdCounts[Number(Utilities.formatDate(when, TZ, 'u')) - 1]++;
-      total++;
-    }
+  const monthTotals = {};
+  for (const r of collectRegRows_()) {
+    if (r.day.substring(0, 7) === thisMonth) monthTotals[r.id] = (monthTotals[r.id] || 0) + 1;
+    if (r.id !== found.id) continue;
+    dc[r.day] = (dc[r.day] || 0) + 1;
+    hourCounts[r.hour]++;
+    wdCounts[r.wd]++;
+    total++;
   }
 
-  // 日付ユーティリティ
-  const dayStr = offset => Utilities.formatDate(new Date(Date.now() - offset * 86400000), TZ, 'yyyy-MM-dd');
   const days = [];
-  for (let i = 29; i >= 0; i--) days.push(dayStr(i));
-  const today = days[days.length - 1];
-  const yesterday = days[days.length - 2];
-  const last7 = sumLastNDays_(dayCounts, days, 7);
-  let prior7 = 0;
-  for (let i = 13; i >= 7; i--) prior7 += dayCounts[dayStr(i)] || 0;
+  for (let i = p - 1; i >= 0; i--) days.push(gDay_(i));
+  const today = gDay_(0);
+  const yesterday = gDay_(1);
+  const periodSum = sumOffsets_(dc, 0, p - 1);
+  const prevSum = sumOffsets_(dc, p, 2 * p - 1);
+  const last7 = sumOffsets_(dc, 0, 6);
+  const prior7 = sumOffsets_(dc, 7, 13);
 
-  // 月別集計（本人）
+  // 月別
   const monthCounts = {};
-  for (const [d, n] of Object.entries(dayCounts)) {
+  for (const [d, n] of Object.entries(dc)) {
     const m = d.substring(0, 7);
     monthCounts[m] = (monthCounts[m] || 0) + n;
   }
   const monthCount = monthCounts[thisMonth] || 0;
-  const lastMonthKey = Utilities.formatDate(
-    new Date(now.getFullYear(), now.getMonth() - 1, 15), TZ, 'yyyy-MM');
-  const lastMonthCount = monthCounts[lastMonthKey] || 0;
 
-  // 記録系: ベスト日・連続登録日数
+  // 記録
   let bestDay = null;
   let bestN = 0;
-  for (const [d, n] of Object.entries(dayCounts)) {
+  for (const [d, n] of Object.entries(dc)) {
     if (n > bestN || (n === bestN && d > (bestDay || ''))) { bestDay = d; bestN = n; }
   }
   let streak = 0;
   {
-    let i = (dayCounts[today] || 0) > 0 ? 0 : 1; // 今日まだ0でも昨日までの連続を数える
-    while ((dayCounts[dayStr(i)] || 0) > 0) { streak++; i++; }
+    let i = (dc[today] || 0) > 0 ? 0 : 1;
+    while ((dc[gDay_(i)] || 0) > 0) { streak++; i++; }
   }
 
-  // 前週比
-  let trendHtml = '<span style="color:#98A69E">—</span>';
-  if (prior7 > 0) {
-    const pct = Math.round(((last7 - prior7) / prior7) * 100);
-    trendHtml = pct > 0 ? '<span style="color:#00A63E">↑ +' + pct + '%</span>'
-      : pct < 0 ? '<span style="color:#CE4A38">↓ ' + pct + '%</span>'
-      : '<span style="color:#98A69E">±0%</span>';
-  } else if (last7 > 0) {
-    trendHtml = '<span style="color:#00A63E">↑ NEW</span>';
-  }
-
-  // 匿名ランキング（今月・QR設定にいる人だけで順位付け）
+  // 匿名ランキング（今月）
   const ranked = Object.keys(qrs).map(id => ({ id: id, n: monthTotals[id] || 0 }))
     .sort((a, b) => b.n - a.n);
   const myRank = ranked.findIndex(r => r.id === found.id) + 1;
@@ -803,14 +926,21 @@ function renderStatsPage_(key) {
 
   const esc = escapeHtmlAttr_;
   const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
+  const base = webAppBase_();
 
-  // ── パーツ生成 ──
-  const stat = (label, v) =>
-    '<div class="stat"><div class="sv">' + v + '</div><div class="sl">' + label + '</div></div>';
-  const stats = stat('累計', total) + stat('先月', lastMonthCount) +
-    stat('今日', dayCounts[today] || 0) + stat('直近7日', last7);
+  // 期間タブ
+  const pills = '<div class="pills">' + [7, 30, 90].map(n =>
+    '<a class="pill' + (n === p ? ' on' : '') + '" href="' +
+    esc(base + '?stats=' + found.key + '&p=' + n) + '">直近' + n + '日</a>').join('') + '</div>';
 
-  // 報酬パネル（単価設定時のみ）
+  // KPIタイル
+  const stats =
+    '<div class="stat"><div class="sv">' + periodSum + '</div><div class="sl">直近' + p + '日</div>' + deltaChip_(periodSum, prevSum) + '</div>' +
+    '<div class="stat"><div class="sv">' + (dc[today] || 0) + '</div><div class="sl">今日</div></div>' +
+    '<div class="stat"><div class="sv">' + (dc[yesterday] || 0) + '</div><div class="sl">昨日</div></div>' +
+    '<div class="stat"><div class="sv">' + total + '</div><div class="sl">累計</div></div>';
+
+  // 見込み報酬（単価設定時のみ）
   let rewardHtml = '';
   if (found.rate > 0) {
     rewardHtml = '<div class="panel"><div class="ph">見込み報酬</div><div class="reward">' +
@@ -819,7 +949,7 @@ function renderStatsPage_(key) {
       '</div><div class="note">確定額はお支払い時のご案内が正となります</div></div>';
   }
 
-  // 目標パネル（目標設定時のみ）
+  // 目標（設定時のみ）
   let goalHtml = '';
   if (found.goal > 0) {
     const pct = Math.min(100, Math.round((monthCount / found.goal) * 100));
@@ -830,7 +960,7 @@ function renderStatsPage_(key) {
       '<div class="pbar"><div class="pfill" style="width:' + pct + '%"></div></div></div>';
   }
 
-  // ランキングパネル（2人以上いるときのみ）
+  // ランキング（2人以上のときのみ）
   let rankHtml = '';
   if (ranked.length >= 2) {
     rankHtml = '<div class="panel"><div class="ph">今月のランキング</div>' +
@@ -841,17 +971,17 @@ function renderStatsPage_(key) {
         : 'トップまであと ' + gapToTop + '件') + '</div></div>';
   }
 
-  // 記録パネル
+  // 記録
   const recordHtml = '<div class="panel"><div class="ph">記録</div><div class="recs">' +
     '<div><div class="rv2">' + (bestDay ? bestN + '<span class="unit">件</span>' : '—') + '</div><div class="sl">ベスト日' + (bestDay ? ' ' + esc(bestDay.substring(5).replace('-', '/')) : '') + '</div></div>' +
     '<div><div class="rv2">' + streak + '<span class="unit">日</span></div><div class="sl">連続登録中</div></div>' +
-    '<div><div class="rv2">' + trendHtml + '</div><div class="sl">前週比</div></div>' +
+    '<div><div class="rv2">' + deltaChip_(last7, prior7) + '</div><div class="sl">前週比</div></div>' +
     '</div></div>';
 
-  // 30日グラフ
-  const maxDaily = Math.max(1, ...days.map(d => dayCounts[d] || 0));
+  // 期間グラフ
+  const maxDaily = Math.max(1, ...days.map(d => dc[d] || 0));
   const bars = days.map(d => {
-    const n = dayCounts[d] || 0;
+    const n = dc[d] || 0;
     const h = Math.round((n / maxDaily) * 100);
     return '<div class="bcol" title="' + esc(d) + '：' + n + '件">' +
       '<div class="bval">' + (n || '') + '</div>' +
@@ -859,7 +989,7 @@ function renderStatsPage_(key) {
       '<div class="blab">' + esc(d.substring(5).replace('-', '/')) + '</div></div>';
   }).join('');
 
-  // 時間帯・曜日グラフ（投稿時間の参考用）
+  // 時間帯・曜日
   const maxHour = Math.max(1, ...hourCounts);
   const hourBars = hourCounts.map((n, h) => {
     const hh = Math.round((n / maxHour) * 100);
@@ -879,82 +1009,172 @@ function renderStatsPage_(key) {
 
   // 表
   const tableRows = days.slice().reverse().map(d =>
-    '<tr><td>' + esc(d.replace(/-/g, '.')) + '</td><td class="num">' + (dayCounts[d] || 0) + '</td></tr>'
+    '<tr><td>' + esc(d.replace(/-/g, '.')) + '</td><td class="num">' + (dc[d] || 0) + '</td></tr>'
   ).join('');
   const monthRows = Object.keys(monthCounts).sort().reverse().slice(0, 12).map(m =>
     '<tr><td>' + esc(m.replace('-', '.')) + '</td><td class="num">' + monthCounts[m] +
     (found.rate > 0 ? '</td><td class="num">' + yen(found.rate * monthCounts[m]) : '') + '</td></tr>'
   ).join('');
 
-  const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>' + esc(found.name) + ' 成果レポート</title><style>' +
-    'body{margin:0;background:#F7F9F7;color:#17211B;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased}' +
-    '.wrap{max-width:640px;margin:0 auto;padding:26px 16px 56px}' +
-    '.eyebrow{font-size:10px;letter-spacing:.24em;color:#00A63E;font-weight:700}' +
-    'h1{font-size:22px;margin:4px 0 2px;letter-spacing:.01em}' +
-    '.upd{color:#98A69E;font-size:11px;font-variant-numeric:tabular-nums}' +
-    '.hero{margin:18px 0 12px;padding:20px;border-radius:18px;border:1px solid rgba(0,166,62,.22);' +
-    'background:radial-gradient(120% 160% at 0% 0%,rgba(0,166,62,.10),rgba(0,166,62,.02) 60%),#fff;' +
-    'box-shadow:0 1px 3px rgba(16,40,26,.05)}' +
-    '.hv{font-size:52px;font-weight:800;color:#00A63E;line-height:1.15;font-variant-numeric:tabular-nums}' +
-    '.hl{font-size:12px;color:#6B7A72;letter-spacing:.08em}' +
-    '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
-    '.stat{background:#fff;border:1px solid #E6ECE7;border-radius:14px;padding:10px 4px;text-align:center;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
-    '.sv{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}' +
-    '.sl{font-size:10px;color:#8A968E}' +
-    '.panel{background:#fff;border:1px solid #E6ECE7;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
-    '.ph{font-size:11px;letter-spacing:.18em;color:#8A968E;font-weight:700;margin-bottom:10px}' +
-    '.note{font-size:11px;color:#98A69E;margin-top:8px}' +
-    '.reward{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}' +
-    '.rv{font-size:28px;font-weight:800;color:#B08A1E;font-variant-numeric:tabular-nums}' +
-    '.rv.dim{font-size:20px;color:#6B7A72}' +
-    '.rl{font-size:11px;color:#8A968E}' +
-    '.goalrow{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}' +
-    '.gnum{font-size:30px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
-    '.gden{color:#8A968E;font-size:14px}' +
-    '.gpct{margin-left:auto;font-weight:700;color:#00A63E;font-size:14px}' +
-    '.pbar{height:10px;background:#EAF1EB;border-radius:99px;overflow:hidden}' +
-    '.pfill{height:100%;background:linear-gradient(90deg,#00A63E,#3ED47A);border-radius:99px}' +
-    '.rankrow{display:flex;align-items:baseline;gap:4px}' +
-    '.rankbig{font-size:40px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
-    '.rankunit{font-size:16px;font-weight:700}' +
-    '.rankden{color:#8A968E;margin-left:4px}' +
-    '.recs{display:flex;gap:14px;text-align:center}' +
-    '.recs>div{flex:1}' +
-    '.rv2{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
-    '.unit{font-size:12px;font-weight:600;color:#8A968E;margin-left:1px}' +
-    '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
-    '.chart.small{height:96px}' +
-    '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
-    '.bar{width:100%;background:linear-gradient(180deg,#3ED47A,#00A63E);border-radius:3px 3px 1px 1px;min-height:0}' +
-    '.bar.alt{background:linear-gradient(180deg,#7FD9AC,#2FA168)}' +
-    '.bval{font-size:9px;color:#6B7A72;height:12px;font-variant-numeric:tabular-nums}' +
-    '.blab{font-size:8px;color:#98A69E;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
-    '.blab2{font-size:9px;color:#98A69E;height:14px;margin-top:2px}' +
-    'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
-    'td{padding:7px 8px;border-top:1px solid #EEF2EF}' +
-    '.num{text-align:right;font-weight:700}' +
-    'tr.thead td{color:#8A968E;border-top:none;font-size:11px}' +
-    '.foot{color:#98A69E;font-size:11px;text-align:center;margin-top:20px}' +
-    '</style></head><body><div class="wrap">' +
+  const html = pageHead_(found.name + ' 成果レポート') +
     '<div class="eyebrow">AFFILIATE REPORT</div>' +
     '<h1>' + esc(found.name) + '</h1>' +
     '<div class="upd">' + Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm') + ' 更新</div>' +
     '<div class="hero"><div class="hv">' + monthCount + '</div><div class="hl">今月の登録件数</div></div>' +
+    pills +
     '<div class="stats">' + stats + '</div>' +
     goalHtml + rewardHtml + rankHtml + recordHtml +
-    '<div class="panel"><div class="ph">日別登録数 — 直近30日</div><div class="chart">' + bars + '</div></div>' +
+    '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日</div><div class="chart">' + bars + '</div></div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
     '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
     '<div class="panel"><div class="ph">曜日別の傾向</div><div class="chart small">' + wdBars + '</div></div>' +
-    '<div class="panel"><div class="ph">月別実績</div><table><tr class="thead"><td>月</td><td class="num">件数</td>' +
+    '<div class="panel"><div class="ph">月別実績</div><div class="tbox"><table><tr class="thead"><td>月</td><td class="num">件数</td>' +
     (found.rate > 0 ? '<td class="num">見込み報酬</td>' : '') + '</tr>' +
-    (monthRows || '<tr><td colspan="3" style="color:#98A69E">まだデータがありません</td></tr>') + '</table></div>' +
-    '<div class="panel"><div class="ph">日別一覧 — 直近30日</div><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
-    tableRows + '</table></div>' +
+    (monthRows || '<tr><td colspan="3" style="color:#98A69E">まだデータがありません</td></tr>') + '</table></div></div>' +
+    '<div class="panel"><div class="ph">日別一覧 — 直近' + p + '日</div><div class="tbox"><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
+    tableRows + '</table></div></div>' +
     '<div class="foot">このページはあなた専用のリンクです。URLの共有はご遠慮ください。</div>' +
     '</div></body></html>';
 
   return HtmlService.createHtmlOutput(html).setTitle(found.name + ' 成果レポート');
+}
+
+// ────────────────────────────────────────────
+// 管理者ダッシュボード（?admin=管理キー）
+//   全アフィリエイターの数字・比較・各専用ページへのリンク
+// ────────────────────────────────────────────
+function renderAdminPage_() {
+  const qrs = getQrMap_();
+  const ids = Object.keys(qrs);
+  const now = new Date();
+  const thisMonth = Utilities.formatDate(now, TZ, 'yyyy-MM');
+  const lastMonthKey = Utilities.formatDate(
+    new Date(now.getFullYear(), now.getMonth() - 1, 15), TZ, 'yyyy-MM');
+
+  // 集計
+  const perDay = {};
+  const dcAll = {};
+  const hourAll = new Array(24).fill(0);
+  const wdAll = new Array(7).fill(0);
+  const totals = {};
+  const monthCur = {};
+  const monthPrev = {};
+  let totalAll = 0;
+  for (const r of collectRegRows_()) {
+    (perDay[r.id] = perDay[r.id] || {})[r.day] = ((perDay[r.id] || {})[r.day] || 0) + 1;
+    dcAll[r.day] = (dcAll[r.day] || 0) + 1;
+    hourAll[r.hour]++;
+    wdAll[r.wd]++;
+    totals[r.id] = (totals[r.id] || 0) + 1;
+    totalAll++;
+    const m = r.day.substring(0, 7);
+    if (m === thisMonth) monthCur[r.id] = (monthCur[r.id] || 0) + 1;
+    if (m === lastMonthKey) monthPrev[r.id] = (monthPrev[r.id] || 0) + 1;
+  }
+
+  const esc = escapeHtmlAttr_;
+  const base = webAppBase_();
+  const days = [];
+  for (let i = 29; i >= 0; i--) days.push(gDay_(i));
+
+  // KPI
+  const t0 = dcAll[gDay_(0)] || 0;
+  const t1 = dcAll[gDay_(1)] || 0;
+  const w7 = sumOffsets_(dcAll, 0, 6);
+  const w7p = sumOffsets_(dcAll, 7, 13);
+  const d30 = sumOffsets_(dcAll, 0, 29);
+  const d30p = sumOffsets_(dcAll, 30, 59);
+  const monthAll = ids.reduce((s, id) => s + (monthCur[id] || 0), 0);
+
+  const stats =
+    '<div class="stat"><div class="sv">' + t0 + '</div><div class="sl">今日</div>' + deltaChip_(t0, t1) + '</div>' +
+    '<div class="stat"><div class="sv">' + w7 + '</div><div class="sl">直近7日</div>' + deltaChip_(w7, w7p) + '</div>' +
+    '<div class="stat"><div class="sv">' + d30 + '</div><div class="sl">直近30日</div>' + deltaChip_(d30, d30p) + '</div>' +
+    '<div class="stat"><div class="sv">' + totalAll + '</div><div class="sl">累計</div></div>';
+
+  // アフィリエイター別テーブル（今月順）
+  const palette = ['#00A63E', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#EC4899', '#84CC16'];
+  const colorOf = {};
+  ids.forEach((id, i) => colorOf[id] = palette[i % palette.length]);
+
+  const list = ids.map(id => {
+    const d = perDay[id] || {};
+    return {
+      id: id, name: qrs[id].name, key: qrs[id].key,
+      today: d[gDay_(0)] || 0,
+      w7: sumOffsets_(d, 0, 6), w7p: sumOffsets_(d, 7, 13),
+      month: monthCur[id] || 0, lastM: monthPrev[id] || 0,
+      total: totals[id] || 0,
+    };
+  }).sort((a, b) => b.month - a.month || b.total - a.total);
+
+  const tableRows = list.map((x, i) => {
+    const share = monthAll > 0 ? Math.round((x.month / monthAll) * 100) : 0;
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><span class="dot" style="background:' + colorOf[x.id] + '"></span>' + esc(x.name) + '</td>' +
+      '<td class="num">' + x.today + '</td>' +
+      '<td class="num">' + x.w7 + '</td>' +
+      '<td>' + deltaChip_(x.w7, x.w7p) + '</td>' +
+      '<td class="num">' + x.month + '</td>' +
+      '<td class="num">' + share + '%</td>' +
+      '<td class="num">' + x.lastM + '</td>' +
+      '<td class="num">' + x.total + '</td>' +
+      '<td>' + (x.key ? '<a class="open" href="' + esc(base + '?stats=' + x.key) + '">開く</a>' : '') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  // 日別×アフィリエイター積み上げグラフ（直近30日）
+  const dayTotals = days.map(d => ids.reduce((s, id) => s + ((perDay[id] || {})[d] || 0), 0));
+  const maxT = Math.max(1, ...dayTotals);
+  const bars = days.map((d, di) => {
+    const segs = ids.map(id => {
+      const n = (perDay[id] || {})[d] || 0;
+      if (!n) return '';
+      return '<div class="seg" style="height:' + ((n / maxT) * 100).toFixed(1) + '%;background:' + colorOf[id] + '"></div>';
+    }).join('');
+    return '<div class="bcol" title="' + esc(d) + '：' + dayTotals[di] + '件">' +
+      '<div class="bval">' + (dayTotals[di] || '') + '</div>' +
+      '<div class="stack">' + segs + '</div>' +
+      '<div class="blab">' + esc(d.substring(5).replace('-', '/')) + '</div></div>';
+  }).join('');
+  const legend = '<div class="legend">' + list.map(x =>
+    '<span><span class="dot" style="background:' + colorOf[x.id] + '"></span>' + esc(x.name) + '</span>').join('') + '</div>';
+
+  // 時間帯・曜日（全体）
+  const maxHour = Math.max(1, ...hourAll);
+  const hourBars = hourAll.map((n, h) => {
+    const hh = Math.round((n / maxHour) * 100);
+    return '<div class="bcol" title="' + h + '時台：' + n + '件">' +
+      '<div class="bar alt" style="height:' + Math.max(hh, n ? 4 : 0) + '%"></div>' +
+      '<div class="blab2">' + (h % 3 === 0 ? h : '') + '</div></div>';
+  }).join('');
+  const wdLabels = ['月', '火', '水', '木', '金', '土', '日'];
+  const maxWd = Math.max(1, ...wdAll);
+  const wdBars = wdAll.map((n, i) => {
+    const hh = Math.round((n / maxWd) * 100);
+    return '<div class="bcol" title="' + wdLabels[i] + '曜：' + n + '件">' +
+      '<div class="bval">' + (n || '') + '</div>' +
+      '<div class="bar alt" style="height:' + Math.max(hh, n ? 4 : 0) + '%"></div>' +
+      '<div class="blab2">' + wdLabels[i] + '</div></div>';
+  }).join('');
+
+  const html = pageHead_('全体ダッシュボード') +
+    '<div class="eyebrow">ADMIN DASHBOARD</div>' +
+    '<h1>全体ダッシュボード</h1>' +
+    '<div class="upd">' + Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm') + ' 更新</div>' +
+    '<div class="hero"><div class="hv">' + monthAll + '</div><div class="hl">今月の登録件数（全体）</div></div>' +
+    '<div class="stats">' + stats + '</div>' +
+    '<div class="panel"><div class="ph">アフィリエイター別（今月順）</div><div class="tbox"><table>' +
+    '<tr class="thead"><td>#</td><td>名前</td><td class="num">今日</td><td class="num">7日</td><td>前週比</td>' +
+    '<td class="num">今月</td><td class="num">シェア</td><td class="num">先月</td><td class="num">累計</td><td></td></tr>' +
+    (tableRows || '<tr><td colspan="10" style="color:#98A69E">QR設定シートが空です</td></tr>') +
+    '</table></div></div>' +
+    '<div class="panel"><div class="ph">日別登録数 — 直近30日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
+    '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
+    '<div class="panel"><div class="ph">曜日別の傾向（全体）</div><div class="chart small">' + wdBars + '</div></div>' +
+    '<div class="foot">管理者専用ページです。URLは共有しないでください。</div>' +
+    '</div></body></html>';
+
+  return HtmlService.createHtmlOutput(html).setTitle('全体ダッシュボード');
 }
