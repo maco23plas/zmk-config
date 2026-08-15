@@ -874,14 +874,12 @@ function renderStatsPage_(key, period) {
   const now = new Date();
   const thisMonth = Utilities.formatDate(now, TZ, 'yyyy-MM');
 
-  // 集計（本人の日別/時間帯/曜日 ＋ ランキング用の全員今月件数）
+  // 集計（本人の日別/時間帯/曜日）
   const dc = {};
   const hourCounts = new Array(24).fill(0);
   const wdCounts = new Array(7).fill(0);
   let total = 0;
-  const monthTotals = {};
   for (const r of collectRegRows_()) {
-    if (r.day.substring(0, 7) === thisMonth) monthTotals[r.id] = (monthTotals[r.id] || 0) + 1;
     if (r.id !== found.id) continue;
     dc[r.day] = (dc[r.day] || 0) + 1;
     hourCounts[r.hour]++;
@@ -918,12 +916,6 @@ function renderStatsPage_(key, period) {
     while ((dc[gDay_(i)] || 0) > 0) { streak++; i++; }
   }
 
-  // 匿名ランキング（今月）
-  const ranked = Object.keys(qrs).map(id => ({ id: id, n: monthTotals[id] || 0 }))
-    .sort((a, b) => b.n - a.n);
-  const myRank = ranked.findIndex(r => r.id === found.id) + 1;
-  const gapToTop = ranked.length ? ranked[0].n - monthCount : 0;
-
   const esc = escapeHtmlAttr_;
   const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
   const base = webAppBase_();
@@ -958,17 +950,6 @@ function renderStatsPage_(key, period) {
       '<span class="gden">/ ' + found.goal + '件</span>' +
       '<span class="gpct">' + pct + '%' + (pct >= 100 ? ' 達成' : '') + '</span></div>' +
       '<div class="pbar"><div class="pfill" style="width:' + pct + '%"></div></div></div>';
-  }
-
-  // ランキング（2人以上のときのみ）
-  let rankHtml = '';
-  if (ranked.length >= 2) {
-    rankHtml = '<div class="panel"><div class="ph">今月のランキング</div>' +
-      '<div class="rankrow"><span class="rankbig">' + myRank + '</span>' +
-      '<span class="rankunit">位</span><span class="rankden">/ ' + ranked.length + '人</span></div>' +
-      '<div class="note">' + (myRank === 1
-        ? '現在トップ。独走を続けましょう'
-        : 'トップまであと ' + gapToTop + '件') + '</div></div>';
   }
 
   // 記録
@@ -1023,7 +1004,7 @@ function renderStatsPage_(key, period) {
     '<div class="hero"><div class="hv">' + monthCount + '</div><div class="hl">今月の登録件数</div></div>' +
     pills +
     '<div class="stats">' + stats + '</div>' +
-    goalHtml + rewardHtml + rankHtml + recordHtml +
+    goalHtml + rewardHtml + recordHtml +
     '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日</div><div class="chart">' + bars + '</div></div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
     '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
