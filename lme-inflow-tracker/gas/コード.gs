@@ -649,8 +649,8 @@ function selfUpdate() {
     muteHttpExceptions: true,
   });
 
-  // 1. GitHubから最新コードを取得（中身の簡易チェック付き）
-  const gh = UrlFetchApp.fetch(UPDATE_SOURCE_URL, { muteHttpExceptions: true });
+  // 1. GitHubから最新コードを取得（キャッシュ回避付き・中身の簡易チェック付き）
+  const gh = UrlFetchApp.fetch(UPDATE_SOURCE_URL + '?cb=' + Date.now(), { muteHttpExceptions: true });
   if (gh.getResponseCode() !== 200) {
     toast_('GitHubからコードを取得できませんでした（HTTP ' + gh.getResponseCode() + '）');
     return;
