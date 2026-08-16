@@ -932,9 +932,9 @@ function renderStatsPage_(key, period) {
   const yen = n => '¥' + Math.round(n).toLocaleString('ja-JP');
   const base = webAppBase_();
 
-  // 期間タブ
+  // 期間タブ（GASのiframeサンドボックス内なので target="_top" 必須）
   const pills = '<div class="pills">' + [7, 30, 90].map(n =>
-    '<a class="pill' + (n === p ? ' on' : '') + '" href="' +
+    '<a class="pill' + (n === p ? ' on' : '') + '" target="_top" href="' +
     esc(base + '?stats=' + found.key + '&p=' + n) + '">直近' + n + '日</a>').join('') + '</div>';
 
   // KPIタイル
@@ -1113,7 +1113,7 @@ function renderAdminPage_() {
       '<td class="num">' + share + '%</td>' +
       '<td class="num">' + x.lastM + '</td>' +
       '<td class="num">' + x.total + '</td>' +
-      '<td>' + (x.key ? '<a class="open" href="' + esc(base + '?stats=' + x.key) + '">開く</a>' : '') + '</td>' +
+      '<td>' + (x.key ? '<a class="open" target="_blank" href="' + esc(base + '?stats=' + x.key) + '">開く</a>' : '') + '</td>' +
       '</tr>';
   }).join('');
 
