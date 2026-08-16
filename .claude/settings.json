@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-for-legal": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-for-legal"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "commercial-legal@claude-for-legal": true
+  }
+}
