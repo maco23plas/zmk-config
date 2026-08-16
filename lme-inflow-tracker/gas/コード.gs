@@ -34,6 +34,7 @@ const SHEETS = {
   DAILY: '日次集計',
   URLS: 'URL一覧',
   DASH: 'ダッシュボード',
+  DEALS: '成約ログ',
 };
 
 const TZ = 'Asia/Tokyo';
@@ -122,6 +123,18 @@ function setup() {
   ensureSheet_(ss, SHEETS.REGS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
   ensureSheet_(ss, SHEETS.CLICKS, ['日時', 'QR ID', 'QR名', '補足']);
   ensureSheet_(ss, SHEETS.DAILY, ['日付', 'QR ID', 'QR名', '登録数', 'クリック数']);
+
+  // 成約ログ（成約が出たら1行追加するだけ：日付・QR ID・メモ）
+  const dealSh = ensureSheet_(ss, SHEETS.DEALS,
+    ['日付（例 2026-08-15）', 'QR ID（ドロップダウンで選択）', 'メモ（任意）']);
+  const idList = Object.keys(getQrMap_());
+  if (idList.length) {
+    dealSh.getRange(2, 2, 999, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList(idList, true)
+        .setAllowInvalid(true)
+        .build());
+  }
 
   // 毎日トリガーを（再）登録
   const hour = Number(getConfig_().REPORT_HOUR) || 9;
@@ -383,8 +396,12 @@ function dailyReport() {
   const clicks = countByQr_(SHEETS.CLICKS, targetDay);
   const clicksTotal = countByQr_(SHEETS.CLICKS, null);
 
+  const deals = countByQr_(SHEETS.DEALS, targetDay);
+  const dealsTotal = countByQr_(SHEETS.DEALS, null);
+
   const useRegs = hasRows_(SHEETS.REGS);     // 外部連携（実登録）を使っているか
   const useClicks = hasRows_(SHEETS.CLICKS); // リダイレクタ（クリック）を使っているか
+  const useDeals = hasRows_(SHEETS.DEALS);   // 成約ログを使っているか
 
   const daily = ensureSheet_(ss, SHEETS.DAILY, ['日付', 'QR ID', 'QR名', '登録数', 'クリック数']);
 
@@ -393,14 +410,18 @@ function dailyReport() {
   lines.push('');
   let dayRegSum = 0;
   let dayClickSum = 0;
+  let dayDealSum = 0;
   for (const [id, qr] of Object.entries(qrs)) {
     const r = regs[id] || 0;
     const c = clicks[id] || 0;
+    const g = deals[id] || 0;
     dayRegSum += r;
     dayClickSum += c;
+    dayDealSum += g;
     const parts = [];
     if (useRegs) parts.push('登録 ' + r + ' 件（累計 ' + (regsTotal[id] || 0) + '）');
     if (useClicks) parts.push('クリック ' + c + ' 件（累計 ' + (clicksTotal[id] || 0) + '）');
+    if (useDeals) parts.push('成約 ' + g + ' 件（累計 ' + (dealsTotal[id] || 0) + '）');
     if (!parts.length) parts.push('登録 0 件');
     lines.push('・' + qr.name + '： ' + parts.join(' ／ '));
     daily.appendRow([targetDay, id, qr.name, r, c]);
@@ -409,6 +430,7 @@ function dailyReport() {
   const sumParts = [];
   if (useRegs) sumParts.push('登録 ' + dayRegSum + ' 件');
   if (useClicks) sumParts.push('クリック ' + dayClickSum + ' 件');
+  if (useDeals) sumParts.push('成約 ' + dayDealSum + ' 件');
   lines.push('合計： ' + (sumParts.join(' ／ ') || '登録 0 件'));
   lines.push('シート: ' + ss.getUrl());
 
@@ -820,7 +842,7 @@ const PAGE_CSS =
   'box-shadow:0 1px 3px rgba(16,40,26,.05)}' +
   '.hv{font-size:52px;font-weight:800;color:#00A63E;line-height:1.15;font-variant-numeric:tabular-nums}' +
   '.hl{font-size:12px;color:#6B7A72;letter-spacing:.08em}' +
-  '.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}' +
+  '.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;margin-bottom:12px}' +
   '.stat{background:#fff;border:1px solid #E6ECE7;border-radius:14px;padding:10px 4px;text-align:center;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
   '.sv{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}' +
   '.sl{font-size:10px;color:#8A968E}' +
@@ -1114,6 +1136,20 @@ function renderAdminPage_() {
   }
   const useClicks = clickAll > 0;
 
+  // 成約ログ（入力があるときのみ列が出る）
+  const dealTotals = {};
+  const dealMonth = {};
+  const dealMonthPrev = {};
+  let dealAll = 0;
+  for (const r of collectLogRows_(SHEETS.DEALS)) {
+    dealTotals[r.id] = (dealTotals[r.id] || 0) + 1;
+    const m = r.day.substring(0, 7);
+    if (m === thisMonth) dealMonth[r.id] = (dealMonth[r.id] || 0) + 1;
+    if (m === lastMonthKey) dealMonthPrev[r.id] = (dealMonthPrev[r.id] || 0) + 1;
+    dealAll++;
+  }
+  const useDeals = dealAll > 0;
+
   // KPI
   const t0 = dcAll[gDay_(0)] || 0;
   const t1 = dcAll[gDay_(1)] || 0;
@@ -1123,11 +1159,17 @@ function renderAdminPage_() {
   const d30p = sumOffsets_(dcAll, 30, 59);
   const monthAll = ids.reduce((s, id) => s + (monthCur[id] || 0), 0);
 
+  const dealMonthAll = ids.reduce((s, id) => s + (dealMonth[id] || 0), 0);
+  const dealMonthPrevAll = ids.reduce((s, id) => s + (dealMonthPrev[id] || 0), 0);
   const stats =
     '<div class="stat"><div class="sv">' + t0 + '</div><div class="sl">今日</div>' + deltaChip_(t0, t1) + '</div>' +
     '<div class="stat"><div class="sv">' + w7 + '</div><div class="sl">直近7日</div>' + deltaChip_(w7, w7p) + '</div>' +
     '<div class="stat"><div class="sv">' + d30 + '</div><div class="sl">直近30日</div>' + deltaChip_(d30, d30p) + '</div>' +
-    '<div class="stat"><div class="sv">' + totalAll + '</div><div class="sl">累計</div></div>';
+    '<div class="stat"><div class="sv">' + totalAll + '</div><div class="sl">累計</div></div>' +
+    (useDeals
+      ? '<div class="stat"><div class="sv">' + dealMonthAll + '</div><div class="sl">今月成約</div>' +
+        deltaChip_(dealMonthAll, dealMonthPrevAll) + '</div>'
+      : '');
 
   // アフィリエイター別テーブル（今月順）
   const palette = ['#00A63E', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#EC4899', '#84CC16'];
@@ -1144,6 +1186,8 @@ function renderAdminPage_() {
       total: totals[id] || 0,
       c30: sumOffsets_(perDayC[id] || {}, 0, 29),
       r30: sumOffsets_(d, 0, 29),
+      dealM: dealMonth[id] || 0,
+      dealT: dealTotals[id] || 0,
     };
   }).sort((a, b) => b.month - a.month || b.total - a.total);
 
@@ -1162,6 +1206,10 @@ function renderAdminPage_() {
       (useClicks
         ? '<td class="num">' + x.c30 + '</td>' +
           '<td class="num">' + (x.c30 > 0 ? Math.round((x.r30 / x.c30) * 100) + '%' : '—') + '</td>'
+        : '') +
+      (useDeals
+        ? '<td class="num">' + x.dealM + '</td>' +
+          '<td class="num">' + (x.total > 0 ? Math.round((x.dealT / x.total) * 100) + '%' : '—') + '</td>'
         : '') +
       '<td>' + (x.key ? '<a class="open" target="_blank" href="' + esc(base + '?stats=' + x.key) + '">開く</a>' : '') + '</td>' +
       '</tr>';
@@ -1212,8 +1260,9 @@ function renderAdminPage_() {
     '<tr class="thead"><td>#</td><td>名前</td><td class="num">今日</td><td class="num">7日</td><td>前週比</td>' +
     '<td class="num">今月</td><td class="num">シェア</td><td class="num">先月</td><td class="num">累計</td>' +
     (useClicks ? '<td class="num">クリック30日</td><td class="num">登録率</td>' : '') +
+    (useDeals ? '<td class="num">成約今月</td><td class="num">成約率</td>' : '') +
     '<td></td></tr>' +
-    (tableRows || '<tr><td colspan="12" style="color:#98A69E">QR設定シートが空です</td></tr>') +
+    (tableRows || '<tr><td colspan="14" style="color:#98A69E">QR設定シートが空です</td></tr>') +
     '</table></div></div>' +
     '<div class="panel"><div class="ph">日別登録数 — 直近30日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
