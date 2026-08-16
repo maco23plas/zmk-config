@@ -727,6 +727,18 @@ function selfUpdate() {
 }
 
 // ────────────────────────────────────────────
+// 診断用：⑤が失敗するときにエディタから実行して実行ログを確認する
+// ────────────────────────────────────────────
+function diagApi() {
+  const r = UrlFetchApp.fetch(
+    'https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId() + '/content',
+    { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }
+  );
+  Logger.log('HTTP ' + r.getResponseCode());
+  Logger.log(r.getContentText().substring(0, 600));
+}
+
+// ────────────────────────────────────────────
 // Web分析ページ 共通部品
 // ────────────────────────────────────────────
 function invalidPage_() {
