@@ -164,24 +164,35 @@ function generateUrls() {
   const rows = [[
     'QR ID', '表示名',
     '★エルメ「外部連携」タブ（パラメーターエクスポート）に貼るURL',
-    '★アフィリエイター専用 成果確認ページURL（本人にだけ送る）',
+    '★成果確認ページURL（本人にだけ送る）',
+    '★配布用リンク（アフィリエイターがプロフ等に貼るURL・クリック計測用）',
+    '配布用QR画像プレビュー',
+    'QR画像ダウンロード（開いて右クリック保存）',
   ]];
   const qrs = getQrMap_();
   for (const [id, qr] of Object.entries(qrs)) {
+    const clickUrl = base + '?id=' + id;
+    const qrImg = 'https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=' +
+      encodeURIComponent(clickUrl);
     rows.push([
       id, qr.name,
       base + '?ev=reg&id=' + id,
       qr.key ? base + '?stats=' + qr.key : '(①を実行するとキーが生成されます)',
+      clickUrl,
+      '=IMAGE("' + qrImg + '")',
+      qrImg,
     ]);
   }
   const ak = String(getConfig_().ADMIN_KEY || '').trim();
-  rows.push(['', '', '', '']);
+  rows.push(['', '', '', '', '', '', '']);
   rows.push(['(管理者)', '全体ダッシュボード ※自分専用・共有禁止', '',
-    ak ? base + '?admin=' + ak : '(①を実行するとキーが生成されます)']);
-  sh.getRange(1, 1, rows.length, 4).setValues(rows);
+    ak ? base + '?admin=' + ak : '(①を実行するとキーが生成されます)', '', '', '']);
+  sh.getRange(1, 1, rows.length, 7).setValues(rows);
   sh.setFrozenRows(1);
-  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 480).setColumnWidth(4, 480);
-  toast_('URL一覧を生成しました。C列→エルメ外部連携タブ／D列→各アフィリエイター本人へ。');
+  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 440)
+    .setColumnWidth(4, 440).setColumnWidth(5, 440).setColumnWidth(6, 140).setColumnWidth(7, 440);
+  if (rows.length > 2) sh.setRowHeights(2, rows.length - 2, 130);
+  toast_('URL一覧を生成しました。C列→エルメ／D列→本人の成果ページ／E列とF列→配布用リンク・QR。');
 }
 
 // ────────────────────────────────────────────
@@ -748,8 +759,13 @@ function invalidPage_() {
 
 /** 登録ログを {id, day, hour, wd} の配列で返す（1回読むだけ） */
 function collectRegRows_() {
+  return collectLogRows_(SHEETS.REGS);
+}
+
+/** 任意のログシートを {id, day, hour, wd} の配列で返す */
+function collectLogRows_(sheetName) {
   const out = [];
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.REGS);
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sh || sh.getLastRow() < 2) return out;
   for (const [when, rawId] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
     if (!(when instanceof Date)) continue;
@@ -944,6 +960,25 @@ function renderStatsPage_(key, period) {
     '<div class="stat"><div class="sv">' + (dc[yesterday] || 0) + '</div><div class="sl">昨日</div></div>' +
     '<div class="stat"><div class="sv">' + total + '</div><div class="sl">累計</div></div>';
 
+  // クリック→登録率（クリック計測リンクを使っている人にだけ表示）
+  const cdc = {};
+  let clickTotal = 0;
+  for (const r of collectLogRows_(SHEETS.CLICKS)) {
+    if (r.id !== found.id) continue;
+    cdc[r.day] = (cdc[r.day] || 0) + 1;
+    clickTotal++;
+  }
+  let clickHtml = '';
+  if (clickTotal > 0) {
+    const cp = sumOffsets_(cdc, 0, p - 1);
+    const rate = cp > 0 ? Math.round((periodSum / cp) * 100) : 0;
+    clickHtml = '<div class="panel"><div class="ph">クリック → 登録（直近' + p + '日）</div><div class="recs">' +
+      '<div><div class="rv2">' + cp + '<span class="unit">回</span></div><div class="sl">リンククリック</div></div>' +
+      '<div><div class="rv2">' + periodSum + '<span class="unit">件</span></div><div class="sl">友だち登録</div></div>' +
+      '<div><div class="rv2">' + rate + '<span class="unit">%</span></div><div class="sl">登録率</div></div>' +
+      '</div></div>';
+  }
+
   // 見込み報酬（単価設定時のみ）
   let rewardHtml = '';
   if (found.rate > 0) {
@@ -1016,7 +1051,7 @@ function renderStatsPage_(key, period) {
     '<div class="hero"><div class="hv">' + monthCount + '</div><div class="hl">今月の登録件数</div></div>' +
     pills +
     '<div class="stats">' + stats + '</div>' +
-    goalHtml + rewardHtml + recordHtml +
+    clickHtml + goalHtml + rewardHtml + recordHtml +
     '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日</div><div class="chart">' + bars + '</div></div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
     '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
@@ -1070,6 +1105,15 @@ function renderAdminPage_() {
   const days = [];
   for (let i = 29; i >= 0; i--) days.push(gDay_(i));
 
+  // クリックログ（方式B併用時のみ列が出る）
+  const perDayC = {};
+  let clickAll = 0;
+  for (const r of collectLogRows_(SHEETS.CLICKS)) {
+    (perDayC[r.id] = perDayC[r.id] || {})[r.day] = ((perDayC[r.id] || {})[r.day] || 0) + 1;
+    clickAll++;
+  }
+  const useClicks = clickAll > 0;
+
   // KPI
   const t0 = dcAll[gDay_(0)] || 0;
   const t1 = dcAll[gDay_(1)] || 0;
@@ -1098,6 +1142,8 @@ function renderAdminPage_() {
       w7: sumOffsets_(d, 0, 6), w7p: sumOffsets_(d, 7, 13),
       month: monthCur[id] || 0, lastM: monthPrev[id] || 0,
       total: totals[id] || 0,
+      c30: sumOffsets_(perDayC[id] || {}, 0, 29),
+      r30: sumOffsets_(d, 0, 29),
     };
   }).sort((a, b) => b.month - a.month || b.total - a.total);
 
@@ -1113,6 +1159,10 @@ function renderAdminPage_() {
       '<td class="num">' + share + '%</td>' +
       '<td class="num">' + x.lastM + '</td>' +
       '<td class="num">' + x.total + '</td>' +
+      (useClicks
+        ? '<td class="num">' + x.c30 + '</td>' +
+          '<td class="num">' + (x.c30 > 0 ? Math.round((x.r30 / x.c30) * 100) + '%' : '—') + '</td>'
+        : '') +
       '<td>' + (x.key ? '<a class="open" target="_blank" href="' + esc(base + '?stats=' + x.key) + '">開く</a>' : '') + '</td>' +
       '</tr>';
   }).join('');
@@ -1160,8 +1210,10 @@ function renderAdminPage_() {
     '<div class="stats">' + stats + '</div>' +
     '<div class="panel"><div class="ph">アフィリエイター別（今月順）</div><div class="tbox"><table>' +
     '<tr class="thead"><td>#</td><td>名前</td><td class="num">今日</td><td class="num">7日</td><td>前週比</td>' +
-    '<td class="num">今月</td><td class="num">シェア</td><td class="num">先月</td><td class="num">累計</td><td></td></tr>' +
-    (tableRows || '<tr><td colspan="10" style="color:#98A69E">QR設定シートが空です</td></tr>') +
+    '<td class="num">今月</td><td class="num">シェア</td><td class="num">先月</td><td class="num">累計</td>' +
+    (useClicks ? '<td class="num">クリック30日</td><td class="num">登録率</td>' : '') +
+    '<td></td></tr>' +
+    (tableRows || '<tr><td colspan="12" style="color:#98A69E">QR設定シートが空です</td></tr>') +
     '</table></div></div>' +
     '<div class="panel"><div class="ph">日別登録数 — 直近30日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
