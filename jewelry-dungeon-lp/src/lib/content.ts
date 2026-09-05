@@ -22,13 +22,16 @@ export const headerNavItems = [
   { label: "よくある質問", href: "#faq" },
 ];
 
-/** フッターナビ */
+/** フッターナビ（下層ページからも遷移できるよう、トップからの絶対パスで指定） */
 export const footerNavItems = [
-  { label: "取引の仕組み", href: "#howtoplay" },
-  { label: "オーブの種類", href: "#orb" },
-  { label: "リスクについて", href: "#risk" },
-  { label: "よくある質問", href: "#faq" },
+  { label: "取引の仕組み", href: "/#howtoplay" },
+  { label: "オーブの種類", href: "/#orb" },
+  { label: "リスクについて", href: "/#risk" },
+  { label: "よくある質問", href: "/#faq" },
 ];
+
+/** フッターの下層ページリンク */
+export const footerPageLinks = [{ label: "運営会社", href: "/company/" }];
 
 export interface Orb {
   key: "red" | "silver" | "gold";
@@ -48,11 +51,13 @@ export const orbs: Orb[] = [
     imageWidth: 604,
     imageHeight: 602,
     specs: [
-      { label: "販売価格", value: "40,000〜120,000円" },
+      { label: "販売価格", value: "35,000〜105,000円" },
       { label: "値上げ率", value: "12%" },
-      { label: "期間", value: "7日間" },
-      { label: "チケット枚数", value: "120枚" },
-      { label: "上限予約枚数", value: "6個" },
+      { label: "期間", value: "6日間" },
+      { label: "チケット枚数", value: "100枚" },
+      { label: "上限予約口数", value: "5口" },
+      { label: "平均利益", value: "6,000円" },
+      { label: "最小利益", value: "2,200円" },
     ],
   },
   {
@@ -62,11 +67,13 @@ export const orbs: Orb[] = [
     imageWidth: 626,
     imageHeight: 602,
     specs: [
-      { label: "販売価格", value: "60,000〜180,000円" },
+      { label: "販売価格", value: "55,000〜165,000円" },
       { label: "値上げ率", value: "15%" },
-      { label: "期間", value: "8日間" },
-      { label: "チケット枚数", value: "160枚" },
-      { label: "上限予約枚数", value: "4個" },
+      { label: "期間", value: "7日間" },
+      { label: "チケット枚数", value: "170枚" },
+      { label: "上限予約口数", value: "4口" },
+      { label: "平均利益", value: "13,300円" },
+      { label: "最小利益", value: "4,850円" },
     ],
   },
   {
@@ -76,11 +83,13 @@ export const orbs: Orb[] = [
     imageWidth: 612,
     imageHeight: 604,
     specs: [
-      { label: "販売価格", value: "80,000〜250,000円" },
+      { label: "販売価格", value: "75,000〜225,000円" },
       { label: "値上げ率", value: "17%" },
-      { label: "期間", value: "9日間" },
-      { label: "チケット枚数", value: "250枚" },
-      { label: "上限予約枚数", value: "3個" },
+      { label: "期間", value: "8日間" },
+      { label: "チケット枚数", value: "240枚" },
+      { label: "上限予約口数", value: "4口" },
+      { label: "平均利益", value: "20,700円" },
+      { label: "最小利益", value: "7,950円" },
     ],
   },
 ];

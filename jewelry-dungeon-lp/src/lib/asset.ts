@@ -9,3 +9,6 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export function asset(path: string): string {
   return `${basePath}${path}`;
 }
+
+/** サイト内リンク用（asset と同じく basePath を付ける） */
+export const withBasePath = asset;

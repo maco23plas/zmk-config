@@ -1,4 +1,5 @@
-import { footerNavItems } from "@/lib/content";
+import { footerNavItems, footerPageLinks } from "@/lib/content";
+import { withBasePath } from "@/lib/asset";
 import { SITE_NAME, SITE_NAME_EN } from "@/lib/site";
 import styles from "./site-footer.module.css";
 
@@ -12,8 +13,16 @@ export function SiteFooter() {
         </div>
         <nav className={styles.nav} aria-label="フッターナビゲーション">
           {footerNavItems.map((item) => (
-            <a key={item.href} href={item.href} className={styles.navLink}>
+            <a key={item.href} href={withBasePath(item.href)} className={styles.navLink}>
               {item.label}
+            </a>
+          ))}
+          {footerPageLinks.map((item) => (
+            <a key={item.href} href={withBasePath(item.href)} className={styles.navLink}>
+              {item.label}
+              <span className={styles.navArrow} aria-hidden="true">
+                ›
+              </span>
             </a>
           ))}
         </nav>

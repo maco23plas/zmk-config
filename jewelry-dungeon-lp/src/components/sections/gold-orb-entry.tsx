@@ -8,7 +8,7 @@ export function GoldOrbEntry() {
     <Section id="goldentry" className={styles.section}>
       <SectionHead
         label="GOLD ORB ENTRY"
-        title="120枚~のチケットで予約。毎日 抽選販売を行います。"
+        title="100枚~のチケットで予約。毎日 抽選販売を行います。"
         lead={
           <>
             オーブは、チケットを使って予約
@@ -22,7 +22,7 @@ export function GoldOrbEntry() {
         <div className={cx(styles.card, styles.cardReserve)}>
           <p className={cx(styles.title, styles.titleReserve)}>予約</p>
           <p className={styles.big}>
-            250枚
+            240枚
             <span className={styles.small}>チケット使用</span>
           </p>
         </div>
@@ -32,8 +32,8 @@ export function GoldOrbEntry() {
         <div className={cx(styles.card, styles.cardPlain)}>
           <p className={styles.title}>当選</p>
           <div className={styles.pills}>
-            <span className={styles.pill}>1口分 250枚消費</span>
-            <span className={styles.pill}>2口分 500枚返還</span>
+            <span className={styles.pill}>1口分 240枚消費</span>
+            <span className={styles.pill}>2口分 480枚返還</span>
           </div>
         </div>
         <div className={cx(styles.card, styles.cardPlain)}>
