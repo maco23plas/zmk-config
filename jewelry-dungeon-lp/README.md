@@ -34,7 +34,8 @@ NEXT_PUBLIC_BASE_PATH=/<repo> npm run build
    公開用アカウントにコピーを作る（Public にする）。作成直後にワークフローが走り、自動でビルド・公開されます。
    ※ 元データ用リポジトリ（maco23plas 配下）ではワークフローは動かず、サイトは公開されません。
 2. 以後、元データ側の更新を取り込むときは、コピー側でファイルを差し替えて `main` に push すると再公開されます。
-3. Pages の有効化はワークフローが自動で行います（うまくいかない場合のみ Settings > Pages > Source を **GitHub Actions** に）。
+3. コピー先リポジトリの Settings > Pages > Build and deployment > Source を **GitHub Actions** にする（初回のみ・必須）。
+   初回のワークフローはこの設定前に走って失敗するので、設定後に Actions で「Re-run all jobs」を押す。
 4. 公開URL: `https://<account>.github.io/<repo>/`。
    リポジトリ名を `<account>.github.io` にすると `https://<account>.github.io/` で公開されます。
 5. 独自ドメインを使う場合は Settings > Pages の Custom domain に設定し、

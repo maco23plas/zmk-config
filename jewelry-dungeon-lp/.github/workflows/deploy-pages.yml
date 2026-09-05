@@ -1,7 +1,7 @@
 name: Deploy LP to GitHub Pages
 
 # main に push すると LP をビルドして GitHub Pages に公開します。
-# 初回のみ: リポジトリ Settings > Pages > Build and deployment > Source を「GitHub Actions」にしてください。
+# 初回のみ（必須）: リポジトリ Settings > Pages > Build and deployment > Source を「GitHub Actions」にしてください。
 # このファイルは、jewelry-dungeon-lp の中身をリポジトリのルートに置いた構成を前提にしています。
 
 on:
@@ -55,10 +55,8 @@ jobs:
         run: npm run build
 
       - name: Setup Pages
+        # 事前に Settings > Pages > Source を「GitHub Actions」にしておくこと（自動有効化は権限不足で失敗するため行わない）
         uses: actions/configure-pages@v5
-        with:
-          # 初回に GitHub Pages を自動で有効化する（Settings > Pages を手で触らなくてよい）
-          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
