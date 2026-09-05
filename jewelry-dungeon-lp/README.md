@@ -33,7 +33,7 @@ NEXT_PUBLIC_BASE_PATH=/<repo> npm run build
 1. 公開用の GitHub アカウントでリポジトリを作る（例: `jewelry-dungeon-lp`）。
 2. このフォルダ（`jewelry-dungeon-lp/`）の中身をそのリポジトリのルートに置いて `main` に push する。
    `.github/workflows/deploy-pages.yml` が同梱されているので、push のたびに自動でビルド・公開されます。
-3. リポジトリの Settings > Pages > Build and deployment > Source を **GitHub Actions** にする（初回のみ）。
+3. Pages の有効化はワークフローが自動で行います（うまくいかない場合のみ Settings > Pages > Source を **GitHub Actions** に）。
 4. 公開URL: `https://<account>.github.io/<repo>/`。
    リポジトリ名を `<account>.github.io` にすると `https://<account>.github.io/` で公開されます。
 5. 独自ドメインを使う場合は Settings > Pages の Custom domain に設定し、

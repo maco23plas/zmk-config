@@ -53,6 +53,9 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # 初回に GitHub Pages を自動で有効化する（Settings > Pages を手で触らなくてよい）
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
