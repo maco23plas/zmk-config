@@ -9,17 +9,17 @@ import { displayNameFor } from '../domain/room.js';
  * 視聴ページ ＝「会場」。
  *
  * 動画を見せる画面ではなく、決まった時刻に人が集まる場として作っている。
- *   ・開場（開始前）… 名前で迎え、他の参加者の入室が見え、挨拶を交わせる
- *   ・配信中        … 司会の進行、参加者のコメント、投票
+ *   ・開場（開始前）… 名前で迎え、他の参加者が入ってくるのが見える
+ *   ・配信中        … 司会の進行アナウンス、投票
  *   ・終了          … 締めの挨拶と、公式LINEでの質問受付へ
  *
- * 人数・入室・コメントはすべて実際の参加者の行動で、作り物ではない。
- * 開催枠が時刻で決まっているので、本当に同じ時間に居合わせる。
+ * 参加者からの書き込み（コメント・質問）はこの画面では受け付けない。
+ * 質問は公式LINEで受けるので、画面には導線だけを置く。
+ * 人数と入室は実際の参加者の行動で、作り物ではない。
  */
 export function watchPage({ reservation, state, media, script, room, poll, serverNow }) {
   const myName = displayNameFor(reservation.name);
-  const chatEnabled = Boolean(reservation.show_chat) && reservation.chat_mode === 'on';
-  const chatVisible = Boolean(reservation.show_chat) && reservation.chat_mode !== 'off';
+  const showScript = Boolean(reservation.show_chat);   // 司会の進行アナウンスを出すか
 
   const cfg = {
     token: reservation.watch_token,
@@ -39,10 +39,9 @@ export function watchPage({ reservation, state, media, script, room, poll, serve
       ? { label: reservation.cta_label || '詳しく見る', url: reservation.cta_url, atSec: reservation.cta_at_sec }
       : null,
     script: script || [],
-    room: room || { viewers: 0, showViewers: false, messages: [], lastId: 0 },
+    room: room || { viewers: 0, showViewers: false, joins: [] },
     poll: poll || null,
-    chatEnabled,
-    chatVisible,
+    showScript,
   };
 
   const header = h`
@@ -159,33 +158,26 @@ export function watchPage({ reservation, state, media, script, room, poll, serve
 
       <!-- 会場サイド -->
       <aside class="stage-side">
-        ${chatVisible ? h`
+        ${showScript ? h`
           <div class="panel room-panel">
             <div class="room-head">
-              <h3>コメント</h3>
+              <h3>進行</h3>
               <span class="room-people" id="roomPeople"></span>
             </div>
             <div class="chat-log" id="chatLog">
               <p class="chat-empty" id="chatEmpty">開場までしばらくお待ちください</p>
             </div>
-            ${chatEnabled ? h`
-              <form class="chat-form" id="chatForm">
-                <input type="text" id="chatInput" maxlength="140" autocomplete="off"
-                       placeholder="${myName}としてコメント">
-                <button type="submit" id="chatSend" aria-label="送信">送信</button>
-              </form>
-              <p class="chat-status" id="chatStatus"></p>`
-            : h`<p class="chat-readonly">この回のコメント投稿は受け付けていません。</p>`}
           </div>` : ''}
 
-        <div class="panel q-form">
-          <h3>質問を送る</h3>
-          <p style="font-size:.85rem;margin-bottom:9px">
-            その場で聞きづらいことは、こちらからどうぞ。担当者が公式LINEでご回答します。
-          </p>
-          <textarea id="qBody" maxlength="1000" placeholder="例）自分が対象になるか知りたいです"></textarea>
-          <button class="btn btn-primary btn-sm btn-block" id="qSend" type="button" style="margin-top:9px">送信する</button>
-          <p class="q-status" id="qStatus"></p>
+        <div class="panel">
+          <h3>ご質問はこちら</h3>
+          <p>ご覧いただくなかで出てきたご質問は、<b>公式LINE</b>にお送りください。
+            担当者が個別にご回答します。</p>
+          ${config.line.addFriendUrl ? h`
+            <a class="btn btn-line btn-block" style="margin-top:12px"
+               href="${config.line.addFriendUrl}" target="_blank" rel="noopener">公式LINEで質問する</a>`
+          : h`<p class="muted" style="font-size:.84rem">
+              ご予約時のトークにそのままご返信ください。</p>`}
         </div>
 
         <div class="panel">
@@ -193,6 +185,7 @@ export function watchPage({ reservation, state, media, script, room, poll, serve
           <p style="font-size:.86rem">
             ・アプリのインストールやログインは不要です<br>
             ・巻き戻し・早送りはできません<br>
+            ・この画面ではコメントを受け付けていません<br>
             ・通信が途切れた場合は、ページを再読み込みすると現在の位置から再開します
           </p>
         </div>
@@ -202,12 +195,12 @@ export function watchPage({ reservation, state, media, script, room, poll, serve
 
       <p class="watch-note">
         この配信は、ご予約いただいた開始時刻に合わせて自動再生される録画配信です。<br>
-        コメント欄と参加者数は、同じ回にご参加中の方の実際のものです。
+        参加者数と入室のお知らせは、同じ回にご参加中の方の実際のものです。
       </p>
     </div>
 
     <script id="watchConfig" type="application/json">${jsonScript(cfg)}</script>
-    <script src="/static/watch.js?v=2" defer></script>`;
+    <script src="/static/watch.js?v=3" defer></script>`;
 
   return page({
     title: `${reservation.title} | 視聴ページ`,

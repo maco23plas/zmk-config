@@ -1,21 +1,21 @@
 // 「会場」— 同じ回に集まっている参加者どうしの状態。
 //
-// ここで扱う人数・入室・コメントは、すべて実際の参加者の行動そのものです。
+// ここで扱う人数と入室は、すべて実際の参加者の行動そのものです。
 // 開催枠が時刻で決まっているので、同じ時間に本当に複数人が居合わせます。
-// 架空の人数やサクラの発言を作らなくても「集まっている感じ」が成立するのが要点です。
+// 架空の人数を作らなくても「集まっている感じ」が成立するのが要点です。
+//
+// 参加者からの書き込み（コメント・質問）はこの画面では受け付けません。
+// 質問は公式LINEで受けるため、画面には導線だけを置いています。
 
 import { all, get, run, batch } from '../db.js';
 import { MINUTE } from '../lib/time.js';
 
 /** 在室とみなす時間。ポーリング間隔より十分長くとる。 */
 export const PRESENCE_WINDOW_MS = 45 * 1000;
-/** 連続投稿の制限 */
-export const CHAT_COOLDOWN_MS = 3000;
-export const CHAT_MAX_LENGTH = 140;
 
 /**
  * 表示名。フルネームは出さず「山田さん」の形にする。
- * 会場に出るのは他人の目に触れる名前なので、姓だけに留める。
+ * 入室通知は他の参加者の目に触れるので、姓だけに留める。
  */
 export function displayNameFor(name) {
   const trimmed = String(name || '').trim();
@@ -78,7 +78,7 @@ export async function recentJoins(sessionId, sinceMs, reservationId, limit = 5) 
   return rows.map((r) => ({ name: r.display_name, at: r.joined_at }));
 }
 
-/** 会場の状況をまとめて取る（表示するかの判断込み） */
+/** 会場の状況（人数と入室）をまとめて取る */
 export async function roomSnapshot({ sessionId, reservationId, minViewersShown }, now, sinceJoinMs) {
   const [viewers, joins] = await Promise.all([
     countPresent(sessionId, now),
@@ -91,65 +91,6 @@ export async function roomSnapshot({ sessionId, reservationId, minViewersShown }
     joins,
   };
 }
-
-// ---- コメント --------------------------------------------------------------
-
-export class ChatError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
-}
-
-/** 参加者の発言を記録する */
-export async function postMessage({ sessionId, reservationId, displayName, body, kind = 'guest' }, now) {
-  const text = String(body || '').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX_LENGTH);
-  if (!text) throw new ChatError('empty', 'コメントを入力してください');
-
-  if (reservationId) {
-    const last = await get(
-      'SELECT created_at FROM room_messages WHERE session_id = ? AND reservation_id = ? ORDER BY id DESC LIMIT 1',
-      sessionId, reservationId,
-    );
-    if (last && now - last.created_at < CHAT_COOLDOWN_MS) {
-      throw new ChatError('too_fast', '少し時間をおいてから送信してください');
-    }
-  }
-
-  const result = await run(
-    'INSERT INTO room_messages (session_id, reservation_id, display_name, body, kind, created_at) VALUES (?,?,?,?,?,?)',
-    sessionId, reservationId, displayName, text, kind, now,
-  );
-  return { id: result.lastInsertRowid, body: text };
-}
-
-/** 前回取得より後のコメント */
-export const messagesSince = (sessionId, afterId, limit = 50) =>
-  all(
-    `SELECT id, display_name, body, kind, created_at FROM room_messages
-      WHERE session_id = ? AND id > ? AND hidden = 0
-      ORDER BY id ASC LIMIT ?`,
-    sessionId, Number(afterId) || 0, limit,
-  );
-
-/** 入室直後に見せる直近のコメント（会場に人がいた形跡を見せる） */
-export async function recentMessages(sessionId, limit = 20) {
-  const rows = await all(
-    `SELECT id, display_name, body, kind, created_at FROM room_messages
-      WHERE session_id = ? AND hidden = 0
-      ORDER BY id DESC LIMIT ?`,
-    sessionId, limit,
-  );
-  return rows.reverse();
-}
-
-export const hideMessage = (id) => run('UPDATE room_messages SET hidden = 1 WHERE id = ?', id);
-
-export const listMessagesForAdmin = (sessionId, limit = 200) =>
-  all(
-    `SELECT m.*, s.start_at FROM room_messages m
-       JOIN sessions s ON s.id = m.session_id
-      ${sessionId ? 'WHERE m.session_id = ?' : ''}
-      ORDER BY m.id DESC LIMIT ?`,
-    ...(sessionId ? [sessionId, limit] : [limit]),
-  );
 
 // ---- 投票 ------------------------------------------------------------------
 

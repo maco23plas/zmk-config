@@ -5,7 +5,7 @@ const FIELDS = [
   'title', 'description', 'video_url', 'duration_sec', 'poster_url', 'presenter',
   'cta_label', 'cta_url', 'cta_at_sec', 'late_join_sec', 'archive_hours',
   'show_viewer_count', 'viewer_base', 'show_chat',
-  'lobby_open_min', 'chat_mode', 'min_viewers_shown', 'welcome_message', 'closing_message',
+  'lobby_open_min', 'min_viewers_shown', 'welcome_message', 'closing_message',
 ];
 
 export const listWebinars = () => all('SELECT * FROM webinars ORDER BY created_at DESC');
@@ -39,7 +39,6 @@ function defaultFor(field) {
   };
   if (field in numbers) return numbers[field];
   if (['cta_at_sec', 'late_join_sec', 'archive_hours', 'viewer_base'].includes(field)) return 0;
-  if (field === 'chat_mode') return 'on';
   return '';
 }
 

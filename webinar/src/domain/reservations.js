@@ -7,7 +7,7 @@ const RES_SELECT = `
          w.title, w.description, w.duration_sec, w.video_url, w.poster_url, w.presenter,
          w.cta_label, w.cta_url, w.cta_at_sec, w.late_join_sec, w.archive_hours,
          w.show_viewer_count, w.viewer_base, w.show_chat,
-         w.lobby_open_min, w.chat_mode, w.min_viewers_shown, w.welcome_message, w.closing_message
+         w.lobby_open_min, w.min_viewers_shown, w.welcome_message, w.closing_message
     FROM reservations r
     JOIN sessions s ON s.id = r.session_id
     JOIN webinars w ON w.id = s.webinar_id`;
@@ -151,14 +151,6 @@ export async function cancelReservation(id, now = Date.now()) {
 export function recordWatchEvent({ reservationId, sessionId, kind, atSec }, now = Date.now()) {
   return run('INSERT INTO watch_events (reservation_id, session_id, kind, at_sec, created_at) VALUES (?,?,?,?,?)',
     reservationId, sessionId, kind, Math.max(0, Math.round(Number(atSec) || 0)), now);
-}
-
-export async function addQuestion({ reservationId, sessionId, body, atSec }, now = Date.now()) {
-  const trimmed = String(body || '').trim().slice(0, 1000);
-  if (!trimmed) return null;
-  await run('INSERT INTO questions (reservation_id, session_id, body, at_sec, created_at) VALUES (?,?,?,?,?)',
-    reservationId, sessionId, trimmed, Math.max(0, Math.round(Number(atSec) || 0)), now);
-  return trimmed;
 }
 
 /** 視聴の到達状況（管理画面の分析用） */

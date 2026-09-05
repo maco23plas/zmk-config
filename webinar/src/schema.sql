@@ -19,10 +19,9 @@ CREATE TABLE IF NOT EXISTS webinars (
   archive_hours     INTEGER NOT NULL DEFAULT 0,   -- 終了後の見逃し配信時間(0=なし)
   show_viewer_count INTEGER NOT NULL DEFAULT 1,   -- 参加者数を出す（実測のみ）
   viewer_base       INTEGER NOT NULL DEFAULT 0,   -- 0=実測のみ。0より大きいと演出になる（非推奨）
-  show_chat         INTEGER NOT NULL DEFAULT 1,   -- コメント欄を出す
+  show_chat         INTEGER NOT NULL DEFAULT 1,   -- 司会の進行アナウンスを表示する
   -- ▼ 会場（ロビー）の設定
   lobby_open_min    INTEGER NOT NULL DEFAULT 15,  -- 何分前に開場するか
-  chat_mode         TEXT    NOT NULL DEFAULT 'on',-- on(発言可) | readonly(読むだけ) | off
   min_viewers_shown INTEGER NOT NULL DEFAULT 3,   -- 参加者数を表示し始める人数
   welcome_message   TEXT    NOT NULL DEFAULT '',  -- 入室時に本人へ出す一言
   closing_message   TEXT    NOT NULL DEFAULT '',  -- 終了時に出す一言
@@ -130,17 +129,6 @@ CREATE TABLE IF NOT EXISTS watch_events (
 CREATE INDEX IF NOT EXISTS watch_events_res ON watch_events(reservation_id, created_at);
 CREATE INDEX IF NOT EXISTS watch_events_session ON watch_events(session_id);
 
--- 視聴中に届いた質問
-CREATE TABLE IF NOT EXISTS questions (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  reservation_id TEXT NOT NULL,
-  session_id     TEXT NOT NULL,
-  body           TEXT NOT NULL,
-  at_sec         INTEGER NOT NULL DEFAULT 0,
-  answered       INTEGER NOT NULL DEFAULT 0,
-  created_at     INTEGER NOT NULL
-);
-
 -- LINE送信ログ（ドライラン時の確認にも使う）
 CREATE TABLE IF NOT EXISTS outbound_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,6 +148,7 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 );
 
 -- ▼ ここから「会場」。すべて実際の参加者の行動を記録したもので、演出ではない。
+-- 参加者からの書き込み（コメント・質問）は受け付けない。質問は公式LINEで受ける。
 
 -- 誰がいま会場にいるか（参加者数と入室通知の元データ）
 CREATE TABLE IF NOT EXISTS room_presence (
@@ -171,19 +160,6 @@ CREATE TABLE IF NOT EXISTS room_presence (
   PRIMARY KEY (session_id, reservation_id)
 );
 CREATE INDEX IF NOT EXISTS room_presence_seen ON room_presence(session_id, last_seen);
-
--- 参加者の発言。司会の台本はここには入らない（クライアント側で時刻どおりに出す）。
-CREATE TABLE IF NOT EXISTS room_messages (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id     TEXT NOT NULL,
-  reservation_id TEXT,
-  display_name   TEXT NOT NULL,
-  body           TEXT NOT NULL,
-  kind           TEXT NOT NULL DEFAULT 'guest', -- guest(参加者) | host(運営の手入力) | system(入室通知)
-  hidden         INTEGER NOT NULL DEFAULT 0,    -- 管理画面から非表示にできる
-  created_at     INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS room_messages_session ON room_messages(session_id, id);
 
 -- 投票（配信中に出すアンケート）
 CREATE TABLE IF NOT EXISTS polls (

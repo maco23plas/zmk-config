@@ -11,8 +11,6 @@ const TABS = [
   ['/admin/webinars', 'コンテンツ'],
   ['/admin/reservations', '予約'],
   ['/admin/jobs', '通知'],
-  ['/admin/room', '会場'],
-  ['/admin/questions', '質問'],
 ];
 
 function shell(active, title, body) {
@@ -329,8 +327,9 @@ export function webinarsPage({ webinars, editing, chatText, pollsText, notice })
 
         <h3 style="margin-top:22px">会場（ライブ感）の設定</h3>
         <div class="alert alert-info">
-          参加者数とコメントは、<b>同じ回に実際に参加している方のもの</b>です。
-          開催枠を時刻で区切っているので、作り物を出さなくても人が集まります。
+          参加者数と入室通知は、<b>同じ回に実際に参加している方のもの</b>です。
+          開催枠を時刻で区切っているので、作り物を出さなくても人が集まります。<br>
+          この画面では<b>参加者からの書き込みは受け付けません</b>。質問は公式LINEで受けます。
         </div>
         <div class="grid-2">
           <div class="field">
@@ -353,12 +352,10 @@ export function webinarsPage({ webinars, editing, chatText, pollsText, notice })
           </label>
         </div>
         <div class="field">
-          <label for="chat_mode">コメント欄</label>
-          <select id="chat_mode" name="chat_mode">
-            <option value="on" ${(w.chat_mode || 'on') === 'on' ? 'selected' : ''}>参加者が書き込める（おすすめ）</option>
-            <option value="readonly" ${w.chat_mode === 'readonly' ? 'selected' : ''}>読むだけ（司会の進行のみ流す）</option>
-            <option value="off" ${w.chat_mode === 'off' ? 'selected' : ''}>表示しない</option>
-          </select>
+          <label class="check">
+            <input type="checkbox" name="show_chat" value="1" ${w.show_chat ?? 1 ? 'checked' : ''}>
+            <span>司会の進行アナウンスを表示する（下の台本を時刻どおりに流します）</span>
+          </label>
         </div>
         <div class="grid-2">
           <div class="field">
@@ -414,9 +411,7 @@ export function webinarsPage({ webinars, editing, chatText, pollsText, notice })
             <td class="num nowrap">${formatDuration(x.duration_sec)}</td>
             <td class="nowrap">
               <span class="pill pill-pending">${x.lobby_open_min}分前開場</span>
-              ${x.chat_mode === 'on' ? h` <span class="pill pill-sent">コメント可</span>`
-                : x.chat_mode === 'readonly' ? h` <span class="pill pill-skipped">読むだけ</span>`
-                : h` <span class="pill pill-skipped">コメント無し</span>`}
+              ${x.show_chat ? h` <span class="pill pill-sent">進行あり</span>` : ''}
             </td>
             <td class="nowrap"><a class="btn btn-ghost btn-sm" href="/admin/webinars?edit=${x.id}">編集</a></td>
           </tr>`)}</tbody>
@@ -508,65 +503,3 @@ export function jobsPage({ jobs, counts, now, notice }) {
     </div>`);
 }
 
-// ---- 会場（コメントの確認と非表示） -----------------------------------------
-
-export function roomPage({ messages, sessions, sessionId, notice }) {
-  return shell('/admin/room', '会場', h`
-    ${notice ? h`<div class="alert alert-ok">${notice}</div>` : ''}
-    <div class="card card-tight">
-      <form method="get" action="/admin/room" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-        <div class="field" style="margin:0;min-width:260px;flex:1">
-          <label for="session">開催枠でしぼり込む</label>
-          <select id="session" name="session" onchange="this.form.submit()">
-            <option value="">すべて</option>
-            ${sessions.map((s) => h`
-              <option value="${s.id}" ${s.id === sessionId ? 'selected' : ''}>
-                ${formatJstShort(s.start_at)}　${s.title}
-              </option>`)}
-          </select>
-        </div>
-      </form>
-    </div>
-
-    <div class="card">
-      <h2>参加者のコメント（${messages.length}件）</h2>
-      <p class="muted" style="font-size:.87rem">
-        不適切な書き込みは「非表示」にすると、以後どの参加者にも表示されなくなります。
-      </p>
-      ${messages.length === 0 ? h`<p class="muted">まだコメントはありません。</p>` : h`
-        <div class="table-wrap"><table class="tbl">
-          <thead><tr><th>時刻</th><th>開催枠</th><th>お名前</th><th>内容</th><th></th></tr></thead>
-          <tbody>${messages.map((m) => h`<tr style="${m.hidden ? 'opacity:.45' : ''}">
-            <td class="nowrap">${formatJstShort(m.created_at)}</td>
-            <td class="nowrap">${formatJstShort(m.start_at)}</td>
-            <td class="nowrap">${m.display_name}${m.kind === 'host' ? h` <span class="pill pill-pending">司会</span>` : ''}</td>
-            <td>${m.body}</td>
-            <td class="nowrap">
-              ${m.hidden ? h`<span class="muted">非表示</span>` : h`
-                <form class="inline-form" method="post" action="/admin/room/${m.id}/hide">
-                  <button class="btn btn-danger btn-sm" type="submit">非表示にする</button>
-                </form>`}
-            </td>
-          </tr>`)}</tbody>
-        </table></div>`}
-    </div>`);
-}
-
-// ---- 質問 ------------------------------------------------------------------
-
-export function questionsPage({ questions }) {
-  return shell('/admin/questions', '質問', h`
-    <div class="card">
-      <h2>視聴中に届いた質問（${questions.length}件）</h2>
-      ${questions.length === 0 ? h`<p class="muted">まだ質問はありません。</p>` : h`
-        <div class="table-wrap"><table class="tbl">
-          <thead><tr><th>受信</th><th>お名前</th><th>再生位置</th><th>内容</th></tr></thead>
-          <tbody>${questions.map((q) => h`<tr>
-            <td class="nowrap">${formatJstShort(q.created_at)}</td>
-            <td class="nowrap">${q.name || '（不明）'}</td>
-            <td class="nowrap">${formatDuration(q.at_sec)}時点</td>
-            <td>${q.body}</td>
-          </tr>`)}</tbody>
-        </table></div>`}
-    </div>`);
-}

@@ -6,7 +6,10 @@
 -- すでに列がある場合は "duplicate column name" のエラーが出るが、無視して構わない。
 
 ALTER TABLE webinars ADD COLUMN lobby_open_min    INTEGER NOT NULL DEFAULT 15;
-ALTER TABLE webinars ADD COLUMN chat_mode         TEXT    NOT NULL DEFAULT 'on';
 ALTER TABLE webinars ADD COLUMN min_viewers_shown INTEGER NOT NULL DEFAULT 3;
 ALTER TABLE webinars ADD COLUMN welcome_message   TEXT    NOT NULL DEFAULT '';
 ALTER TABLE webinars ADD COLUMN closing_message   TEXT    NOT NULL DEFAULT '';
+
+-- 参加者からのコメント・質問は受け付けなくなったため、対応するテーブルを削除する。
+DROP TABLE IF EXISTS room_messages;
+DROP TABLE IF EXISTS questions;

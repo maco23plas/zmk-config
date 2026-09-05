@@ -275,18 +275,18 @@ test('管理画面で予約とCSVを確認できる', async () => {
   assert.match(csvRes.headers.get('content-disposition'), /attachment/);
 });
 
-test('視聴ログと質問が記録される', async () => {
+test('視聴ログが記録される。コメントと質問は受け付けない', async () => {
   const session = await setup();
   const { token, code } = await reserve(session);
   await webhook(linkEvent(code));
   clock.setNow(START + 20 * MINUTE);
 
   await server.post(`/watch/${token}/event`, JSON.stringify({ kind: 'cta_click', atSec: 1200 }), { 'Content-Type': 'application/json' });
-  await server.post(`/watch/${token}/question`, JSON.stringify({ body: '対象になりますか？', atSec: 1250 }), { 'Content-Type': 'application/json' });
-
   assert.equal((await get(`SELECT COUNT(*) c FROM watch_events WHERE kind='cta_click'`)).c, 1);
-  assert.equal((await get('SELECT body FROM questions')).body, '対象になりますか？');
 
-  const empty = await server.post(`/watch/${token}/question`, JSON.stringify({ body: '   ' }), { 'Content-Type': 'application/json' });
-  assert.equal(empty.status, 400, '空の質問は保存しない');
+  // 書き込みの受け口そのものが無いこと（質問は公式LINEで受ける）
+  for (const path of ['chat', 'question']) {
+    const res = await server.post(`/watch/${token}/${path}`, JSON.stringify({ body: 'テスト' }), { 'Content-Type': 'application/json' });
+    assert.equal(res.status, 404, `/${path} は存在しない`);
+  }
 });

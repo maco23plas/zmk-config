@@ -204,8 +204,8 @@ body.watch{background:var(--bg);color:var(--ink)}
 .panel h3{color:var(--ink);font-size:.94rem;margin:0 0 10px}
 .panel p{color:var(--ink-soft);font-size:.88rem}
 
-/* ---- 会場（コメント欄） ---- */
-.room-panel{display:flex;flex-direction:column;padding-bottom:14px}
+/* ---- 会場（司会の進行） ---- */
+.room-panel{display:flex;flex-direction:column}
 .room-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
 .room-head h3{margin:0}
 .room-people{color:var(--green-dark);font-size:.78rem;font-weight:700}
@@ -217,19 +217,7 @@ body.watch{background:var(--bg);color:var(--ink)}
 .chat-msg b{color:#2D7FF9;font-weight:700;margin-right:6px}
 .chat-msg.is-host b{color:var(--amber-ink)}
 .chat-msg.is-host{color:var(--ink)}
-.chat-msg.is-system{color:var(--muted);font-size:.8rem}
-.chat-msg.is-mine b{color:var(--green-dark)}
 .chat-empty{color:var(--muted);font-size:.84rem;margin:0}
-.chat-form{display:flex;gap:7px;margin-top:11px}
-.chat-form input{flex:1;min-width:0;padding:9px 13px;border-radius:999px;border:1px solid #D5E0E9;
-  background:#fff;color:var(--ink);font-family:inherit;font-size:.88rem}
-.chat-form input::placeholder{color:#9BAAB7}
-.chat-form input:focus{outline:2px solid rgba(16,185,129,.3);border-color:var(--green)}
-.chat-form button{flex-shrink:0;border:0;border-radius:999px;padding:9px 17px;background:var(--green);
-  color:#fff;font-weight:700;font-size:.85rem;font-family:inherit;cursor:pointer}
-.chat-form button:disabled{opacity:.5;cursor:not-allowed}
-.chat-status{font-size:.78rem;color:var(--amber-ink);margin:7px 0 0;min-height:1.1em}
-.chat-readonly{font-size:.8rem;color:var(--muted);margin:10px 0 0}
 
 /* ---- アンケート ---- */
 .poll-panel{border-color:#B6E6D2}
@@ -265,9 +253,6 @@ button.poll-option:hover{border-color:var(--green)}
 .toast-poll,.toast-cta{border-color:#FBE2B8;background:var(--amber-soft);color:var(--amber-ink)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 @keyframes toastOut{to{opacity:0;transform:translateX(-14px)}}
-
-.q-form textarea{min-height:74px;font-size:.9rem}
-.q-status{font-size:.82rem;color:var(--green-dark);margin:8px 0 0;min-height:1.2em}
 
 .watch-note{color:var(--muted);font-size:.76rem;margin:4px 0 0;text-align:center;line-height:1.8;
   grid-column:1 / -1}

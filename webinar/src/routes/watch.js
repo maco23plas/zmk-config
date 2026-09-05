@@ -4,12 +4,12 @@ import { clock } from '../clock.js';
 import { config } from '../config.js';
 import { html, json, text, redirect, serveFile } from '../lib/http.js';
 import { playbackState, mediaAllowed, roomOpen, parseVideoSource, PlaybackState } from '../domain/playback.js';
-import { getByWatchToken, recordWatchEvent, addQuestion } from '../domain/reservations.js';
+import { getByWatchToken, recordWatchEvent } from '../domain/reservations.js';
 import { listChatScript } from '../domain/webinars.js';
 import { displayedViewerCount } from '../domain/presence.js';
 import {
-  displayNameFor, touchPresence, roomSnapshot, postMessage, messagesSince, recentMessages,
-  listPolls, parsePollOptions, activePoll, vote, pollTally, myVote, ChatError,
+  displayNameFor, touchPresence, roomSnapshot,
+  listPolls, parsePollOptions, activePoll, vote, pollTally, myVote,
 } from '../domain/room.js';
 
 const toPlan = (r) => ({
@@ -58,25 +58,21 @@ async function pollStateFor(reservation, positionSec) {
   };
 }
 
-/** 会場の状況。人数・入室・コメントはすべて実際の参加者のもの。 */
-async function roomStateFor(reservation, state, now, { sinceJoin, afterId } = {}) {
-  if (!roomOpen(state.state)) return { viewers: 0, showViewers: false, joins: [], messages: [], lastId: afterId || 0 };
+/** 会場の状況。人数と入室はどちらも実際の参加者のもの。 */
+async function roomStateFor(reservation, state, now, { sinceJoin } = {}) {
+  if (!roomOpen(state.state)) return { viewers: 0, showViewers: false, joins: [] };
 
-  const displayName = displayNameFor(reservation.name);
   await touchPresence({
-    sessionId: reservation.session_id, reservationId: reservation.id, displayName,
+    sessionId: reservation.session_id,
+    reservationId: reservation.id,
+    displayName: displayNameFor(reservation.name),
   }, now);
 
-  const [snapshot, messages] = await Promise.all([
-    roomSnapshot({
-      sessionId: reservation.session_id,
-      reservationId: reservation.id,
-      minViewersShown: reservation.min_viewers_shown,
-    }, now, sinceJoin),
-    reservation.show_chat
-      ? (afterId === undefined ? recentMessages(reservation.session_id) : messagesSince(reservation.session_id, afterId))
-      : Promise.resolve([]),
-  ]);
+  const snapshot = await roomSnapshot({
+    sessionId: reservation.session_id,
+    reservationId: reservation.id,
+    minViewersShown: reservation.min_viewers_shown,
+  }, now, sinceJoin);
 
   // viewer_base を設定している場合だけ、実測と目安の大きい方を出す（既定は実測のみ）
   const shown = reservation.viewer_base > 0
@@ -88,10 +84,6 @@ async function roomStateFor(reservation, state, now, { sinceJoin, afterId } = {}
     viewers: reservation.show_viewer_count ? shown : 0,
     showViewers: Boolean(reservation.show_viewer_count) && (snapshot.showViewers || reservation.viewer_base > 0),
     joins: snapshot.joins,
-    messages: messages.map((m) => ({
-      id: m.id, name: m.display_name, body: m.body, kind: m.kind, at: m.created_at,
-    })),
-    lastId: messages.length ? messages[messages.length - 1].id : (afterId || 0),
   };
 }
 
@@ -135,8 +127,8 @@ export function register(router, views) {
     }));
   });
 
-  // クライアントからの定期同期。1本で「時刻合わせ・動画の受け渡し・在室・
-  // 新着コメント・投票」をまとめて返すので、視聴中のリクエストはこれだけで済む。
+  // クライアントからの定期同期。1本で「時刻合わせ・動画の受け渡し・在室・投票」を
+  // まとめて返すので、視聴中のリクエストはこれだけで済む。
   router.post('/watch/:token/state', async (ctx) => {
     const now = clock.now();
     const reservation = await getByWatchToken(ctx.params.token);
@@ -152,7 +144,6 @@ export function register(router, views) {
 
     const room = await roomStateFor(reservation, state, now, {
       sinceJoin: Number(ctx.form.sinceJoin) || null,
-      afterId: Number(ctx.form.afterId) || 0,
     });
 
     return json({
@@ -164,32 +155,6 @@ export function register(router, views) {
       room,
       poll: state.state === PlaybackState.LIVE ? await pollStateFor(reservation, state.positionSec) : null,
     });
-  });
-
-  // 参加者の発言。開場中と配信中だけ受け付ける。
-  router.post('/watch/:token/chat', async (ctx) => {
-    const now = clock.now();
-    const reservation = await getByWatchToken(ctx.params.token);
-    if (!reservation || reservation.status !== 'active') return json({ ok: false }, 404);
-
-    const state = playbackState(toPlan(reservation), now);
-    if (!roomOpen(state.state)) return json({ ok: false, error: 'closed' }, 403);
-    if (reservation.chat_mode !== 'on' || !reservation.show_chat) {
-      return json({ ok: false, error: 'disabled' }, 403);
-    }
-
-    try {
-      const saved = await postMessage({
-        sessionId: reservation.session_id,
-        reservationId: reservation.id,
-        displayName: displayNameFor(reservation.name),
-        body: ctx.form.body,
-      }, now);
-      return json({ ok: true, id: saved.id });
-    } catch (err) {
-      if (err instanceof ChatError) return json({ ok: false, error: err.code, message: err.message }, 400);
-      throw err;
-    }
   });
 
   // 投票
@@ -253,18 +218,6 @@ export function register(router, views) {
       reservationId: reservation.id, sessionId: reservation.session_id,
       kind, atSec: ctx.form.atSec,
     }, clock.now());
-    return json({ ok: true });
-  });
-
-  router.post('/watch/:token/question', async (ctx) => {
-    const reservation = await getByWatchToken(ctx.params.token);
-    if (!reservation) return json({ ok: false }, 404);
-
-    const saved = await addQuestion({
-      reservationId: reservation.id, sessionId: reservation.session_id,
-      body: ctx.form.body, atSec: ctx.form.atSec,
-    }, clock.now());
-    if (!saved) return json({ ok: false, error: 'empty' }, 400);
     return json({ ok: true });
   });
 

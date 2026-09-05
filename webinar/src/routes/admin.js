@@ -16,9 +16,7 @@ import {
   listChatScript, replaceChatScript, parseChatScriptText, chatScriptToText,
 } from '../domain/webinars.js';
 import { requeue } from '../domain/notifications.js';
-import {
-  listPolls, parsePollsText, pollsToText, replacePolls, listMessagesForAdmin, hideMessage,
-} from '../domain/room.js';
+import { listPolls, parsePollsText, pollsToText, replacePolls } from '../domain/room.js';
 import * as views from '../views/admin.js';
 
 const COOKIE = 'wadm';
@@ -187,9 +185,7 @@ export function register(router) {
       archive_hours: Math.max(0, int(f.archive_hours)),
       show_viewer_count: f.show_viewer_count === '1' ? 1 : 0,
       viewer_base: Math.max(0, int(f.viewer_base)),
-      // コメント欄の表示は chat_mode から決まる
-      show_chat: f.chat_mode === 'off' ? 0 : 1,
-      chat_mode: ['on', 'readonly', 'off'].includes(f.chat_mode) ? f.chat_mode : 'on',
+      show_chat: f.show_chat === '1' ? 1 : 0,
       lobby_open_min: Math.min(120, Math.max(0, int(f.lobby_open_min, 15))),
       min_viewers_shown: Math.min(1000, Math.max(1, int(f.min_viewers_shown, 3))),
       welcome_message: String(f.welcome_message || '').trim().slice(0, 120),
@@ -258,28 +254,6 @@ export function register(router) {
     return redirect('/admin/jobs?ok=1', 303);
   }));
 
-  // ---- 会場（参加者のコメント） ----
-  router.get('/admin/room', guard(async (ctx) => {
-    const sessionId = ctx.query.get('session') || '';
-    return html(views.roomPage({
-      messages: await listMessagesForAdmin(sessionId),
-      sessions: await listRecentSessions(60),
-      sessionId,
-      notice: ctx.query.get('ok') === '1' ? '非表示にしました。' : '',
-    }));
-  }));
-
-  router.post('/admin/room/:id/hide', guard(async (ctx) => {
-    await hideMessage(int(ctx.params.id));
-    return redirect('/admin/room?ok=1', 303);
-  }));
-
-  // ---- 質問 ----
-  router.get('/admin/questions', guard(async () => html(views.questionsPage({
-    questions: await all(`SELECT q.*, r.name FROM questions q
-                            LEFT JOIN reservations r ON r.id = q.reservation_id
-                           ORDER BY q.created_at DESC LIMIT 200`),
-  }))));
 }
 
 function queryReservations(sessionId) {

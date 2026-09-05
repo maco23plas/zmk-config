@@ -17,8 +17,7 @@
     'startCountdown', 'soundBtn', 'endedTitle', 'endedNote', 'endedCta', 'progressBar', 'progressText',
     'viewerText', 'clock', 'livePill', 'livePillText', 'liveDot', 'roomCount', 'roomPeople',
     'ctaPanel', 'ctaLink', 'ctaTitle', 'pollPanel', 'pollQuestion', 'pollOptions', 'pollTotal',
-    'chatLog', 'chatEmpty', 'chatForm', 'chatInput', 'chatSend', 'chatStatus',
-    'qBody', 'qSend', 'qStatus', 'toastArea'].forEach(function (id) { el[id] = document.getElementById(id); });
+    'chatLog', 'chatEmpty', 'toastArea'].forEach(function (id) { el[id] = document.getElementById(id); });
 
   // ---- サーバー時刻との同期 ------------------------------------------------
   var skew = cfg.serverNow - Date.now();
@@ -32,7 +31,6 @@
   var soundOn = false;
   var ctaShown = false;
   var scriptShown = 0;
-  var lastMessageId = (cfg.room && cfg.room.lastId) || 0;
   var lastJoinAt = cfg.serverNow;
   var syncing = false;
   var lastSync = 0;
@@ -89,14 +87,14 @@
 
   // ---- コメント欄 ----------------------------------------------------------
 
+  /** 司会のアナウンスを1件表示する */
   function appendMessage(msg) {
     if (!el.chatLog) return;
     if (el.chatEmpty) { el.chatEmpty.remove(); el.chatEmpty = null; }
     var atBottom = el.chatLog.scrollHeight - el.chatLog.scrollTop - el.chatLog.clientHeight < 40;
 
     var p = document.createElement('p');
-    p.className = 'chat-msg' + (msg.kind === 'host' ? ' is-host' : msg.kind === 'system' ? ' is-system' : '');
-    if (msg.mine) p.className += ' is-mine';
+    p.className = 'chat-msg' + (msg.kind === 'host' ? ' is-host' : '');
     var b = document.createElement('b');
     b.textContent = msg.name;
     var s = document.createElement('span');
@@ -106,15 +104,6 @@
 
     while (el.chatLog.children.length > 200) el.chatLog.firstChild.remove();
     if (atBottom) el.chatLog.scrollTop = el.chatLog.scrollHeight;
-  }
-
-  function ingestMessages(list) {
-    for (var i = 0; i < list.length; i++) {
-      var m = list[i];
-      if (m.id && m.id <= lastMessageId - 0) { /* 既出 */ }
-      appendMessage({ name: m.name, body: m.body, kind: m.kind });
-      if (m.id > lastMessageId) lastMessageId = m.id;
-    }
   }
 
   /** 司会の進行台本。時刻で決まるので、通信を待たずにその場で出す。 */
@@ -365,7 +354,6 @@
 
     post('/state', {
       atSec: Math.round(positionSec()),
-      afterId: lastMessageId,
       sinceJoin: lastJoinAt,
     }).then(function (data) {
       if (!data || !data.state) return;
@@ -377,7 +365,6 @@
 
       if (data.room) {
         setPeople(data.room);
-        if (data.room.messages && data.room.messages.length) ingestMessages(data.room.messages);
         if (data.room.joins) {
           data.room.joins.forEach(function (j) {
             toast(j.name + 'が入室しました', 'join');
@@ -392,43 +379,7 @@
     }).finally(function () { syncing = false; });
   }
 
-  // ---- コメント送信 --------------------------------------------------------
-
-  if (el.chatForm) {
-    el.chatForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var body = (el.chatInput.value || '').trim();
-      if (!body) return;
-      el.chatSend.disabled = true;
-      el.chatStatus.textContent = '';
-      post('/chat', { body: body }).then(function (data) {
-        if (data && data.ok) {
-          el.chatInput.value = '';
-          appendMessage({ name: cfg.me, body: body, kind: 'guest', mine: true });
-          if (data.id > lastMessageId) lastMessageId = data.id;
-        } else {
-          el.chatStatus.textContent = (data && data.message) || '送信できませんでした';
-        }
-      }).finally(function () { el.chatSend.disabled = false; });
-    });
-  }
-
-  if (el.qSend) {
-    el.qSend.addEventListener('click', function () {
-      var body = (el.qBody.value || '').trim();
-      if (!body) { el.qStatus.textContent = '内容を入力してください'; return; }
-      el.qSend.disabled = true;
-      el.qStatus.textContent = '送信中…';
-      post('/question', { body: body, atSec: Math.round(positionSec()) }).then(function (data) {
-        if (data && data.ok) {
-          el.qBody.value = '';
-          el.qStatus.textContent = '送信しました。担当者より公式LINEでご回答します。';
-        } else {
-          el.qStatus.textContent = '送信できませんでした。時間をおいてお試しください。';
-        }
-      }).finally(function () { el.qSend.disabled = false; });
-    });
-  }
+  // 参加者からの書き込みは受け付けない（質問は公式LINEへ）
 
   // ---- メインループ --------------------------------------------------------
 
@@ -439,7 +390,7 @@
       show(el.overlayWait, false);
       show(el.overlayLobby, true);
       setPill('開場中', false);
-      if (el.chatEmpty) el.chatEmpty.textContent = 'ご自由に挨拶をどうぞ。開始までお待ちください。';
+      if (el.chatEmpty) el.chatEmpty.textContent = 'まもなく開始します。このままお待ちください。';
       if (!welcomed) { welcomed = true; toast(cfg.welcome, 'welcome'); }
       sync(true);
     } else if (name === 'countdown') {
@@ -513,7 +464,6 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) sync(true); });
   window.addEventListener('pagehide', function () { if (started && !ended) sendEvent('leave', positionSec()); });
 
-  if (cfg.room && cfg.room.messages) ingestMessages(cfg.room.messages);
   setPeople(cfg.room);
   renderPoll(cfg.poll);
 

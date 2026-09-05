@@ -1,14 +1,14 @@
-// 「会場」のテスト。人数・入室・コメント・投票がすべて実データであることを確かめる。
+// 「会場」のテスト。人数・入室・投票がすべて実データであることを確かめる。
+// 参加者からの書き込み（コメント・質問）は受け付けない仕様。
 
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb } from './helpers.js';
 import {
   displayNameFor, touchPresence, countPresent, recentJoins, roomSnapshot,
-  postMessage, messagesSince, recentMessages, hideMessage,
   parsePollsText, pollsToText, replacePolls, listPolls, parsePollOptions,
   activePoll, vote, pollTally, myVote, cleanupPresence,
-  ChatError, PRESENCE_WINDOW_MS, PRESENCE_REFRESH_MS, CHAT_COOLDOWN_MS,
+  PRESENCE_WINDOW_MS, PRESENCE_REFRESH_MS,
 } from '../src/domain/room.js';
 import { createWebinar } from '../src/domain/webinars.js';
 import { createSession } from '../src/domain/sessions.js';
@@ -82,6 +82,15 @@ test('自分より後に入ってきた人だけが入室通知になる', async
   assert.ok(!self.some((j) => j.name === '佐藤さん'), '自分の入室は通知しない');
 });
 
+test('この画面では参加者からの書き込みを受け付けない', async () => {
+  const room = await import('../src/domain/room.js');
+  for (const gone of ['postMessage', 'messagesSince', 'recentMessages', 'hideMessage', 'addQuestion']) {
+    assert.equal(room[gone], undefined, `${gone} は削除されている`);
+  }
+  const reservations = await import('../src/domain/reservations.js');
+  assert.equal(reservations.addQuestion, undefined, '質問の受付も削除されている');
+});
+
 test('少人数のときは人数を出さない（出すと逆に寂しいため）', async () => {
   await join(ctx.people[0], START);
   let snap = await roomSnapshot({ sessionId: ctx.session.id, reservationId: ctx.people[0].id, minViewersShown: 3 }, START);
@@ -93,57 +102,6 @@ test('少人数のときは人数を出さない（出すと逆に寂しいた�
   snap = await roomSnapshot({ sessionId: ctx.session.id, reservationId: ctx.people[0].id, minViewersShown: 3 }, START);
   assert.equal(snap.viewers, 3);
   assert.equal(snap.showViewers, true);
-});
-
-test('コメントは実際の参加者の発言として記録される', async () => {
-  const saved = await postMessage({
-    sessionId: ctx.session.id, reservationId: ctx.people[0].id,
-    displayName: displayNameFor(ctx.people[0].name), body: '  よろしく  お願いします  ',
-  }, START);
-  assert.equal(saved.body, 'よろしく お願いします', '空白は整理する');
-
-  const list = await messagesSince(ctx.session.id, 0);
-  assert.equal(list.length, 1);
-  assert.equal(list[0].display_name, '山田さん');
-
-  assert.equal((await messagesSince(ctx.session.id, saved.id)).length, 0, '取得済みは返さない');
-});
-
-test('空のコメントと連続投稿を弾く', async () => {
-  const send = (body, now) => postMessage({
-    sessionId: ctx.session.id, reservationId: ctx.people[0].id, displayName: '山田さん', body,
-  }, now);
-
-  await assert.rejects(() => send('   ', START), (e) => e instanceof ChatError && e.code === 'empty');
-
-  await send('1回目', START);
-  await assert.rejects(() => send('すぐ2回目', START + 500),
-    (e) => e instanceof ChatError && e.code === 'too_fast');
-  await send('時間をおいて', START + CHAT_COOLDOWN_MS + 100);
-  assert.equal((await messagesSince(ctx.session.id, 0)).length, 2);
-});
-
-test('非表示にしたコメントは誰にも配られない', async () => {
-  const a = await postMessage({ sessionId: ctx.session.id, reservationId: ctx.people[0].id, displayName: '山田さん', body: '通常' }, START);
-  const b = await postMessage({ sessionId: ctx.session.id, reservationId: ctx.people[1].id, displayName: '佐藤さん', body: '消す' }, START);
-
-  await hideMessage(b.id);
-  const list = await messagesSince(ctx.session.id, 0);
-  assert.deepEqual(list.map((m) => m.body), ['通常']);
-  assert.deepEqual((await recentMessages(ctx.session.id)).map((m) => m.id), [a.id]);
-});
-
-test('入室直後は直近のコメントが見える（会場に人がいた形跡）', async () => {
-  for (let i = 1; i <= 25; i++) {
-    await postMessage({
-      sessionId: ctx.session.id, reservationId: ctx.people[i % 3].id,
-      displayName: '誰か', body: 'コメント' + i,
-    }, START + i * CHAT_COOLDOWN_MS * 2);
-  }
-  const recent = await recentMessages(ctx.session.id, 20);
-  assert.equal(recent.length, 20);
-  assert.equal(recent[0].body, 'コメント6', '古い順に並ぶ');
-  assert.equal(recent[19].body, 'コメント25');
 });
 
 test('投票は再生位置で決まるので全員に同じものが出る', async () => {
