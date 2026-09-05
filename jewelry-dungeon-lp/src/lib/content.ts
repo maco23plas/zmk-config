@@ -32,7 +32,6 @@ export const footerNavItems = [
 
 export interface Orb {
   key: "red" | "silver" | "gold";
-  nameEn: string;
   nameJa: string;
   image: string;
   imageWidth: number;
@@ -44,7 +43,6 @@ export interface Orb {
 export const orbs: Orb[] = [
   {
     key: "red",
-    nameEn: "RED ORB",
     nameJa: "レッドオーブ",
     image: "/parts/orb-platinum.png",
     imageWidth: 604,
@@ -59,7 +57,6 @@ export const orbs: Orb[] = [
   },
   {
     key: "silver",
-    nameEn: "SILVER ORB",
     nameJa: "シルバーオーブ",
     image: "/parts/orb-silver.png",
     imageWidth: 626,
@@ -74,7 +71,6 @@ export const orbs: Orb[] = [
   },
   {
     key: "gold",
-    nameEn: "GOLD ORB",
     nameJa: "ゴールドオーブ",
     image: "/parts/orb-gold.png",
     imageWidth: 612,

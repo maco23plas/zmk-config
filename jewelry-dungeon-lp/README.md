@@ -34,7 +34,7 @@ src/
 │  │  ├─ section.tsx      … セクション共通ラッパー（余白・コンテナ幅）とラベル + h2 + リード
 │  │  ├─ cta-button.tsx   … 申込モーダルを開く主CTA
 │  │  └─ line-link.tsx    … 公式LINEリンク（新規タブ）
-│  ├─ layout/             … 固定ヘッダー / ドロワー / 下部固定CTAバー / フローティングボタン / フッター
+│  ├─ layout/             … 固定ヘッダー / ドロワー / 下部固定CTAバー / フッター
 │  ├─ modal/              … モーダル（申込フォーム / 送信完了 / 公式LINE案内）
 │  └─ sections/           … 01 HERO 〜 15 FREE SESSION の各セクション（*.tsx + *.module.css）
 └─ lib/

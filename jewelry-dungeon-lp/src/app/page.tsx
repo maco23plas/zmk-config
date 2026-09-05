@@ -2,7 +2,6 @@ import { UiProvider } from "@/components/ui/ui-context";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Drawer } from "@/components/layout/drawer";
 import { BottomBar } from "@/components/layout/bottom-bar";
-import { FloatingButtons } from "@/components/layout/floating-buttons";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SeminarModal } from "@/components/modal/seminar-modal";
 import { Hero } from "@/components/sections/hero";
@@ -47,7 +46,6 @@ export default function Page() {
         </main>
         <SiteFooter />
         <BottomBar />
-        <FloatingButtons />
         <SeminarModal />
       </div>
     </UiProvider>

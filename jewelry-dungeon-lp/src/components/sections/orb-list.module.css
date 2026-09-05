@@ -34,12 +34,13 @@
 }
 
 .name {
-  margin: 0 0 4px;
+  margin: 0 0 10px;
   text-align: center;
   font-family: var(--font-serif);
-  font-size: clamp(11px, 3.7vw, 14px);
+  /* 3列の狭いカードでも和名（最長7文字）が1行に収まるよう幅に追従させる */
+  font-size: clamp(10px, 3.3vw, 14px);
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -53,17 +54,6 @@
 
 .nameGold {
   color: var(--orb-gold);
-}
-
-.nameJa {
-  margin: 0 0 10px;
-  text-align: center;
-  font-size: clamp(9.5px, 3.2vw, 11px);
-  color: var(--sub);
-}
-
-.nameJaGold {
-  color: #a07c34;
 }
 
 .img {
@@ -131,9 +121,7 @@
   }
   .name {
     font-size: 16px;
-  }
-  .nameJa {
-    font-size: 11.5px;
+    letter-spacing: 0.02em;
   }
   .img {
     max-width: 120px;
@@ -156,12 +144,9 @@
     padding: 24px 20px 26px;
   }
   .name {
-    font-size: 26px;
+    margin-bottom: 14px;
+    font-size: 24px;
     letter-spacing: 0.05em;
-  }
-  .nameJa {
-    margin-bottom: 12px;
-    font-size: 12.5px;
   }
   .img {
     max-width: 180px;

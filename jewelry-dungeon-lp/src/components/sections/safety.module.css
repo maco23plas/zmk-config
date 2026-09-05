@@ -39,6 +39,16 @@
   place-items: center;
 }
 
+.iconSvg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .cardBody {
   min-width: 0;
 }

@@ -38,8 +38,7 @@ export function OrbList() {
           const isGold = orb.key === "gold";
           return (
             <div key={orb.key} className={cx(styles.card, isGold && styles.cardGold)}>
-              <h3 className={cx(styles.name, nameClass[orb.key])}>{orb.nameEn}</h3>
-              <p className={cx(styles.nameJa, isGold && styles.nameJaGold)}>{orb.nameJa}</p>
+              <h3 className={cx(styles.name, nameClass[orb.key])}>{orb.nameJa}</h3>
               <Image
                 src={orb.image}
                 alt={orb.nameJa}
