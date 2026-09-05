@@ -1,0 +1,14 @@
+{
+  "name": "antai-webinar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "説明会の予約サイト × LINE公式アカウント連携 × 疑似ライブ(simulive)ウェビナー配信",
+  "type": "module",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "seed": "node --disable-warning=ExperimentalWarning src/seed.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  }
+}
