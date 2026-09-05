@@ -17,7 +17,7 @@ if ((await get('SELECT COUNT(*) c FROM webinars')).c > 0) {
 }
 
 const webinar = await createWebinar({
-  title: 'ジュエリーのお仕事 オンライン説明会',
+  title: 'ジュエリーダンジョン オンライン説明会',
   description: 'ジュエリー販売の仕組みと、はじめ方をご説明します。\n'
     + '未経験の方に向けた内容です。ご質問は公式LINEで承ります。',
   // 動画は未設定。管理画面から youtube:動画ID などに差し替えてください。

@@ -216,6 +216,26 @@ test('利用者が予約をキャンセルすると通知が止まる', async ()
   assert.notEqual((await get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`)).status, 'sent');
 });
 
+test('事業者情報とプライバシーポリシーが公開されている', async () => {
+  for (const [path, heading] of [['/company', '事業者情報'], ['/privacy', 'プライバシーポリシー']]) {
+    const res = await server.get(path);
+    assert.equal(res.status, 200, `${path} が開ける`);
+    const html = await res.text();
+    assert.match(html, new RegExp(heading));
+    // ひな形のまま公開しないよう、未記入の箇所は画面上でも目立たせる
+    if (html.includes('【要記入】')) assert.match(html, /class="todo"/, '未記入が強調される');
+  }
+  // 予約フォームからプライバシーポリシーへ辿れること（個人情報を取得するため）
+  const session = await setup();
+  const form = await (await server.get(`/reserve?session=${session.id}`)).text();
+  assert.match(form, /href="\/privacy"/, '同意文からポリシーへリンクしている');
+  // どのページのフッターからも辿れること
+  const top = await (await server.get('/')).text();
+  for (const path of ['/company', '/privacy']) {
+    assert.match(top, new RegExp(`href="${path}"`), `トップのフッターに ${path} がある`);
+  }
+});
+
 test('存在しないトークンの視聴ページは404', async () => {
   const res = await server.get('/watch/deadbeef');
   assert.equal(res.status, 404);

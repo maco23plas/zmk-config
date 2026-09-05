@@ -45,8 +45,12 @@ function footerHtml() {
   return String(h`
     <footer class="site-foot">
       <div class="wrap-wide">
-        ${config.brand.company ? h`運営：${config.brand.company}　` : ''}
-        <a href="${config.baseUrl}/">開催日程</a>
+        ${config.brand.company ? h`<span>運営：${config.brand.company}</span>` : ''}
+        <nav class="foot-nav">
+          <a href="/">開催日程</a>
+          <a href="/company">事業者情報</a>
+          <a href="/privacy">プライバシーポリシー</a>
+        </nav>
       </div>
     </footer>`);
 }

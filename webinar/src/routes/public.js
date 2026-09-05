@@ -7,6 +7,7 @@ import { listOpenSessions, getSession } from '../domain/sessions.js';
 import { createReservation, getByWatchToken, cancelReservation, ReservationError } from '../domain/reservations.js';
 import { syncJobs, cancelJobs } from '../domain/notifications.js';
 import { indexPage, reservePage, thanksPage, managePage, errorPage } from '../views/pages.js';
+import { companyPage, privacyPage } from '../views/legal.js';
 
 export function register(router) {
   router.get('/', async () => {
@@ -80,6 +81,9 @@ export function register(router) {
     }
     return redirect(`/r/${ctx.params.token}?canceled=1`, 303);
   });
+
+  router.get('/company', () => html(companyPage()));
+  router.get('/privacy', () => html(privacyPage()));
 
   // 死活監視用
   router.get('/healthz', () => new Response('ok', { headers: { 'Content-Type': 'text/plain' } }));

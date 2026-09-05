@@ -47,6 +47,27 @@ small{font-size:.82rem}
 .site-head nav a:hover{color:var(--ink)}
 main{padding:26px 0 60px}
 .site-foot{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:.8rem;background:var(--paper)}
+.site-foot .wrap-wide{display:flex;gap:10px 20px;justify-content:space-between;flex-wrap:wrap;align-items:center}
+.foot-nav{display:flex;gap:16px;flex-wrap:wrap}
+.foot-nav a{color:var(--muted);text-decoration:none}
+.foot-nav a:hover{color:var(--ink);text-decoration:underline}
+
+/* 法務ページ */
+.legal-dl{display:grid;grid-template-columns:minmax(7em,auto) 1fr;gap:0 20px;margin:0;font-size:.92rem}
+.legal-dl dt{color:var(--muted);font-size:.85rem;padding:12px 0;border-bottom:1px solid var(--line)}
+.legal-dl dd{margin:0;padding:12px 0;border-bottom:1px solid var(--line);line-height:1.8}
+.legal-dl dt:last-of-type,.legal-dl dd:last-of-type{border-bottom:0}
+@media(max-width:560px){
+  .legal-dl{grid-template-columns:1fr;gap:0}
+  .legal-dl dt{border-bottom:0;padding:12px 0 0}
+  .legal-dl dd{padding:2px 0 12px}
+}
+.legal-section{margin-bottom:22px}
+.legal-section:last-of-type{margin-bottom:0}
+.legal-section h2{font-size:1rem;margin:0 0 6px}
+.legal-section p{color:var(--ink-soft);font-size:.91rem;line-height:1.9;margin:0}
+/* 未記入の箇所は公開前に気づけるように目立たせる */
+.todo{background:#FFF3D6;color:#7A5E30;padding:1px 6px;border-radius:4px;font-weight:700}
 
 /* ---- カード ---- */
 .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);

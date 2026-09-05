@@ -215,8 +215,8 @@ export function reservePage(session, { error = '', values = {}, now } = {}) {
           <label class="check">
             <input type="checkbox" name="agree" value="1" required ${values.agree ? 'checked' : ''}>
             <span>
-              予約確認と視聴リンクを<b>公式LINE</b>で受け取ることに同意します。
-              入力情報は本説明会のご案内にのみ使用します。
+              予約確認と視聴リンクを<b>公式LINE</b>で受け取ることに同意します。<br>
+              入力情報は本説明会のご案内にのみ使用します（<a href="/privacy" target="_blank" rel="noopener">プライバシーポリシー</a>）。
             </span>
           </label>
         </div>
