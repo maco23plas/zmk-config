@@ -1,0 +1,40 @@
+.section {
+  background: #fff;
+  --title-mb: 20px;
+}
+
+/* 図版(1774x887)には上下に余白が含まれているため、比率固定の枠で上下を少し切り詰める */
+.figureWrap {
+  width: 100%;
+  aspect-ratio: 1774 / 730;
+  overflow: hidden;
+}
+
+.figure {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  border-radius: 0;
+}
+
+.note {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 9px;
+  line-height: 1.85;
+  color: var(--note);
+}
+
+@media (min-width: 600px) {
+  .note {
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .note {
+    font-size: 11.5px;
+  }
+}

@@ -1,0 +1,83 @@
+/* セクション共通: SP 34px 14px / TB 52px 20px / PC 76px 18px */
+.section {
+  padding: 34px 14px;
+  scroll-margin-top: 72px;
+  overflow-x: hidden;
+  --title-mb: 12px;
+  --lead-mb: 44px;
+}
+
+.inner {
+  max-width: min(480px, 100%);
+  margin: 0 auto;
+}
+
+.label {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  color: var(--gold-label);
+}
+
+.title {
+  margin: 0 0 var(--title-mb);
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 23px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.lead {
+  margin: 0 0 var(--lead-mb);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--sub);
+}
+
+.leadAlt {
+  --lead-mb: 28px;
+  color: var(--text);
+}
+
+.left {
+  text-align: left;
+}
+
+@media (min-width: 600px) {
+  .section {
+    padding: 52px 20px;
+  }
+  .inner {
+    max-width: min(720px, 100%);
+  }
+  .title {
+    font-size: 28px;
+  }
+  .lead {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section {
+    padding: 76px 18px;
+  }
+  .inner {
+    max-width: 1120px;
+  }
+  .title {
+    font-size: 38px;
+    line-height: 1.5;
+  }
+  .lead {
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .leadAlt {
+    line-height: 2.05;
+  }
+}

@@ -1,0 +1,187 @@
+.section {
+  background: #fff;
+}
+
+.accent {
+  color: var(--gold);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.card {
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 14px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-1);
+}
+
+.icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--bg-icon);
+  color: var(--navy);
+  font-size: 17px;
+  display: grid;
+  place-items: center;
+}
+
+.cardBody {
+  min-width: 0;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--sub);
+}
+
+/* 信頼カード: SP は見出し+本文を全幅で先頭に、画像とチェックリストを横並び */
+.trust {
+  background: var(--grad-gold-card);
+  border: 1px solid rgba(216, 169, 74, 0.3);
+  border-radius: 22px;
+  padding: 18px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.trustImg {
+  flex: none;
+  width: 110px;
+  height: auto;
+  display: block;
+}
+
+.trustText {
+  flex: 1 1 100%;
+  order: -1;
+  min-width: 0;
+}
+
+.trustTitle {
+  margin: 0 0 6px;
+  font-size: clamp(13px, 4.6vw, 15px);
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.trustBody {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.85;
+  color: var(--text-2);
+}
+
+.trustList {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trustItem {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.trustCheck {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #fff;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+}
+
+@media (min-width: 600px) {
+  .text,
+  .trustBody,
+  .trustItem {
+    font-size: 12.5px;
+  }
+  .trust {
+    padding: 24px 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    margin-bottom: 26px;
+  }
+  .card {
+    flex-direction: row;
+    gap: 16px;
+    border-radius: 20px;
+    padding: 26px;
+  }
+  .title {
+    margin-bottom: 8px;
+    font-size: 16px;
+  }
+  .text {
+    font-size: 13px;
+    line-height: 1.9;
+  }
+  .trust {
+    flex-wrap: nowrap;
+    gap: 30px;
+    padding: 30px;
+  }
+  .trustText {
+    flex: 1.2 1 0;
+    order: 0;
+  }
+  .trustTitle {
+    margin-bottom: 10px;
+    font-size: 19px;
+    text-align: left;
+    white-space: normal;
+  }
+  .trustBody {
+    font-size: 13px;
+    line-height: 1.95;
+  }
+  .trustList {
+    flex: 1 1 0;
+    gap: 12px;
+  }
+  .trustItem {
+    font-size: 14px;
+  }
+}

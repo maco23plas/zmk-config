@@ -1,0 +1,180 @@
+/* =====================================================================
+   Jewelry Dungeon LP – グローバルスタイル / デザイントークン
+   モバイルファースト。ブレークポイント: 600px (TB) / 1024px (PC)
+   ===================================================================== */
+
+:root {
+  /* Colors */
+  --navy: #12305e;
+  --navy-deep: #0a1c39;
+  --navy-fv: #0d2246;
+  --text: #41567a;
+  --text-2: #4a5f80;
+  --sub: #5b6f8e;
+  --note: #6b7f9e;
+  --note-2: #8395ae;
+  --label-form: #3d5478;
+
+  --gold: #b8862c;
+  --gold-light: #dfae56;
+  --gold-light-2: #e6bd6f;
+  --gold-light-3: #d7ab55;
+  --gold-text: #8f6417;
+  --gold-text-2: #8b7239;
+  --gold-label: #c8a252;
+  --gold-label-2: #e0bd75;
+  --gold-number: #dcb562;
+  --gold-bg: #fffaf0;
+  --gold-bg-2: #fdf6e8;
+  --gold-bg-3: #fdf3e2;
+  --gold-bg-4: #fffdf7;
+
+  --bg-page: #f2f6fb;
+  --bg-soft: #f7fafd;
+  --bg-soft-2: #f5f8fc;
+  --bg-hover: #f2f6fc;
+  --bg-hover-2: #eef3f9;
+  --bg-icon: #e8eef8;
+
+  --line: rgba(18, 48, 94, 0.08);
+  --line-strong: rgba(18, 48, 94, 0.18);
+  --line-gold: rgba(216, 169, 74, 0.4);
+  --line-green: #06c755;
+  --chevron: #a8b7cc;
+
+  --orb-red: #b93a4a;
+  --orb-silver: #5b6f8e;
+  --orb-gold: #8f6417;
+
+  /* Gradients */
+  --grad-cta: linear-gradient(180deg, #dfae56, #b8862c);
+  --grad-fv: linear-gradient(180deg, #d7ab55 0%, #c1913a 52%, #b0801f 100%);
+  --grad-session: linear-gradient(160deg, #12305e, #0a1c39);
+  --grad-gold-card: linear-gradient(180deg, #fffaf0, #fff);
+  --grad-bg-blue: linear-gradient(180deg, #eef4fb, #f7fafd);
+  --grad-bg-blue-2: linear-gradient(180deg, #e7eff9, #f5f9fc);
+  --grad-bg-risk: linear-gradient(180deg, #f7f9fc, #fdfaf4);
+
+  /* Shadows */
+  --shadow-1: 0 10px 26px rgba(18, 48, 94, 0.05);
+  --shadow-2: 0 12px 34px rgba(18, 48, 94, 0.09);
+  --shadow-3: 0 24px 60px rgba(10, 28, 57, 0.25);
+  --shadow-cta: 0 6px 18px rgba(184, 134, 44, 0.35);
+
+  /* Typography */
+  --font-sans: var(--font-noto-sans-jp), "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  --font-serif: var(--font-noto-serif-jp), "Noto Serif JP", "Hiragino Mincho ProN", serif;
+
+  /* Layout */
+  --header-h: 64px;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--navy);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--gold);
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  text-wrap: balance;
+  line-break: strict;
+}
+
+p,
+li,
+a,
+button,
+span {
+  text-wrap: pretty;
+  line-break: strict;
+}
+
+main p,
+main li,
+main h3,
+main h4 {
+  word-break: auto-phrase;
+}
+
+@keyframes jdFade {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* スクリーンリーダー向け（視覚的に非表示） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,84 @@
+.footer {
+  background: var(--navy-deep);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 44px 18px 120px;
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+}
+
+.inner {
+  max-width: min(480px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.brand {
+  min-width: 0;
+}
+
+.brandName {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.brandSub {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+  font-size: 11px;
+}
+
+.navLink {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.navLink:hover {
+  color: #e6c983;
+}
+
+.legal {
+  max-width: min(480px, 100%);
+  margin: 32px auto 0;
+  font-size: 9px;
+  line-height: 1.9;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+@media (min-width: 600px) {
+  .inner,
+  .legal {
+    max-width: min(720px, 100%);
+  }
+}
+
+@media (min-width: 1024px) {
+  .inner,
+  .legal {
+    max-width: 1120px;
+  }
+  .brandName {
+    font-size: 16px;
+  }
+  .nav {
+    font-size: 13px;
+  }
+  .legal {
+    font-size: 11px;
+  }
+}

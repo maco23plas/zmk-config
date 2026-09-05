@@ -1,0 +1,9 @@
+.page {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 下部固定CTAバー分の逃げ */
+.main {
+  padding-bottom: 96px;
+}

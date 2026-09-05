@@ -1,0 +1,313 @@
+.section {
+  background: var(--grad-bg-blue);
+}
+
+/* 見出し + オペレーター画像の横並び */
+.split {
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.splitText {
+  flex: 1.1;
+  min-width: 0;
+}
+
+.splitImg {
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  color: var(--gold-label);
+}
+
+.title {
+  margin: 0 0 12px;
+  font-family: var(--font-serif);
+  font-size: 23px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.lead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text-2);
+}
+
+.lead + .lead {
+  margin-top: 1.8em;
+}
+
+.operator {
+  width: 100%;
+  height: auto;
+  border-radius: 22px;
+  display: block;
+  box-shadow: 0 14px 36px rgba(18, 48, 94, 0.12);
+}
+
+/* 3つのボタンカード */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.cards > * {
+  min-width: 0;
+}
+
+.card {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 14px 10px;
+  box-shadow: 0 10px 26px rgba(18, 48, 94, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--navy);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  color: var(--navy);
+}
+
+.cardLine {
+  border-color: rgba(6, 199, 85, 0.25);
+}
+
+.cardLine:hover {
+  border-color: var(--line-green);
+}
+
+.cardSeminar {
+  border-color: rgba(18, 48, 94, 0.14);
+}
+
+.cardSeminar:hover {
+  border-color: var(--navy);
+}
+
+.cardRegister {
+  border-color: rgba(224, 157, 58, 0.25);
+}
+
+.cardRegister:hover {
+  border-color: var(--gold-light);
+}
+
+.icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.iconLine {
+  background: var(--line-green);
+  color: #fff;
+}
+
+.iconSeminar {
+  background: var(--bg-icon);
+  color: var(--navy);
+  font-size: 16px;
+}
+
+.iconRegister {
+  background: #fbe9cf;
+  color: var(--gold);
+  font-size: 16px;
+}
+
+.cardBody {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.cardTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--navy);
+}
+
+.cardSub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--note);
+}
+
+.arrow {
+  color: var(--chevron);
+}
+
+/* 相談カード */
+.consult {
+  margin-top: 16px;
+  background: var(--grad-gold-card);
+  border: 1px solid var(--line-gold);
+  border-radius: 22px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.consultTitle {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.lineBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 100%;
+  cursor: pointer;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  padding: 14px 22px;
+  min-height: 44px;
+  border-radius: 999px;
+  background: var(--grad-cta);
+  box-shadow: 0 12px 30px rgba(184, 134, 44, 0.34);
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease;
+}
+
+.lineBtn:hover {
+  color: #fff;
+  filter: brightness(1.07);
+  transform: translateY(-2px);
+}
+
+.lineIcon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--line-green);
+  font-size: 9px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.consultNote {
+  margin: 14px 0 0;
+  font-size: 9px;
+  color: var(--note-2);
+}
+
+@media (min-width: 600px) {
+  .title {
+    font-size: 28px;
+  }
+  .lead {
+    font-size: 13px;
+  }
+  .consultNote {
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .split {
+    gap: 36px;
+    margin-bottom: 38px;
+  }
+  .label {
+    margin-bottom: 12px;
+  }
+  .title {
+    margin-bottom: 20px;
+    font-size: 38px;
+  }
+  .lead {
+    font-size: 14px;
+    line-height: 2.1;
+  }
+  .lead + .lead {
+    margin-top: 2.1em;
+  }
+  .cards {
+    gap: 18px;
+    margin-bottom: 24px;
+  }
+  .card {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 24px;
+  }
+  .icon {
+    width: 46px;
+    height: 46px;
+    font-size: 11px;
+  }
+  .iconSeminar,
+  .iconRegister {
+    font-size: 18px;
+  }
+  .cardBody {
+    width: auto;
+  }
+  .cardTitle {
+    font-size: 16px;
+  }
+  .cardSub {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .consult {
+    margin-top: 24px;
+    padding: 30px;
+  }
+  .lineBtn {
+    gap: 14px;
+    font-size: 19px;
+    padding: 20px 44px;
+  }
+  .lineIcon {
+    width: 34px;
+    height: 34px;
+  }
+  .consultNote {
+    font-size: 12px;
+  }
+}

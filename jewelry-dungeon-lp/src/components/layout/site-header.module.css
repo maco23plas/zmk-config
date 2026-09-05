@@ -1,0 +1,143 @@
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 14px rgba(18, 48, 94, 0.06);
+  transform: translateY(-105%);
+  transition: transform 0.3s ease;
+}
+
+.header[data-visible="true"] {
+  transform: translateY(0);
+}
+
+.inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 18px;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-width: 0;
+}
+
+.brand:hover {
+  color: inherit;
+}
+
+.brandLogo {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  object-fit: contain;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brandName {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--gold);
+}
+
+.brandSub {
+  font-size: 9px;
+  letter-spacing: 0.34em;
+  color: var(--note);
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.navLink {
+  display: none;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--navy);
+}
+
+.navLink:hover {
+  color: var(--gold);
+}
+
+.navCta {
+  display: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  padding: 11px 20px;
+  border-radius: 999px;
+  background: var(--grad-cta);
+  box-shadow: 0 4px 14px rgba(184, 134, 44, 0.35);
+}
+
+.navCta:hover {
+  filter: brightness(1.07);
+}
+
+.burger {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  justify-content: center;
+  align-items: center;
+  flex: none;
+}
+
+.burger:hover {
+  opacity: 0.7;
+}
+
+.burgerLine {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--navy);
+  border-radius: 2px;
+}
+
+@media (min-width: 1024px) {
+  .navLink,
+  .navCta {
+    display: inline-flex;
+    align-items: center;
+  }
+}

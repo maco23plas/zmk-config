@@ -1,0 +1,191 @@
+.section {
+  background: var(--grad-bg-blue-2);
+  --title-mb: 14px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 8px 14px;
+  box-shadow: var(--shadow-2);
+  --spec-label: var(--sub);
+  --spec-value: var(--navy);
+  --spec-rule: rgba(18, 48, 94, 0.08);
+}
+
+.cardGold {
+  background: var(--grad-gold-card);
+  border: 2px solid #d8a94a;
+  box-shadow: 0 16px 40px rgba(184, 134, 44, 0.18);
+  --spec-label: var(--gold-text-2);
+  --spec-value: var(--gold-text);
+  --spec-rule: rgba(184, 134, 44, 0.18);
+}
+
+.name {
+  margin: 0 0 4px;
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: clamp(11px, 3.7vw, 14px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.nameRed {
+  color: var(--orb-red);
+}
+
+.nameSilver {
+  color: var(--orb-silver);
+}
+
+.nameGold {
+  color: var(--orb-gold);
+}
+
+.nameJa {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: clamp(9.5px, 3.2vw, 11px);
+  color: var(--sub);
+}
+
+.nameJaGold {
+  color: #a07c34;
+}
+
+.img {
+  width: 100%;
+  max-width: 96px;
+  height: auto;
+  display: block;
+  margin: 0 auto 12px;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.specs {
+  background: var(--bg-soft-2);
+  border-radius: 14px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.specsGold {
+  background: var(--gold-bg-2);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+}
+
+.rowLabel {
+  font-size: 11px;
+  color: var(--spec-label);
+}
+
+.rowValue {
+  margin-left: auto;
+  text-align: right;
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--spec-value);
+  overflow-wrap: anywhere;
+}
+
+.rule {
+  height: 1px;
+  background: var(--spec-rule);
+}
+
+.note {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 9px;
+  line-height: 1.85;
+  color: var(--sub);
+}
+
+@media (min-width: 600px) {
+  .card {
+    padding: 16px 12px 18px;
+  }
+  .name {
+    font-size: 16px;
+  }
+  .nameJa {
+    font-size: 11.5px;
+  }
+  .img {
+    max-width: 120px;
+  }
+  .specs {
+    padding: 12px 12px;
+    gap: 8px;
+  }
+  .note {
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    gap: 22px;
+  }
+  .card {
+    border-radius: 24px;
+    padding: 24px 20px 26px;
+  }
+  .name {
+    font-size: 26px;
+    letter-spacing: 0.05em;
+  }
+  .nameJa {
+    margin-bottom: 12px;
+    font-size: 12.5px;
+  }
+  .img {
+    max-width: 180px;
+    margin-bottom: 14px;
+  }
+  .specs {
+    padding: 14px 15px;
+    gap: 10px;
+  }
+  .row {
+    gap: 4px 10px;
+  }
+  .rowLabel {
+    font-size: 11.5px;
+  }
+  .rowValue {
+    font-size: 17px;
+  }
+  .rowValuePrice {
+    font-size: 15px;
+  }
+  .note {
+    margin-top: 20px;
+    font-size: 12.5px;
+    line-height: 1.9;
+  }
+}

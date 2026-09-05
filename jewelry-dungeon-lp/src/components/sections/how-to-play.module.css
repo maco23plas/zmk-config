@@ -1,0 +1,146 @@
+.section {
+  background: #fff;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.card {
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 14px 12px;
+  box-shadow: 0 10px 28px rgba(18, 48, 94, 0.06);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.no {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--grad-cta);
+  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.title {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.text {
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+.shot {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  display: block;
+}
+
+.note {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 9px;
+  line-height: 1.85;
+  color: var(--note);
+}
+
+.ctaWrap {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.cta {
+  max-width: 100%;
+  border: none;
+  cursor: pointer;
+  font-size: clamp(15px, 4.4vw, 17px);
+  font-weight: 700;
+  color: #fff;
+  padding: 16px 28px;
+  min-height: 44px;
+  border-radius: 999px;
+  background: var(--grad-cta);
+  box-shadow: 0 12px 30px rgba(184, 134, 44, 0.34);
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cta:hover {
+  filter: brightness(1.07);
+  transform: translateY(-2px);
+}
+
+@media (min-width: 600px) {
+  .text {
+    font-size: 12.5px;
+  }
+  .note {
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    gap: 24px;
+  }
+  .card {
+    border-radius: 22px;
+    padding: 26px;
+  }
+  .head {
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .no {
+    width: 42px;
+    height: 42px;
+    font-size: 16px;
+  }
+  .title {
+    font-size: 24px;
+  }
+  .text {
+    margin-bottom: 18px;
+    font-size: 13px;
+    line-height: 1.95;
+  }
+  .note {
+    margin-top: 28px;
+    font-size: 11px;
+  }
+  .ctaWrap {
+    margin-top: 36px;
+  }
+  .cta {
+    font-size: 17px;
+    padding: 19px 60px;
+  }
+}

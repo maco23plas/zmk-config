@@ -1,0 +1,270 @@
+.section {
+  background: #fff;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.card {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.cardA {
+  background: var(--bg-soft-2);
+  box-shadow: 0 10px 28px rgba(18, 48, 94, 0.07);
+}
+
+.cardB {
+  background: var(--grad-gold-card);
+  border: 2px solid rgba(216, 169, 74, 0.5);
+  box-shadow: 0 16px 40px rgba(184, 134, 44, 0.16);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 14px;
+}
+
+.badge {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.badgeA {
+  background: #c9d5e6;
+}
+
+.badgeB {
+  background: var(--grad-cta);
+}
+
+.title {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.titleB {
+  color: var(--gold-text);
+}
+
+.visual {
+  position: relative;
+}
+
+.img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+/* SP: チェックリストは画像の下に静的配置 */
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.checkIcon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+}
+
+.checkIconA {
+  background: #8fa3bf;
+}
+
+.checkIconB {
+  background: var(--gold);
+}
+
+.body {
+  padding: 12px;
+}
+
+.text {
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+
+.textB {
+  color: var(--gold-text-2);
+}
+
+.example {
+  border-radius: 16px;
+  padding: 14px 12px;
+}
+
+.exampleA {
+  background: #e9eef6;
+}
+
+.exampleB {
+  background: var(--gold-bg-3);
+}
+
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.pillA {
+  color: var(--sub);
+  background: #d6e0ee;
+}
+
+.pillB {
+  color: #fff;
+  background: var(--grad-cta);
+}
+
+.exampleText {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.exampleTextB {
+  color: var(--gold-text-2);
+}
+
+.exampleValue {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.exampleValueB {
+  color: var(--gold-text);
+}
+
+.num {
+  font-size: 18px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+@media (min-width: 600px) {
+  .check,
+  .text,
+  .exampleText {
+    font-size: 12.5px;
+  }
+  .exampleValue {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    gap: 24px;
+  }
+  .card {
+    border-radius: 24px;
+  }
+  .head {
+    gap: 16px;
+    padding: 24px 26px;
+  }
+  .badge {
+    width: 46px;
+    height: 46px;
+    font-size: 20px;
+  }
+  .title {
+    font-size: 24px;
+  }
+  /* PC: チェックリストは画像に重ねる */
+  .checks {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    bottom: 16px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.94);
+    border-radius: 16px;
+    justify-content: center;
+    gap: 14px;
+    max-width: 64%;
+  }
+  .check {
+    gap: 10px;
+    font-size: 13px;
+  }
+  .body {
+    padding: 24px 26px 28px;
+  }
+  .text {
+    margin-bottom: 18px;
+    font-size: 14px;
+    line-height: 1.9;
+  }
+  .example {
+    padding: 20px 22px;
+  }
+  .pill {
+    margin-bottom: 12px;
+  }
+  .exampleText {
+    font-size: 13px;
+  }
+  .exampleValue {
+    font-size: 22px;
+  }
+  .num {
+    font-size: 34px;
+  }
+}
