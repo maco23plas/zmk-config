@@ -110,6 +110,18 @@
   color: var(--navy);
 }
 
+.preparing {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--sub);
+  background: #fff;
+  border: 1px solid rgba(18, 48, 94, 0.12);
+  border-radius: 20px;
+  padding: 28px 18px;
+}
+
 .table {
   margin: 0;
   background: #fff;

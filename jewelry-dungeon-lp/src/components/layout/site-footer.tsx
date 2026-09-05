@@ -1,4 +1,5 @@
 import { footerNavItems, footerPageLinks } from "@/lib/content";
+import { companyPageReady } from "@/lib/company";
 import { withBasePath } from "@/lib/asset";
 import { SITE_NAME, SITE_NAME_EN } from "@/lib/site";
 import styles from "./site-footer.module.css";
@@ -17,7 +18,7 @@ export function SiteFooter() {
               {item.label}
             </a>
           ))}
-          {footerPageLinks.map((item) => (
+          {companyPageReady && footerPageLinks.map((item) => (
             <a key={item.href} href={withBasePath(item.href)} className={styles.navLink}>
               {item.label}
               <span className={styles.navArrow} aria-hidden="true">

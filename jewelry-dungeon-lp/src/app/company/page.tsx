@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { asset, withBasePath } from "@/lib/asset";
-import { companyRows } from "@/lib/company";
+import { companyPageReady, companyRows } from "@/lib/company";
 import { SITE_NAME, SITE_NAME_EN } from "@/lib/site";
 import { SiteFooter } from "@/components/layout/site-footer";
 import styles from "./page.module.css";
@@ -41,14 +41,18 @@ export default function CompanyPage() {
           <div className={styles.inner}>
             <p className={styles.label}>COMPANY</p>
             <h1 className={styles.title}>運営会社</h1>
-            <dl className={styles.table}>
-              {companyRows.map((row) => (
-                <div key={row.label} className={styles.row}>
-                  <dt className={styles.dt}>{row.label}</dt>
-                  <dd className={styles.dd}>{row.value}</dd>
-                </div>
-              ))}
-            </dl>
+            {companyPageReady ? (
+              <dl className={styles.table}>
+                {companyRows.map((row) => (
+                  <div key={row.label} className={styles.row}>
+                    <dt className={styles.dt}>{row.label}</dt>
+                    <dd className={styles.dd}>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className={styles.preparing}>運営会社情報は現在準備中です。</p>
+            )}
           </div>
         </section>
       </main>
