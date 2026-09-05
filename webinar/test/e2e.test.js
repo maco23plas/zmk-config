@@ -70,12 +70,15 @@ const linkEvent = (code, userId = 'U_e2e') => ([{
 
 // ---------------------------------------------------------------------------
 
-test('予約サイトに開催枠が並ぶ', async () => {
+test('トップページに説明会の案内と開催枠が並ぶ', async () => {
   await setup();
   const html = await (await server.get('/')).text();
-  assert.match(html, /オンライン説明会/);
-  assert.match(html, /2026年9月10日\(木\) 20:00/);
-  assert.match(html, /Zoomのインストールは不要/);
+  assert.match(html, /2026年9月10日\(木\) 20:00/, '日程が出る');
+  assert.match(html, /日程を見て予約する|開催日程を見る/, '予約への導線がある');
+  assert.match(html, /Zoom/, 'アプリ不要であることを伝えている');
+  // 副業の勧誘は規制が厳しいので、収入を示す表現が紛れ込んでいないこと
+  assert.doesNotMatch(html, /月\s*\d+\s*万円|必ず稼|誰でも稼|収入保証/, '収入の断定表現を出さない');
+  assert.match(html, /収入や成果を保証するものではありません/, '注意書きを必ず出す');
 });
 
 test('通し: 予約 → LINE連携 → 3時間前に視聴リンク → 開始時刻に再生 → 終了', async () => {

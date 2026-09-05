@@ -1,4 +1,5 @@
 import { page } from './layout.js';
+import { config } from '../config.js';
 import { h, raw } from '../lib/html.js';
 import { formatJstShort, formatDuration, toDatetimeLocal, formatRelative } from '../lib/time.js';
 import { JOB_KINDS } from '../domain/notifications.js';
@@ -17,7 +18,8 @@ function shell(active, title, body) {
   const header = h`
     <header class="site-head admin-head">
       <div class="wrap-wide">
-        <a class="brand" href="/admin">説明会 管理画面<span>アンタイ</span></a>
+        <a class="brand" href="/admin">説明会 管理画面${
+          config.brand.sub ? h`<span>${config.brand.sub}</span>` : ''}</a>
         <nav>
           <a href="/" target="_blank" rel="noopener">予約サイト ↗</a>
           <form class="inline-form" method="post" action="/admin/logout">
@@ -261,7 +263,7 @@ export function webinarsPage({ webinars, editing, chatText, pollsText, notice })
         <div class="field">
           <label for="title">タイトル</label>
           <input type="text" id="title" name="title" required maxlength="120" value="${w.title || ''}"
-                 placeholder="社会保険給付金サポート オンライン説明会">
+                 placeholder="例）はじめてのジュエリー オンライン説明会">
         </div>
         <div class="field">
           <label for="description">説明文</label>

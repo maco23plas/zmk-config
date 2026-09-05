@@ -16,7 +16,8 @@ export function page({ title, body, bodyClass = '', noindex = false, head = '', 
   const defaultHeader = h`
     <header class="site-head">
       <div class="wrap-wide">
-        <a class="brand" href="${brandHref}">オンライン説明会<span>アンタイ</span></a>
+        <a class="brand" href="${brandHref}">${config.brand.name}${
+          config.brand.sub ? h`<span>${config.brand.sub}</span>` : ''}</a>
       </div>
     </header>`;
 
@@ -44,7 +45,7 @@ function footerHtml() {
   return String(h`
     <footer class="site-foot">
       <div class="wrap-wide">
-        運営：合同会社HUG（アンタイ）　
+        ${config.brand.company ? h`運営：${config.brand.company}　` : ''}
         <a href="${config.baseUrl}/">開催日程</a>
       </div>
     </footer>`);

@@ -3,6 +3,7 @@ import { h, nl2br } from '../lib/html.js';
 import { config } from '../config.js';
 import { formatJst, formatDuration, formatRelative, isSameJstDay, googleCalendarUrl } from '../lib/time.js';
 import { seatsLeft } from '../domain/sessions.js';
+import { landing } from '../content/landing.js';
 import { playbackState, PlaybackState } from '../domain/playback.js';
 
 export { errorPage };
@@ -30,63 +31,137 @@ function seatsText(session) {
   return left === null ? '' : `残り${left}席`;
 }
 
-// ---- 開催日程一覧 ----------------------------------------------------------
+// ---- トップページ（LP＋日程選択） --------------------------------------------
+
+/** 日程のカード1件 */
+function slotItem(s, now) {
+  return h`
+    <li class="slot">
+      <div class="slot-when">
+        <div class="slot-date">${formatJst(s.start_at)} ${slotBadge(s, now)}</div>
+        <div class="slot-meta">
+          ${formatRelative(s.start_at - now)}・約${formatDuration(s.duration_sec)}
+          ${seatsText(s) ? h` ・${seatsText(s)}` : ''}
+        </div>
+      </div>
+      <div class="slot-cta">
+        <a class="btn btn-primary btn-sm" href="/reserve?session=${s.id}">予約する</a>
+      </div>
+    </li>`;
+}
 
 export function indexPage(sessions, now) {
-  const groups = new Map();
-  for (const s of sessions) {
-    if (!groups.has(s.webinar_id)) groups.set(s.webinar_id, []);
-    groups.get(s.webinar_id).push(s);
-  }
+  const next = sessions[0] || null;
+  const webinar = next;   // 説明会の基本情報は開催枠から引く（管理画面で編集できる）
+  const c = landing;
 
-  const body = h`
-    <main><div class="wrap">
-      ${groups.size === 0 ? h`
-        <div class="card">
-          <h1>現在ご予約いただける日程がありません</h1>
+  // 一度に全部並べると選びにくいので、直近だけ出して残りは折りたたむ
+  const VISIBLE = 6;
+  const head = sessions.slice(0, VISIBLE);
+  const rest = sessions.slice(VISIBLE);
+
+  const slots = h`
+    <section class="lp-section" id="dates">
+      <h2 class="lp-h2">開催日程を選ぶ</h2>
+      ${sessions.length === 0 ? h`
+        <div class="card" style="max-width:34em;margin:26px auto 0">
+          <p>現在ご予約いただける日程がありません。</p>
           <p class="muted">次回の開催が決まりましたら、公式LINEでお知らせします。</p>
           ${config.line.addFriendUrl ? h`
-            <a class="btn btn-line" href="${config.line.addFriendUrl}">公式LINEでお知らせを受け取る</a>` : ''}
-        </div>` : ''}
+            <a class="btn btn-line btn-block" href="${config.line.addFriendUrl}">公式LINEでお知らせを受け取る</a>` : ''}
+        </div>`
+      : h`
+        <ul class="slot-list lp-slots">${head.map((s) => slotItem(s, now))}</ul>
+        ${rest.length ? h`
+          <details class="lp-more">
+            <summary>ほかの日程を見る（あと${rest.length}件）</summary>
+            <ul class="slot-list lp-slots">${rest.map((s) => slotItem(s, now))}</ul>
+          </details>` : ''}
+        <p class="muted lp-fineprint">
+          ご予約後、開始3時間前に公式LINEへ視聴リンクをお送りします。
+        </p>`}
+    </section>`;
 
-      ${[...groups.values()].map((list) => {
-        const w = list[0];
-        return h`
-          <div class="card">
-            <h1>${w.title}</h1>
-            ${w.description ? h`<p>${nl2br(w.description)}</p>` : ''}
-            <dl class="dl">
-              <dt>所要時間</dt><dd>約${formatDuration(w.duration_sec)}</dd>
-              ${w.presenter ? h`<dt>登壇</dt><dd>${w.presenter}</dd>` : ''}
-              <dt>参加方法</dt><dd>オンライン（アプリ不要）</dd>
-            </dl>
-            <div class="alert alert-info" style="margin-top:16px">
-              <b>Zoomのインストールは不要です。</b><br>
-              ご予約後、開始3時間前に公式LINEへ視聴リンクをお送りします。
-              リンクを開くだけで、時間になると自動で始まります。
-            </div>
+  const body = h`
+    <main>
+      <!-- ヒーロー -->
+      <section class="lp-hero">
+        <div class="wrap">
+          <p class="lp-eyebrow">${c.hero.eyebrow}</p>
+          <h1 class="lp-title">${c.hero.title}</h1>
+          <p class="lp-lead">${nl2br(c.hero.lead)}</p>
+          <ul class="lp-points">${c.hero.points.map((p) => h`<li>${p}</li>`)}</ul>
+          ${next ? h`
+            <a class="btn btn-primary lp-cta" href="#dates">日程を見て予約する</a>
+            <p class="lp-next">次回 ${formatJst(next.start_at)}${
+              webinar.duration_sec ? h`・約${formatDuration(webinar.duration_sec)}` : ''}</p>`
+          : h`<a class="btn btn-primary lp-cta" href="#dates">開催日程を見る</a>`}
+        </div>
+      </section>
+
+      <div class="wrap">
+        <!-- こんな方に -->
+        <section class="lp-section">
+          <h2 class="lp-h2">${c.forWhom.title}</h2>
+          <ul class="lp-check">${c.forWhom.items.map((t) => h`<li>${t}</li>`)}</ul>
+        </section>
+
+        <!-- 説明会でお伝えすること -->
+        <section class="lp-section">
+          <h2 class="lp-h2">${c.learn.title}</h2>
+          <div class="lp-grid">
+            ${c.learn.items.map((item, i) => h`
+              <div class="lp-card">
+                <span class="lp-num">${String(i + 1).padStart(2, '0')}</span>
+                <h3>${item.title}</h3>
+                <p>${item.body}</p>
+              </div>`)}
           </div>
+        </section>
 
-          <h2>開催日程を選ぶ</h2>
-          <ul class="slot-list">
-            ${list.map((s) => h`
-              <li class="slot">
-                <div class="slot-when">
-                  <div class="slot-date">${formatJst(s.start_at)} ${slotBadge(s, now)}</div>
-                  <div class="slot-meta">
-                    ${formatRelative(s.start_at - now)}・約${formatDuration(s.duration_sec)}
-                    ${seatsText(s) ? h` ・${seatsText(s)}` : ''}
-                  </div>
-                </div>
-                <div class="slot-cta">
-                  <a class="btn btn-primary btn-sm" href="/reserve?session=${s.id}">予約する</a>
-                </div>
-              </li>`)}
-          </ul>`;
-      })}
-    </div></main>`;
+        <!-- 参加方法 -->
+        <section class="lp-section">
+          <h2 class="lp-h2">${c.how.title}</h2>
+          <p class="lp-sub">${c.how.lead}</p>
+          <ol class="lp-steps">
+            ${c.how.steps.map((step) => h`
+              <li><b>${step.title}</b><span>${step.body}</span></li>`)}
+          </ol>
+        </section>
 
-  return page({ title: 'オンライン説明会 | 開催日程', body });
+        <!-- 当日の流れ -->
+        <section class="lp-section">
+          <h2 class="lp-h2">${c.timetable.title}</h2>
+          <dl class="lp-timetable">
+            ${c.timetable.items.map((t) => h`<dt>${t.at}</dt><dd>${t.body}</dd>`)}
+          </dl>
+          <p class="muted lp-fineprint">${c.timetable.note}</p>
+        </section>
+
+        ${slots}
+
+        <!-- よくあるご質問 -->
+        <section class="lp-section">
+          <h2 class="lp-h2">${c.faq.title}</h2>
+          <div class="lp-faq">
+            ${c.faq.items.map((item) => h`
+              <details>
+                <summary>${item.q}</summary>
+                <p>${item.a}</p>
+              </details>`)}
+          </div>
+        </section>
+
+        <!-- 注意書き -->
+        <section class="lp-section">
+          <div class="lp-notes">
+            ${c.notes.map((n) => h`<p>${n}</p>`)}
+          </div>
+        </section>
+      </div>
+    </main>`;
+
+  return page({ title: `${c.hero.title} | ${config.brand.name}`, body });
 }
 
 // ---- 予約フォーム ----------------------------------------------------------

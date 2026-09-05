@@ -31,6 +31,13 @@ export function makeConfig(source = {}) {
       sessionSecret: String(env.SESSION_SECRET || ''),
     },
 
+    // 画面に出す名前。事業ごとに差し替える。
+    brand: {
+      name: String(env.BRAND_NAME || 'オンライン説明会'),
+      sub: String(env.BRAND_SUB || ''),          // ブランド名（小さく併記）
+      company: String(env.COMPANY_NAME || ''),   // フッターの運営者表記
+    },
+
     dbPath: String(env.DB_PATH || './data/webinar.db'),
     mediaDir: String(env.MEDIA_DIR || './media'),
     publicDir: String(env.PUBLIC_DIR || './public'),
@@ -66,6 +73,7 @@ export const config = makeConfig({});
 export function configure(source, overrides = {}) {
   const next = makeConfig(source);
   Object.assign(config, next, overrides);
+  Object.assign(config.brand, next.brand, overrides.brand || {});
   Object.assign(config.line, next.line, overrides.line || {});
   Object.assign(config.admin, next.admin, overrides.admin || {});
   Object.assign(config.notify, next.notify, overrides.notify || {});
