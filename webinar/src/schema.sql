@@ -17,21 +17,28 @@ CREATE TABLE IF NOT EXISTS webinars (
   cta_at_sec        INTEGER NOT NULL DEFAULT 0,   -- CTAボタンを出す再生位置(秒)
   late_join_sec     INTEGER NOT NULL DEFAULT 0,   -- 開始後この秒数までは途中入場可(0=配信中いつでも可)
   archive_hours     INTEGER NOT NULL DEFAULT 0,   -- 終了後の見逃し配信時間(0=なし)
-  show_viewer_count INTEGER NOT NULL DEFAULT 0,   -- 視聴者数の演出(既定OFF)
-  viewer_base       INTEGER NOT NULL DEFAULT 0,
-  show_chat         INTEGER NOT NULL DEFAULT 0,   -- 台本チャットの演出(既定OFF)
+  show_viewer_count INTEGER NOT NULL DEFAULT 1,   -- 参加者数を出す（実測のみ）
+  viewer_base       INTEGER NOT NULL DEFAULT 0,   -- 0=実測のみ。0より大きいと演出になる（非推奨）
+  show_chat         INTEGER NOT NULL DEFAULT 1,   -- コメント欄を出す
+  -- ▼ 会場（ロビー）の設定
+  lobby_open_min    INTEGER NOT NULL DEFAULT 15,  -- 何分前に開場するか
+  chat_mode         TEXT    NOT NULL DEFAULT 'on',-- on(発言可) | readonly(読むだけ) | off
+  min_viewers_shown INTEGER NOT NULL DEFAULT 3,   -- 参加者数を表示し始める人数
+  welcome_message   TEXT    NOT NULL DEFAULT '',  -- 入室時に本人へ出す一言
+  closing_message   TEXT    NOT NULL DEFAULT '',  -- 終了時に出す一言
   created_at        INTEGER NOT NULL,
   updated_at        INTEGER NOT NULL
 );
 
--- 台本チャット（show_chat=1 のときだけ使う演出用データ）
+-- 司会の進行台本。at_sec が負なら開始前（ロビー）のアナウンス。
+-- 主催者自身の発言なので、参加者を装うものではない。
 CREATE TABLE IF NOT EXISTS chat_script (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   webinar_id  TEXT NOT NULL REFERENCES webinars(id) ON DELETE CASCADE,
-  at_sec      INTEGER NOT NULL,
+  at_sec      INTEGER NOT NULL,              -- 開始時刻からの秒。負=開始前
   author      TEXT NOT NULL,
   body        TEXT NOT NULL,
-  kind        TEXT NOT NULL DEFAULT 'guest'  -- guest | host
+  kind        TEXT NOT NULL DEFAULT 'host'   -- host(司会) | guest(非推奨: 参加者を装う演出)
 );
 CREATE INDEX IF NOT EXISTS chat_script_webinar ON chat_script(webinar_id, at_sec);
 
@@ -151,6 +158,53 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   event_id   TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL
 );
+
+-- ▼ ここから「会場」。すべて実際の参加者の行動を記録したもので、演出ではない。
+
+-- 誰がいま会場にいるか（参加者数と入室通知の元データ）
+CREATE TABLE IF NOT EXISTS room_presence (
+  session_id     TEXT NOT NULL,
+  reservation_id TEXT NOT NULL,
+  display_name   TEXT NOT NULL DEFAULT '',
+  joined_at      INTEGER NOT NULL,
+  last_seen      INTEGER NOT NULL,
+  PRIMARY KEY (session_id, reservation_id)
+);
+CREATE INDEX IF NOT EXISTS room_presence_seen ON room_presence(session_id, last_seen);
+
+-- 参加者の発言。司会の台本はここには入らない（クライアント側で時刻どおりに出す）。
+CREATE TABLE IF NOT EXISTS room_messages (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id     TEXT NOT NULL,
+  reservation_id TEXT,
+  display_name   TEXT NOT NULL,
+  body           TEXT NOT NULL,
+  kind           TEXT NOT NULL DEFAULT 'guest', -- guest(参加者) | host(運営の手入力) | system(入室通知)
+  hidden         INTEGER NOT NULL DEFAULT 0,    -- 管理画面から非表示にできる
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS room_messages_session ON room_messages(session_id, id);
+
+-- 投票（配信中に出すアンケート）
+CREATE TABLE IF NOT EXISTS polls (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  webinar_id TEXT NOT NULL REFERENCES webinars(id) ON DELETE CASCADE,
+  at_sec     INTEGER NOT NULL,          -- 開始からこの秒数で表示
+  question   TEXT NOT NULL,
+  options    TEXT NOT NULL,             -- JSON配列 ["選択肢1","選択肢2"]
+  close_sec  INTEGER NOT NULL DEFAULT 0 -- 0=開いたまま。>0 でこの秒数に締め切る
+);
+CREATE INDEX IF NOT EXISTS polls_webinar ON polls(webinar_id, at_sec);
+
+CREATE TABLE IF NOT EXISTS poll_votes (
+  poll_id        INTEGER NOT NULL,
+  session_id     TEXT NOT NULL,
+  reservation_id TEXT NOT NULL,
+  choice         INTEGER NOT NULL,
+  created_at     INTEGER NOT NULL,
+  PRIMARY KEY (poll_id, session_id, reservation_id)
+);
+CREATE INDEX IF NOT EXISTS poll_votes_tally ON poll_votes(poll_id, session_id, choice);
 
 CREATE TABLE IF NOT EXISTS settings (
   k TEXT PRIMARY KEY,

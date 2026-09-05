@@ -16,6 +16,9 @@ import {
   listChatScript, replaceChatScript, parseChatScriptText, chatScriptToText,
 } from '../domain/webinars.js';
 import { requeue } from '../domain/notifications.js';
+import {
+  listPolls, parsePollsText, pollsToText, replacePolls, listMessagesForAdmin, hideMessage,
+} from '../domain/room.js';
 import * as views from '../views/admin.js';
 
 const COOKIE = 'wadm';
@@ -160,6 +163,7 @@ export function register(router) {
       webinars: await listWebinars(),
       editing,
       chatText: editing ? chatScriptToText(await listChatScript(editing.id)) : '',
+      pollsText: editing ? pollsToText(await listPolls(editing.id)) : '',
       notice: ctx.query.get('ok') === '1' ? '保存しました。' : '',
     }));
   }));
@@ -183,13 +187,20 @@ export function register(router) {
       archive_hours: Math.max(0, int(f.archive_hours)),
       show_viewer_count: f.show_viewer_count === '1' ? 1 : 0,
       viewer_base: Math.max(0, int(f.viewer_base)),
-      show_chat: f.show_chat === '1' ? 1 : 0,
+      // コメント欄の表示は chat_mode から決まる
+      show_chat: f.chat_mode === 'off' ? 0 : 1,
+      chat_mode: ['on', 'readonly', 'off'].includes(f.chat_mode) ? f.chat_mode : 'on',
+      lobby_open_min: Math.min(120, Math.max(0, int(f.lobby_open_min, 15))),
+      min_viewers_shown: Math.min(1000, Math.max(1, int(f.min_viewers_shown, 3))),
+      welcome_message: String(f.welcome_message || '').trim().slice(0, 120),
+      closing_message: String(f.closing_message || '').trim().slice(0, 200),
     };
 
     const now = clock.now();
     const webinar = f.id ? await updateWebinar(f.id, data, now) : await createWebinar(data, now);
     if (!webinar) return text('コンテンツが見つかりません', 404);
     await replaceChatScript(webinar.id, parseChatScriptText(f.chat_script));
+    await replacePolls(webinar.id, parsePollsText(f.polls_text));
     return redirect(`/admin/webinars?edit=${webinar.id}&ok=1`, 303);
   }));
 
@@ -245,6 +256,22 @@ export function register(router) {
   router.post('/admin/jobs/:id/requeue', guard(async (ctx) => {
     await requeue(int(ctx.params.id), clock.now());
     return redirect('/admin/jobs?ok=1', 303);
+  }));
+
+  // ---- 会場（参加者のコメント） ----
+  router.get('/admin/room', guard(async (ctx) => {
+    const sessionId = ctx.query.get('session') || '';
+    return html(views.roomPage({
+      messages: await listMessagesForAdmin(sessionId),
+      sessions: await listRecentSessions(60),
+      sessionId,
+      notice: ctx.query.get('ok') === '1' ? '非表示にしました。' : '',
+    }));
+  }));
+
+  router.post('/admin/room/:id/hide', guard(async (ctx) => {
+    await hideMessage(int(ctx.params.id));
+    return redirect('/admin/room?ok=1', 303);
   }));
 
   // ---- 質問 ----

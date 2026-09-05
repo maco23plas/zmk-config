@@ -6,7 +6,8 @@ const RES_SELECT = `
   SELECT r.*, s.start_at, s.status AS session_status, s.webinar_id,
          w.title, w.description, w.duration_sec, w.video_url, w.poster_url, w.presenter,
          w.cta_label, w.cta_url, w.cta_at_sec, w.late_join_sec, w.archive_hours,
-         w.show_viewer_count, w.viewer_base, w.show_chat
+         w.show_viewer_count, w.viewer_base, w.show_chat,
+         w.lobby_open_min, w.chat_mode, w.min_viewers_shown, w.welcome_message, w.closing_message
     FROM reservations r
     JOIN sessions s ON s.id = r.session_id
     JOIN webinars w ON w.id = s.webinar_id`;

@@ -7,6 +7,7 @@ const SESSION_SELECT = `
   SELECT s.*, w.title, w.description, w.duration_sec, w.video_url, w.poster_url, w.presenter,
          w.cta_label, w.cta_url, w.cta_at_sec, w.late_join_sec, w.archive_hours,
          w.show_viewer_count, w.viewer_base, w.show_chat,
+         w.lobby_open_min, w.chat_mode, w.min_viewers_shown, w.welcome_message, w.closing_message,
          (SELECT COUNT(*) FROM reservations r WHERE r.session_id = s.id AND r.status = 'active') AS reserved
     FROM sessions s
     JOIN webinars w ON w.id = s.webinar_id`;
@@ -51,6 +52,7 @@ export const toPlan = (session) => ({
   durationSec: session.duration_sec,
   lateJoinSec: session.late_join_sec,
   archiveHours: session.archive_hours,
+  lobbyOpenMin: session.lobby_open_min,
   status: session.status,
 });
 

@@ -16,10 +16,11 @@ export function lineOaMessageUrl(code) {
 function slotBadge(session, now) {
   const st = playbackState({
     startAt: session.start_at, durationSec: session.duration_sec,
-    lateJoinSec: session.late_join_sec, archiveHours: session.archive_hours, status: session.status,
+    lateJoinSec: session.late_join_sec, archiveHours: session.archive_hours,
+    lobbyOpenMin: session.lobby_open_min, status: session.status,
   }, now);
   if (st.state === PlaybackState.LIVE) return h`<span class="badge badge-live">● 配信中</span>`;
-  if (st.state === PlaybackState.SOON) return h`<span class="badge badge-soon">まもなく開始</span>`;
+  if (st.state === PlaybackState.LOBBY) return h`<span class="badge badge-soon">まもなく開始</span>`;
   if (isSameJstDay(session.start_at, now)) return h`<span class="badge badge-soon">本日</span>`;
   return '';
 }
@@ -93,7 +94,8 @@ export function indexPage(sessions, now) {
 export function reservePage(session, { error = '', values = {}, now } = {}) {
   const st = playbackState({
     startAt: session.start_at, durationSec: session.duration_sec,
-    lateJoinSec: session.late_join_sec, archiveHours: session.archive_hours, status: session.status,
+    lateJoinSec: session.late_join_sec, archiveHours: session.archive_hours,
+    lobbyOpenMin: session.lobby_open_min, status: session.status,
   }, now);
   const live = st.state === PlaybackState.LIVE;
 
@@ -169,7 +171,7 @@ export function thanksPage(reservation, now) {
   const st = playbackState({
     startAt: reservation.start_at, durationSec: reservation.duration_sec,
     lateJoinSec: reservation.late_join_sec, archiveHours: reservation.archive_hours,
-    status: reservation.session_status,
+    lobbyOpenMin: reservation.lobby_open_min, status: reservation.session_status,
   }, now);
 
   const body = h`
@@ -256,7 +258,7 @@ export function managePage(reservation, now, { notice = '' } = {}) {
   const st = playbackState({
     startAt: reservation.start_at, durationSec: reservation.duration_sec,
     lateJoinSec: reservation.late_join_sec, archiveHours: reservation.archive_hours,
-    status: reservation.session_status,
+    lobbyOpenMin: reservation.lobby_open_min, status: reservation.session_status,
   }, now);
   const watchable = st.canWatch;
   const oaUrl = lineOaMessageUrl(reservation.link_code);

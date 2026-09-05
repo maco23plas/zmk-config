@@ -8,6 +8,7 @@ import {
   dueJobs, claimJob, markSent, markSkipped, markFailure, reclaimStuckJobs,
 } from './domain/notifications.js';
 import { generateSessionsFromRules } from './domain/sessions.js';
+import { cleanupPresence } from './domain/room.js';
 import { buildContext, buildMessage } from './line/messages.js';
 import { canPushTo } from './line/webhook.js';
 import { pushMessage, LineApiError } from './line/client.js';
@@ -73,8 +74,9 @@ function retryKeyFor(job) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-/** 定期実行の1回ぶん（開催枠の自動生成＋通知送信） */
+/** 定期実行の1回ぶん（開催枠の自動生成＋通知送信＋後片付け） */
 export async function tickOnce(now = clock.now()) {
+  await cleanupPresence(now);
   const created = await generateSessionsFromRules(now);
   if (created > 0) log.info(`定期開催ルールから開催枠を${created}件追加しました`);
   const stats = await runOnce(now);

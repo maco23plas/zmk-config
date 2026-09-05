@@ -9,15 +9,16 @@
 
 export const PlaybackState = {
   CANCELED: 'canceled',   // 中止
-  SCHEDULED: 'scheduled', // 開始前（待機画面＋カウントダウン）
-  SOON: 'soon',           // 開始直前（10分前〜）
+  SCHEDULED: 'scheduled', // 開場前（カウントダウンのみ）
+  LOBBY: 'lobby',         // 開場中。会場に入って他の参加者と待てる
   LIVE: 'live',           // 配信中
   LATE_CLOSED: 'late_closed', // 途中入場の締切を過ぎた
   ARCHIVE: 'archive',     // 見逃し配信（シーク可）
   ENDED: 'ended',         // 終了
 };
 
-export const SOON_WINDOW_MS = 10 * 60 * 1000;
+/** 開場時間の既定値（分）。webinars.lobby_open_min で変えられる。 */
+export const DEFAULT_LOBBY_OPEN_MIN = 15;
 
 /**
  * @param {object} plan
@@ -25,6 +26,7 @@ export const SOON_WINDOW_MS = 10 * 60 * 1000;
  * @param {number} plan.durationSec    本編の長さ（秒）
  * @param {number} [plan.lateJoinSec]  開始後この秒数まで入場可。0 は配信中いつでも可。
  * @param {number} [plan.archiveHours] 終了後の見逃し配信時間（0 でなし）
+ * @param {number} [plan.lobbyOpenMin] 何分前に開場するか
  * @param {string} [plan.status]       開催枠の状態
  * @param {number} now                 現在時刻 epoch ms
  */
@@ -33,7 +35,10 @@ export function playbackState(plan, now) {
   const durationSec = Math.max(0, Number(plan.durationSec) || 0);
   const lateJoinSec = Math.max(0, Number(plan.lateJoinSec) || 0);
   const archiveHours = Math.max(0, Number(plan.archiveHours) || 0);
+  const lobbyOpenMin = plan.lobbyOpenMin === undefined
+    ? DEFAULT_LOBBY_OPEN_MIN : Math.max(0, Number(plan.lobbyOpenMin) || 0);
   const endAt = startAt + durationSec * 1000;
+  const lobbyAt = startAt - lobbyOpenMin * 60 * 1000;
   const archiveUntil = endAt + archiveHours * 3600 * 1000;
 
   const base = {
@@ -41,7 +46,9 @@ export function playbackState(plan, now) {
     endAt,
     durationSec,
     positionSec: 0,
+    lobbyAt,
     msUntilStart: startAt - now,
+    msUntilLobby: lobbyAt - now,
     msUntilEnd: endAt - now,
     canWatch: false,   // 動画を再生してよいか
     seekable: false,   // シークを許すか（見逃し配信のみ true）
@@ -51,8 +58,8 @@ export function playbackState(plan, now) {
   if (plan.status === 'canceled') return { ...base, state: PlaybackState.CANCELED };
 
   if (now < startAt) {
-    const state = startAt - now <= SOON_WINDOW_MS ? PlaybackState.SOON : PlaybackState.SCHEDULED;
-    return { ...base, state };
+    // 開場していれば、参加者は会場に入って他の人と一緒に待てる
+    return { ...base, state: now >= lobbyAt ? PlaybackState.LOBBY : PlaybackState.SCHEDULED };
   }
 
   if (now < endAt) {
@@ -90,11 +97,16 @@ export function mediaAllowed(state) {
   return state === PlaybackState.LIVE || state === PlaybackState.ARCHIVE;
 }
 
+/** 会場（人数・コメント）を使ってよい状態か */
+export function roomOpen(state) {
+  return state === PlaybackState.LOBBY || state === PlaybackState.LIVE;
+}
+
 /** 画面に出す状態ラベル */
 export const STATE_LABEL = {
   [PlaybackState.CANCELED]: '中止',
-  [PlaybackState.SCHEDULED]: '開始前',
-  [PlaybackState.SOON]: 'まもなく開始',
+  [PlaybackState.SCHEDULED]: '開場前',
+  [PlaybackState.LOBBY]: '開場中',
   [PlaybackState.LIVE]: '配信中',
   [PlaybackState.LATE_CLOSED]: '入場締切',
   [PlaybackState.ARCHIVE]: '見逃し配信',

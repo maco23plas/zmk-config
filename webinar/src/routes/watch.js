@@ -3,16 +3,21 @@
 import { clock } from '../clock.js';
 import { config } from '../config.js';
 import { html, json, text, redirect, serveFile } from '../lib/http.js';
-import { playbackState, mediaAllowed, parseVideoSource, PlaybackState } from '../domain/playback.js';
+import { playbackState, mediaAllowed, roomOpen, parseVideoSource, PlaybackState } from '../domain/playback.js';
 import { getByWatchToken, recordWatchEvent, addQuestion } from '../domain/reservations.js';
 import { listChatScript } from '../domain/webinars.js';
-import { displayedViewerCount, countLiveViewers } from '../domain/presence.js';
+import { displayedViewerCount } from '../domain/presence.js';
+import {
+  displayNameFor, touchPresence, roomSnapshot, postMessage, messagesSince, recentMessages,
+  listPolls, parsePollOptions, activePoll, vote, pollTally, myVote, ChatError,
+} from '../domain/room.js';
 
 const toPlan = (r) => ({
   startAt: r.start_at,
   durationSec: r.duration_sec,
   lateJoinSec: r.late_join_sec,
   archiveHours: r.archive_hours,
+  lobbyOpenMin: r.lobby_open_min,
   status: r.session_status,
 });
 
@@ -29,14 +34,65 @@ function mediaFor(reservation, state) {
   return null;
 }
 
-async function viewerCountFor(reservation, state, now) {
-  if (!reservation.show_viewer_count || state.state !== PlaybackState.LIVE) return 0;
-  const [real, shown] = await Promise.all([
-    countLiveViewers(reservation.session_id, now),
-    displayedViewerCount(reservation.session_id, reservation.viewer_base, state.positionSec, reservation.duration_sec),
+/**
+ * いま出す投票と、その集計。全員が同じ再生位置なので、同じ投票が同時に出る。
+ */
+async function pollStateFor(reservation, positionSec) {
+  const polls = await listPolls(reservation.webinar_id);
+  const poll = activePoll(polls, positionSec);
+  if (!poll) return null;
+
+  const options = parsePollOptions(poll.options);
+  const [{ tally, total }, mine] = await Promise.all([
+    pollTally(poll.id, reservation.session_id, options.length),
+    myVote(poll.id, reservation.session_id, reservation.id),
   ]);
-  // 実測が表示目安を上回ったら実測を出す（過少表示を避ける）
-  return Math.max(real, shown);
+  return {
+    id: poll.id,
+    question: poll.question,
+    options,
+    tally,
+    total,
+    myChoice: mine,
+    closed: poll.close_sec > 0 && positionSec > poll.close_sec,
+  };
+}
+
+/** 会場の状況。人数・入室・コメントはすべて実際の参加者のもの。 */
+async function roomStateFor(reservation, state, now, { sinceJoin, afterId } = {}) {
+  if (!roomOpen(state.state)) return { viewers: 0, showViewers: false, joins: [], messages: [], lastId: afterId || 0 };
+
+  const displayName = displayNameFor(reservation.name);
+  await touchPresence({
+    sessionId: reservation.session_id, reservationId: reservation.id, displayName,
+  }, now);
+
+  const [snapshot, messages] = await Promise.all([
+    roomSnapshot({
+      sessionId: reservation.session_id,
+      reservationId: reservation.id,
+      minViewersShown: reservation.min_viewers_shown,
+    }, now, sinceJoin),
+    reservation.show_chat
+      ? (afterId === undefined ? recentMessages(reservation.session_id) : messagesSince(reservation.session_id, afterId))
+      : Promise.resolve([]),
+  ]);
+
+  // viewer_base を設定している場合だけ、実測と目安の大きい方を出す（既定は実測のみ）
+  const shown = reservation.viewer_base > 0
+    ? Math.max(snapshot.viewers, await displayedViewerCount(
+      reservation.session_id, reservation.viewer_base, state.positionSec, reservation.duration_sec))
+    : snapshot.viewers;
+
+  return {
+    viewers: reservation.show_viewer_count ? shown : 0,
+    showViewers: Boolean(reservation.show_viewer_count) && (snapshot.showViewers || reservation.viewer_base > 0),
+    joins: snapshot.joins,
+    messages: messages.map((m) => ({
+      id: m.id, name: m.display_name, body: m.body, kind: m.kind, at: m.created_at,
+    })),
+    lastId: messages.length ? messages[messages.length - 1].id : (afterId || 0),
+  };
 }
 
 export function register(router, views) {
@@ -64,20 +120,23 @@ export function register(router, views) {
       }, now);
     }
 
-    const chat = reservation.show_chat
-      ? (await listChatScript(reservation.webinar_id))
-        .map((c) => ({ at: c.at_sec, author: c.author, body: c.body, kind: c.kind }))
-      : [];
+    // 司会の進行台本。時刻で決まるのでクライアント側に渡し、遅延ゼロで出す。
+    const script = (await listChatScript(reservation.webinar_id))
+      .map((c) => ({ at: c.at_sec, author: c.author, body: c.body, kind: c.kind }));
 
     return html(watchPage({
-      reservation, state, media, chat,
+      reservation,
+      state,
+      media,
+      script,
+      room: await roomStateFor(reservation, state, now, { sinceJoin: null }),
+      poll: state.state === PlaybackState.LIVE ? await pollStateFor(reservation, state.positionSec) : null,
       serverNow: now,
-      viewerCount: await viewerCountFor(reservation, state, now),
     }));
   });
 
-  // クライアントからの定期同期。時刻ずれの補正と、開始時刻になった瞬間の動画URL受け渡しを担う。
-  // ハートビートも兼ねているので、視聴中のリクエスト数はこの1本だけで済む。
+  // クライアントからの定期同期。1本で「時刻合わせ・動画の受け渡し・在室・
+  // 新着コメント・投票」をまとめて返すので、視聴中のリクエストはこれだけで済む。
   router.post('/watch/:token/state', async (ctx) => {
     const now = clock.now();
     const reservation = await getByWatchToken(ctx.params.token);
@@ -91,14 +150,71 @@ export function register(router, views) {
       }, now);
     }
 
+    const room = await roomStateFor(reservation, state, now, {
+      sinceJoin: Number(ctx.form.sinceJoin) || null,
+      afterId: Number(ctx.form.afterId) || 0,
+    });
+
     return json({
       state: state.state,
       seekable: state.seekable,
       positionSec: Math.round(state.positionSec),
       serverNow: now,
       media: mediaFor(reservation, state),
-      viewerCount: await viewerCountFor(reservation, state, now),
+      room,
+      poll: state.state === PlaybackState.LIVE ? await pollStateFor(reservation, state.positionSec) : null,
     });
+  });
+
+  // 参加者の発言。開場中と配信中だけ受け付ける。
+  router.post('/watch/:token/chat', async (ctx) => {
+    const now = clock.now();
+    const reservation = await getByWatchToken(ctx.params.token);
+    if (!reservation || reservation.status !== 'active') return json({ ok: false }, 404);
+
+    const state = playbackState(toPlan(reservation), now);
+    if (!roomOpen(state.state)) return json({ ok: false, error: 'closed' }, 403);
+    if (reservation.chat_mode !== 'on' || !reservation.show_chat) {
+      return json({ ok: false, error: 'disabled' }, 403);
+    }
+
+    try {
+      const saved = await postMessage({
+        sessionId: reservation.session_id,
+        reservationId: reservation.id,
+        displayName: displayNameFor(reservation.name),
+        body: ctx.form.body,
+      }, now);
+      return json({ ok: true, id: saved.id });
+    } catch (err) {
+      if (err instanceof ChatError) return json({ ok: false, error: err.code, message: err.message }, 400);
+      throw err;
+    }
+  });
+
+  // 投票
+  router.post('/watch/:token/vote', async (ctx) => {
+    const now = clock.now();
+    const reservation = await getByWatchToken(ctx.params.token);
+    if (!reservation || reservation.status !== 'active') return json({ ok: false }, 404);
+
+    const state = playbackState(toPlan(reservation), now);
+    if (state.state !== PlaybackState.LIVE) return json({ ok: false, error: 'closed' }, 403);
+
+    const polls = await listPolls(reservation.webinar_id);
+    const poll = activePoll(polls, state.positionSec);
+    const choice = Number(ctx.form.choice);
+    const options = poll ? parsePollOptions(poll.options) : [];
+    if (!poll || poll.id !== Number(ctx.form.pollId) || !Number.isInteger(choice)
+        || choice < 0 || choice >= options.length) {
+      return json({ ok: false, error: 'invalid' }, 400);
+    }
+    if (poll.close_sec > 0 && state.positionSec > poll.close_sec) {
+      return json({ ok: false, error: 'closed' }, 403);
+    }
+
+    await vote({ pollId: poll.id, sessionId: reservation.session_id, reservationId: reservation.id, choice }, now);
+    return json({ ok: true, poll: await pollStateFor(reservation, state.positionSec) });
   });
 
   // 動画本体。再生可能な時間帯かつ有効なトークンのときだけ通す。

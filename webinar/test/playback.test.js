@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { playbackState, mediaAllowed, parseVideoSource, PlaybackState } from '../src/domain/playback.js';
+import { playbackState, mediaAllowed, roomOpen, parseVideoSource, PlaybackState } from '../src/domain/playback.js';
 import { parseJstLocal } from '../src/lib/time.js';
 
 const START = parseJstLocal('2026-09-10T20:00');
@@ -15,9 +15,28 @@ test('開始前は待機状態で、動画を渡さない', () => {
   assert.equal(s.msUntilStart, 2 * HOUR);
 });
 
-test('開始10分前からは「まもなく開始」', () => {
-  assert.equal(playbackState(base, START - 11 * 60 * 1000).state, PlaybackState.SCHEDULED);
-  assert.equal(playbackState(base, START - 9 * 60 * 1000).state, PlaybackState.SOON);
+test('開場時刻になると会場に入れる（既定は15分前）', () => {
+  assert.equal(playbackState(base, START - 16 * 60 * 1000).state, PlaybackState.SCHEDULED);
+  assert.equal(playbackState(base, START - 14 * 60 * 1000).state, PlaybackState.LOBBY);
+  // 開場中でも動画は渡さない
+  assert.equal(playbackState(base, START - 14 * 60 * 1000).canWatch, false);
+  assert.equal(mediaAllowed(PlaybackState.LOBBY), false);
+  assert.equal(roomOpen(PlaybackState.LOBBY), true, '会場は開いている');
+});
+
+test('開場時間は開催ごとに変えられる', () => {
+  const plan = { ...base, lobbyOpenMin: 30 };
+  assert.equal(playbackState(plan, START - 31 * 60 * 1000).state, PlaybackState.SCHEDULED);
+  assert.equal(playbackState(plan, START - 29 * 60 * 1000).state, PlaybackState.LOBBY);
+  // 0分なら開場しない（開始と同時）
+  assert.equal(playbackState({ ...base, lobbyOpenMin: 0 }, START - 1000).state, PlaybackState.SCHEDULED);
+});
+
+test('会場が開いているのは開場中と配信中だけ', () => {
+  assert.equal(roomOpen(PlaybackState.SCHEDULED), false);
+  assert.equal(roomOpen(PlaybackState.LIVE), true);
+  assert.equal(roomOpen(PlaybackState.ENDED), false);
+  assert.equal(roomOpen(PlaybackState.CANCELED), false);
 });
 
 test('再生位置は「現在時刻 − 開始時刻」で決まる（誰が開いても同じ場面）', () => {
