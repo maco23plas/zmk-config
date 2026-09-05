@@ -15,7 +15,7 @@ export function Faq() {
       <SectionHead
         label="FOR BEGINNERS"
         title="よくあるご質問"
-        lead="ジュエリーダンジョンを安心して始めるために、ご覧ください。"
+        lead="はじめての方からよくいただく質問や不安をまとめました。"
       />
       <div className={styles.list}>
         {faqItems.map((item, index) => {

@@ -150,7 +150,7 @@ export interface HowToStartStep {
 export const howToStartSteps: HowToStartStep[] = [
   {
     no: "01",
-    title: "アカウント登録",
+    title: "会員登録をする",
     text: "メールアドレスだけで最短1分で登録完了。",
     image: "/parts/signup.png",
     imageWidth: 414,
@@ -179,7 +179,7 @@ export const howToStartSteps: HowToStartStep[] = [
   {
     no: "04",
     title: "取引を体験する",
-    text: "マッチングした購入者へ、商品を売却",
+    text: "マッチングした購入者へ、販売をします。",
     image: "/parts/ph4.png",
     imageWidth: 197,
     imageHeight: 300,
@@ -188,7 +188,7 @@ export const howToStartSteps: HowToStartStep[] = [
   {
     no: "05",
     title: "収益を受け取る",
-    text: "利益が上乗せされた状態で売却。収益を受け取れます",
+    text: "利益が上乗せされた状態で販売が完了。販売収益を受け取ります。",
     image: "/parts/ph5.png",
     imageWidth: 197,
     imageHeight: 300,

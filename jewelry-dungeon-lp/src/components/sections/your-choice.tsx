@@ -26,7 +26,7 @@ export function YourChoice() {
             <span className={cx(styles.badge, styles.badgeA)} aria-hidden="true">
               A
             </span>
-            <h3 className={styles.title}>ただ貯金するだけ</h3>
+            <h3 className={styles.title}>銀行口座に貯金するだけ</h3>
           </div>
           <div className={styles.visual}>
             <Image
@@ -56,7 +56,7 @@ export function YourChoice() {
               <p className={styles.exampleValue}>
                 1年で増えるのは{" "}
                 <span className={styles.nowrap}>
-                  約<span className={styles.num}>200</span>円
+                  <span className={styles.num}>200</span>円
                 </span>
               </p>
             </div>
