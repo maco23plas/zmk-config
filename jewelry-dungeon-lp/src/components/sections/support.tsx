@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { cx } from "@/lib/cx";
 import { Section } from "@/components/ui/section";
 import { SeminarCtaButton } from "@/components/ui/cta-button";
@@ -22,7 +23,7 @@ export function Support() {
         </div>
         <div className={styles.splitImg}>
           <Image
-            src="/parts/p-operator.png"
+            src={asset("/parts/p-operator.png")}
             alt="サポートスタッフ"
             width={420}
             height={444}

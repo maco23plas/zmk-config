@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { safetyChecks } from "@/lib/content";
 import { Section, SectionHead } from "@/components/ui/section";
 import styles from "./safety.module.css";
@@ -56,7 +57,7 @@ export function Safety() {
 
       <div className={styles.trust}>
         <Image
-          src="/parts/shield.png"
+          src={asset("/parts/shield.png")}
           alt="信頼の証"
           width={213}
           height={175}

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { useEffect, useRef } from "react";
 import { useUi } from "@/components/ui/ui-context";
 import styles from "./hero.module.css";
@@ -34,7 +35,7 @@ export function Hero() {
       <h1 className="sr-only">隙間時間から始める、令和の新しいデジタル物販｜ジュエリーダンジョン</h1>
       <div ref={visualRef} className={styles.visual}>
         <Image
-          src="/assets/fv-mobile-top.png"
+          src={asset("/assets/fv-mobile-top.png")}
           alt="隙間時間から始める、令和の新しいデジタル物販。オーブを購入し、会員同士で売買することで売却の差益を目指す、新しい収益のカタチ。スマホで完結／1日5分／在庫・仕入れなし"
           width={864}
           height={1246}
@@ -67,7 +68,7 @@ export function Hero() {
         </a>
         <p className={styles.safe}>
           <Image
-            src="/parts/shield-mini.png"
+            src={asset("/parts/shield-mini.png")}
             alt=""
             width={42}
             height={46}

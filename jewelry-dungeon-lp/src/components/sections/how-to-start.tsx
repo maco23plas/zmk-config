@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { howToStartSteps } from "@/lib/content";
 import { cx } from "@/lib/cx";
 import { Section, SectionHead } from "@/components/ui/section";
@@ -24,7 +25,7 @@ export function HowToStart() {
               {step.no}
             </span>
             <Image
-              src={step.image}
+              src={asset(step.image)}
               alt={step.alt}
               width={step.imageWidth}
               height={step.imageHeight}

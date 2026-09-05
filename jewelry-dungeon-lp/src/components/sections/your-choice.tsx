@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { choiceA, choiceB } from "@/lib/content";
 import { cx } from "@/lib/cx";
 import { Section, SectionHead } from "@/components/ui/section";
@@ -30,7 +31,7 @@ export function YourChoice() {
           </div>
           <div className={styles.visual}>
             <Image
-              src="/parts/p-manA.png"
+              src={asset("/parts/p-manA.png")}
               alt="貯金するだけの毎日"
               width={262}
               height={300}
@@ -73,7 +74,7 @@ export function YourChoice() {
           </div>
           <div className={styles.visual}>
             <Image
-              src="/parts/p-womanB.png"
+              src={asset("/parts/p-womanB.png")}
               alt="遊びながら資産を増やす毎日"
               width={262}
               height={300}

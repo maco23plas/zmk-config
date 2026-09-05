@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { Fragment } from "react";
 import { orbs } from "@/lib/content";
 import { cx } from "@/lib/cx";
@@ -40,7 +41,7 @@ export function OrbList() {
             <div key={orb.key} className={cx(styles.card, isGold && styles.cardGold)}>
               <h3 className={cx(styles.name, nameClass[orb.key])}>{orb.nameJa}</h3>
               <Image
-                src={orb.image}
+                src={asset(orb.image)}
                 alt={orb.nameJa}
                 width={orb.imageWidth}
                 height={orb.imageHeight}

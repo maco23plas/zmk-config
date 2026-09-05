@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { headerNavItems } from "@/lib/content";
 import { SITE_NAME, SITE_NAME_EN } from "@/lib/site";
 import { useUi } from "@/components/ui/ui-context";
@@ -16,7 +17,7 @@ export function SiteHeader() {
       <div className={styles.inner}>
         <a href="#top" className={styles.brand} aria-label={`${SITE_NAME} トップへ`}>
           <Image
-            src="/parts/orb-gold.png"
+            src={asset("/parts/orb-gold.png")}
             alt=""
             width={34}
             height={34}

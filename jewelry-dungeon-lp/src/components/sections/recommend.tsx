@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { Section, SectionHead } from "@/components/ui/section";
 import styles from "./recommend.module.css";
 
@@ -14,7 +15,7 @@ export function Recommend() {
       <div className={styles.grid}>
         <div className={styles.card}>
           <Image
-            src="/parts/p-invest.png"
+            src={asset("/parts/p-invest.png")}
             alt="資産運用に興味がある方"
             width={299}
             height={120}
@@ -27,7 +28,7 @@ export function Recommend() {
         </div>
         <div className={styles.card}>
           <Image
-            src="/parts/p-work.png"
+            src={asset("/parts/p-work.png")}
             alt="副業で新しい収入源を作りたい方"
             width={299}
             height={120}

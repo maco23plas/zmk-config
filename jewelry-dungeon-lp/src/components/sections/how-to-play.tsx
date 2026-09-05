@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { howToPlaySteps } from "@/lib/content";
 import { Section, SectionHead } from "@/components/ui/section";
 import { SeminarCtaButton } from "@/components/ui/cta-button";
@@ -22,7 +23,7 @@ export function HowToPlay() {
             </div>
             <p className={styles.text}>{step.text}</p>
             <Image
-              src={step.image}
+              src={asset(step.image)}
               alt={step.alt}
               width={step.imageWidth}
               height={step.imageHeight}

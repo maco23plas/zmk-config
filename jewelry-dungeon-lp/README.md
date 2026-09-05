@@ -16,8 +16,29 @@ npm run typecheck
 ```
 
 `next.config.ts` で `output: "export"` を指定しているため、`npm run build` で `out/` に静的ファイルが生成されます。
-任意の静的ホスティング（GitHub Pages など）にそのまま配置できます。サブパス配下に置く場合は
-`next.config.ts` に `basePath` / `assetPrefix` を追加してください。
+任意の静的ホスティングにそのまま配置できます。
+
+### サブパス配下で配信する場合
+
+`https://<account>.github.io/<repo>/` のようにサブパス配下に置くときは、ビルド時に環境変数を指定します。
+
+```bash
+NEXT_PUBLIC_BASE_PATH=/<repo> npm run build
+```
+
+画像パスは `src/lib/asset.ts` の `asset()` を通しているので、この変数だけで全体が切り替わります。
+
+### GitHub Pages で公開する手順
+
+1. 公開用の GitHub アカウントでリポジトリを作る（例: `jewelry-dungeon-lp`）。
+2. このフォルダ（`jewelry-dungeon-lp/`）の中身をそのリポジトリのルートに置いて `main` に push する。
+   `.github/workflows/deploy-pages.yml` が同梱されているので、push のたびに自動でビルド・公開されます。
+3. リポジトリの Settings > Pages > Build and deployment > Source を **GitHub Actions** にする（初回のみ）。
+4. 公開URL: `https://<account>.github.io/<repo>/`。
+   リポジトリ名を `<account>.github.io` にすると `https://<account>.github.io/` で公開されます。
+5. 独自ドメインを使う場合は Settings > Pages の Custom domain に設定し、
+   Settings > Secrets and variables > Actions > Variables に `PAGES_ROOT` = `true` を追加してください
+   （サブパスなしでビルドされます）。
 
 ## 構成
 
@@ -64,6 +85,4 @@ SP のタイプスケール: h2 23px / カード見出し 14px / 本文 11px / �
 
 - **フォーム送信先の接続**: `src/lib/seminar-form.ts` の `submitSeminarForm` が空実装です（TODO コメント参照）。
   接続後は `src/components/modal/seminar-modal.tsx` の `onSubmit` でエラー表示を追加してください。
-- **09 RISK の文言確定**: `src/lib/content.ts` の `riskItems` と `src/components/sections/risk.tsx` の
-  注記（【要確認】）を、正規のリスク告知と照合して差し替えてください。
 - 公式LINEのURLは `src/lib/site.ts` の `LINE_URL` で一元管理しています（3箇所すべてで使用）。

@@ -34,19 +34,10 @@
   color: var(--text);
 }
 
-.note {
-  margin: 16px 0 0;
-  font-size: 9px;
-  line-height: 1.85;
-  color: var(--note);
-}
 
 @media (min-width: 600px) {
   .rowText {
     font-size: 12.5px;
-  }
-  .note {
-    font-size: 10px;
   }
 }
 
@@ -56,8 +47,5 @@
   }
   .rowText {
     font-size: 13px;
-  }
-  .note {
-    font-size: 11px;
   }
 }

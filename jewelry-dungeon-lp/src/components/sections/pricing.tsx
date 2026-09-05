@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { Section, SectionHead } from "@/components/ui/section";
 import styles from "./pricing.module.css";
 
@@ -9,7 +10,7 @@ export function Pricing() {
       <SectionHead label="PRICING" title="販売価格の考え方" />
       <div className={styles.figureWrap}>
         <Image
-          src="/assets/price-example-2.png"
+          src={asset("/assets/price-example-2.png")}
           alt="購入価格100,000円＋加算例17%＝販売成立時の価格例117,000円、購入価格との差額は17,000円"
           width={1774}
           height={887}
