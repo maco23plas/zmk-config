@@ -8,6 +8,8 @@ import { clock } from './clock.js';
 import { log } from './lib/log.js';
 import { setDriver } from './db.js';
 import { d1Driver } from './db-d1.js';
+import { setFileServer } from './lib/http.js';
+import { r2FileServer } from './r2-files.js';
 import { handleRequest } from './app.js';
 import { tickOnce } from './worker.js';
 
@@ -16,11 +18,11 @@ let initializedFor = null;
 function init(env) {
   if (initializedFor === env) return;
   if (!env.DB) throw new Error('D1データベースのバインディング(DB)が設定されていません');
-  configure(env, {
-    // Workers はディスクを持たないため、動画の自前配信はできない
-    // （YouTube限定公開 または CDN の URL を使う）
-    canServeFiles: false,
-  });
+  // R2バケットを繋いでいれば、自前のMP4（file:指定）も配信できる。
+  // 繋いでいない場合は YouTube限定公開 か CDN の URL を使う。
+  const hasMedia = Boolean(env.MEDIA);
+  configure(env, { canServeFiles: hasMedia });
+  if (hasMedia) setFileServer(r2FileServer(env.MEDIA));
   setDriver(d1Driver(env.DB));
   initializedFor = env;
 }

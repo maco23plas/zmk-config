@@ -125,7 +125,7 @@ LINEのアクセストークン未設定のときは **ドライラン** で動�
 LINEの設定前でも、予約から視聴までの流れをひととおり試せます。
 
 ```bash
-npm test    # 60件のテストが通ることを確認できます
+npm test    # 69件のテストが通ることを確認できます
 ```
 
 ---
@@ -181,7 +181,7 @@ npm test    # 60件のテストが通ることを確認できます
 youtube:dQw4w9WgXcQ
 ```
 
-動画の置き場所を用意する必要がなく、通信量の負担もありません。
+動画の置き場所を用意する必要がなく、通信量の負担もありません。**カード登録も不要**です。
 YouTube に **「限定公開」** でアップロードし、URL の `v=` の後ろを指定します。
 
 - 操作バーは非表示にし、クリックも無効化しています（YouTubeへ離脱させません）
@@ -193,11 +193,38 @@ YouTube に **「限定公開」** でアップロードし、URL の `v=` の�
 file:seminar.mp4
 ```
 
-`webinar/media/` に置いた動画を配信します。Rangeリクエストに対応しているので、
-途中からの読み込みも問題ありません。**配信時間中しか取得できません**（それ以外は 403）。
+**動画を他人に見つけられたくない場合**や、YouTubeの表示を出したくない場合はこちらです。
+置き場所は実行環境によって変わりますが、**管理画面の指定はどちらも `file:ファイル名` のまま**です。
 
-> ⚠️ この方式は **Node.js で動かす場合のみ**です。Cloudflare Workers はディスクを持たないため
-> 501 を返します。無料運用したい場合は ① か ③ を選んでください。
+| 環境 | 置き場所 | 費用 |
+|---|---|---|
+| Cloudflare Workers | **R2**（バケット `antai-webinar-media`） | 無料枠 10GB・**転送量は無料** |
+| Node.js | `webinar/media/` ディレクトリ | サーバー次第 |
+
+**Cloudflare で使う手順:**
+
+```bash
+# 1. wrangler.toml の [[r2_buckets]] のコメントを外す
+# 2. バケットを作る
+npm run cf:media:create
+
+# 3. 動画をアップロード（数百MBでも可）
+npm run cf:media:put -- ./media/seminar.mp4
+
+# 4. 再デプロイ
+npm run cf:deploy
+```
+
+あとは管理画面の「動画」欄に `file:seminar.mp4` と入れるだけです。
+
+Rangeリクエストに対応しているので途中からの読み込みも問題なく、
+**配信時間中しか取得できません**（それ以外は 403）。
+R2は転送量が無料なので、視聴者が増えても動画配信の費用は増えません。
+
+> **無料枠の目安**: 45分の720p動画（約400MB）を保存し、1日100人が視聴しても
+> 保存10GB・読み取り1000万回/月の無料枠に十分収まります。
+> ただし **R2の有効化時にクレジットカードの登録を求められる場合があります**
+> （無料枠内なら課金はされません）。カードを登録したくない場合は ① をお使いください。
 
 ### ③ CDN / S3 のURL
 
@@ -261,9 +288,8 @@ CloudFront や S3 の**署名付きURL**を都度発行する実装に差し替�
 無料プランの上限（10万リクエスト/日、D1 は 5GB・500万行読み取り/日）に対し、
 本システムの想定利用（1日100人が45分視聴しても1万リクエスト程度）は十分に収まります。
 
-> **Workers では動画の自前配信ができません**（ディスクを持たないため）。
-> 動画は **YouTube限定公開** か **CDNのURL** を使ってください（`file:` 指定は 501 を返します）。
-> 自前ファイルを配信したい場合は、下の「Node.js で動かす場合」を選んでください。
+> 動画は **YouTube限定公開**（設定不要・カード不要）か、**自前のMP4**（R2バケットを繋ぐ）を選べます。
+> どちらも無料枠で収まります。詳しくは「5. 動画の用意」へ。
 
 ### 手順（30分ほど）
 
@@ -299,6 +325,9 @@ npm run cf:deploy
 
 `[vars] LINE_BASIC_ID` も忘れずに埋めてください（1タップ連携リンクの生成に使います）。
 
+自前のMP4を配信する場合は、あわせて `wrangler.toml` の `[[r2_buckets]]` のコメントを外し、
+`npm run cf:media:create` → `npm run cf:media:put -- ./media/seminar.mp4` を実行してください。
+
 ### ローカルでCloudflare版を確認する
 
 ```bash
@@ -326,9 +355,10 @@ Cloudflare にドメインを追加し、**Workers & Pages → 対象のWorker �
 
 ---
 
-### Node.js で動かす場合（自前サーバー・動画も自前配信したいとき）
+### Node.js で動かす場合（自前サーバー）
 
-同じコードが Node.js でも動きます。**動画ファイルの自前配信（`file:` 指定）が必要な場合はこちら**です。
+同じコードが Node.js でも動きます。すでにサーバーをお持ちの場合や、
+動画をローカルのディスクに置きたい場合はこちらです。
 ただし常時起動できるサーバー（有料のVPSやPaaS）が要ります。
 
 **Docker:**
@@ -412,7 +442,7 @@ sqlite3 /opt/webinar/data/webinar.db ".backup '/backup/webinar-$(date +%F).db'"
 | `ADMIN_USER` / `ADMIN_PASS` | `admin` / （空） | 管理画面のログイン。**必ず変更** |
 | `SESSION_SECRET` | （空） | Cookie署名用。**必ず変更**（`openssl rand -hex 32`） |
 | `DB_PATH` | `./data/webinar.db` | SQLiteの保存先 |
-| `MEDIA_DIR` | `./media` | `file:` 指定の動画の置き場所 |
+| `MEDIA_DIR` | `./media` | `file:` 指定の動画の置き場所（Node版のみ。Cloudflare版はR2バケット `MEDIA`） |
 | `NOTIFY_CONFIRM` | `on` | 予約完了通知 |
 | `NOTIFY_REMIND_1D` | `on` | 前日リマインド |
 | `NOTIFY_REMIND_10M` | `on` | 10分前リマインド |
@@ -437,7 +467,7 @@ sqlite3 /opt/webinar/data/webinar.db ".backup '/backup/webinar-$(date +%F).db'"
 | 音が出ない | ブラウザの制限でミュート開始します。「🔊 音声をオンにする」を押してください |
 | 再生位置がずれる | 5秒ごとにサーバー時刻へ自動補正します。大きくずれる場合はサーバーの時刻同期（NTP）を確認してください |
 | 再起動したら通知が飛ばない | 通知はDBに残るため消えません。起動後の巡回（Node版は最大20秒、Cloudflare版は最大1分）で送信されます |
-| Cloudflare版で動画が501になる | `file:` 指定は Workers では使えません。`youtube:動画ID` かCDNのURLに変えてください |
+| Cloudflare版で動画が501になる | R2バケットが繋がっていません。`wrangler.toml` の `[[r2_buckets]]` のコメントを外して再デプロイするか、`youtube:動画ID` に変えてください |
 | Cloudflare版でCronが動かない | `npm run cf:logs` でログを確認。`wrangler.toml` の `[triggers] crons` が設定されているかも確認 |
 | 「1027」エラーが出る | Workers無料プランの1日10万リクエストを超えました（翌0時UTCに復帰）。通常運用ではまず到達しません |
 
@@ -458,6 +488,7 @@ webinar/
 │  ├─ clock.js          時刻の入口（テストで固定できる）
 │  ├─ db.js             DBの入口（ドライバ差し替え式）
 │  ├─ db-node.js / db-d1.js   SQLite / Cloudflare D1 のドライバ
+│  ├─ r2-files.js      Cloudflare R2 からの動画配信（Range対応）
 │  ├─ schema.sql        テーブル定義（両環境で共通）
 │  ├─ domain/
 │  │  ├─ playback.js     ★疑似ライブの状態計算（純粋関数）
@@ -483,9 +514,10 @@ webinar/
 │  └─ watch.js          ★視聴プレイヤー（同期・シーク禁止・CTA・コメント）
 ├─ wrangler.toml        Cloudflare の設定
 ├─ Dockerfile           Node.js で動かす場合
-├─ media/               file: 指定の動画置き場（Node版のみ）
+├─ scripts/put-media.mjs  動画をR2へアップロードする補助
+├─ media/               file: 指定の動画置き場（Node版。Cloudflare版はR2）
 ├─ data/                SQLite（Node版のみ・gitignore）
-└─ test/                60件のテスト（npm test）
+└─ test/                69件のテスト（npm test）
 ```
 
 ★ が中心的なロジックです。

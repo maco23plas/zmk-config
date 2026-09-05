@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { config, configure, configWarnings } from './config.js';
 import { clock } from './clock.js';
 import { log } from './lib/log.js';
-import { setFileServer, contentTypeFor, SECURITY_HEADERS } from './lib/http.js';
+import { setFileServer, contentTypeFor, parseRangeHeader, SECURITY_HEADERS } from './lib/http.js';
 import { setDriver } from './db.js';
 import { openSqlite, nodeDriver } from './db-node.js';
 import { handleRequest } from './app.js';
@@ -68,20 +68,18 @@ export function nodeFileServer(baseDir, relativePath, request, { cache = 'public
   };
   const stream = (start, end) => Readable.toWeb(fs.createReadStream(full, { start, end }));
 
-  const range = request.headers.get('range');
-  const m = range && /^bytes=(\d*)-(\d*)$/.exec(range);
-  if (m) {
-    let start = m[1] === '' ? null : Number(m[1]);
-    let end = m[2] === '' ? null : Number(m[2]);
-    if (start === null && end !== null) { start = Math.max(0, stat.size - end); end = stat.size - 1; }
-    else { start = start ?? 0; end = end === null ? stat.size - 1 : Math.min(end, stat.size - 1); }
-
-    if (start > end || start >= stat.size) {
-      return new Response('', { status: 416, headers: { ...base, 'Content-Range': `bytes */${stat.size}` } });
-    }
-    return new Response(stream(start, end), {
+  const range = parseRangeHeader(request.headers.get('range'), stat.size);
+  if (range === 'invalid') {
+    return new Response('', { status: 416, headers: { ...base, 'Content-Range': `bytes */${stat.size}` } });
+  }
+  if (range) {
+    return new Response(stream(range.start, range.end), {
       status: 206,
-      headers: { ...base, 'Content-Range': `bytes ${start}-${end}/${stat.size}`, 'Content-Length': String(end - start + 1) },
+      headers: {
+        ...base,
+        'Content-Range': `bytes ${range.start}-${range.end}/${stat.size}`,
+        'Content-Length': String(range.length),
+      },
     });
   }
 

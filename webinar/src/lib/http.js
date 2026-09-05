@@ -134,6 +134,34 @@ export function serveFile(baseDir, relativePath, request, opts) {
   return fileServer ? fileServer(baseDir, relativePath, request, opts) : null;
 }
 
+/**
+ * Range ヘッダを解釈する。ファイル配信の実装（ディスク/R2）で共通に使う。
+ * @returns {null|'invalid'|{start:number,end:number,length:number}}
+ *   null      … 範囲指定なし（全体を返す）
+ *   'invalid' … 範囲外（416を返す）
+ */
+export function parseRangeHeader(header, size) {
+  if (!header) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(header).trim());
+  if (!m) return null;               // 解釈できない指定は無視して全体を返す
+  if (size <= 0) return 'invalid';
+
+  let start;
+  let end;
+  if (m[1] === '') {
+    // bytes=-500 … 末尾から500バイト
+    const suffix = Number(m[2]);
+    if (m[2] === '' || suffix === 0) return 'invalid';
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (start > end || start >= size) return 'invalid';
+  return { start, end, length: end - start + 1 };
+}
+
 const TYPES = {
   html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8',
   js: 'text/javascript; charset=utf-8', json: 'application/json; charset=utf-8',

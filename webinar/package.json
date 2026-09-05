@@ -16,6 +16,9 @@
     "cf:db:init": "npx --yes wrangler d1 execute antai-webinar --remote --file=src/schema.sql",
     "cf:dev": "npx --yes wrangler dev",
     "cf:deploy": "npx --yes wrangler deploy",
-    "cf:logs": "npx --yes wrangler tail"
+    "cf:logs": "npx --yes wrangler tail",
+    "cf:media:create": "npx --yes wrangler r2 bucket create antai-webinar-media",
+    "cf:media:put": "node scripts/put-media.mjs",
+    "cf:media:list": "npx --yes wrangler r2 object list antai-webinar-media --remote"
   }
 }

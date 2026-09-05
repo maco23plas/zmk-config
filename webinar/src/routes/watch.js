@@ -22,7 +22,7 @@ function mediaFor(reservation, state) {
   const src = parseVideoSource(reservation.video_url);
   if (src.type === 'youtube') return { type: 'youtube', id: src.id };
   if (src.type === 'url') return { type: 'video', src: `/watch/${encodeURIComponent(reservation.watch_token)}/media` };
-  // 自前ファイルはディスクを持つ環境でのみ配信できる
+  // 自前ファイル（Nodeなら media/、Cloudflareなら R2）
   if (src.type === 'file' && config.canServeFiles) {
     return { type: 'video', src: `/watch/${encodeURIComponent(reservation.watch_token)}/media` };
   }
@@ -118,8 +118,10 @@ export function register(router, views) {
     }
     if (src.type === 'file') {
       const response = await serveFile(config.mediaDir, src.name, ctx.request, { cache: 'private, max-age=60' });
-      // ディスクを持たない環境（Cloudflare Workers）では file: 指定は使えない
-      return response || text('この環境では動画ファイルの自前配信ができません（YouTubeまたはCDNのURLをご利用ください）', 501);
+      // 置き場所が無い（Cloudflare で R2 バケットを繋いでいない）場合
+      return response || text(
+        '動画ファイルの置き場所が設定されていません。'
+        + 'Cloudflare で動かす場合は R2 バケットを繋ぐか、YouTube限定公開／CDNのURLをご利用ください。', 501);
     }
     return text('not found', 404);
   });

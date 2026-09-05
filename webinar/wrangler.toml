@@ -8,6 +8,8 @@
 #   npx wrangler secret put ADMIN_PASS
 #   npx wrangler secret put SESSION_SECRET
 #   npx wrangler deploy
+#
+# 自前のMP4を配信する場合は、下の [[r2_buckets]] のコメントも外してください。
 
 name = "antai-webinar"
 main = "src/worker-entry.js"
@@ -23,6 +25,17 @@ binding = "DB"
 database_name = "antai-webinar"
 # ↓ npx wrangler d1 create antai-webinar が出力した database_id に必ず差し替えてください
 database_id = "00000000-0000-0000-0000-000000000000"
+
+# --- 自前のMP4を配信する場合だけ有効にする -----------------------------------
+# YouTube限定公開やCDNのURLを使うなら不要です（コメントのままでOK）。
+#   npx wrangler r2 bucket create antai-webinar-media
+#   npm run cf:media:put -- ./media/seminar.mp4 seminar.mp4
+# 有効化したら、管理画面の動画欄に `file:seminar.mp4` と指定します。
+# R2は転送量が無料なので、動画を配信しても費用が増えません（無料枠: 10GB）。
+#
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "antai-webinar-media"
 
 # 通知ワーカー。無料プランでも1分ごとに実行できる。
 [triggers]
