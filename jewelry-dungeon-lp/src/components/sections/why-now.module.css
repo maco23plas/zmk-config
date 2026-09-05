@@ -32,9 +32,11 @@
 
 .title {
   margin: 8px 0 6px;
-  font-size: 14px;
+  /* 3列の狭いカードでも見出しが1行に収まるよう幅に追従させる */
+  font-size: clamp(11px, 3.4vw, 14px);
   font-weight: 700;
   line-height: 1.5;
+  white-space: nowrap;
 }
 
 .text {
@@ -45,6 +47,10 @@
 }
 
 @media (min-width: 600px) {
+  .title {
+    font-size: 14px;
+    white-space: normal;
+  }
   .text {
     font-size: 12.5px;
   }

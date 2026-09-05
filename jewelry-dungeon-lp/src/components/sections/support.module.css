@@ -31,9 +31,11 @@
 .title {
   margin: 0 0 12px;
   font-family: var(--font-serif);
-  font-size: 23px;
+  /* 画像と横並びで幅が限られるため、SP では「全て聞いてください」が1行に収まる大きさに追従させる */
+  font-size: clamp(16px, 5.1vw, 23px);
   line-height: 1.45;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .lead {
@@ -153,18 +155,20 @@
 
 .cardTitle {
   display: block;
-  font-size: 14px;
+  font-size: clamp(11px, 3.2vw, 14px);
   font-weight: 700;
   line-height: 1.5;
   color: var(--navy);
+  white-space: nowrap;
 }
 
 .cardSub {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: clamp(9.5px, 2.8vw, 11px);
   line-height: 1.6;
   color: var(--note);
+  white-space: nowrap;
 }
 
 .arrow {
@@ -237,6 +241,7 @@
 @media (min-width: 600px) {
   .title {
     font-size: 28px;
+    white-space: normal;
   }
   .lead {
     font-size: 13px;
@@ -289,10 +294,12 @@
   }
   .cardTitle {
     font-size: 16px;
+    white-space: normal;
   }
   .cardSub {
     margin-top: 4px;
     font-size: 12px;
+    white-space: normal;
   }
   .consult {
     margin-top: 24px;

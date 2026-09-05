@@ -1,0 +1,78 @@
+name: Publish from source
+
+# 元データ用リポジトリ（maco23plas/jewelry-dungeon-lp）の main を取得してビルドし、
+# このリポジトリの GitHub Pages に公開します。公開用リポジトリ側で使うワークフローです。
+# - すぐ反映したいとき: Actions > Publish from source > Run workflow
+# - 自動: 6時間ごとに最新の元データで再公開（60日間コミットが無いと自動実行は停止します）
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  SOURCE_REPO: maco23plas/jewelry-dungeon-lp
+  SOURCE_REF: main
+
+jobs:
+  build:
+    # 元データ用リポジトリ自身では実行しない
+    if: ${{ github.repository_owner != 'maco23plas' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          ref: ${{ env.SOURCE_REF }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve base path
+        env:
+          PAGES_ROOT: ${{ vars.PAGES_ROOT }}
+        run: |
+          REPO="${GITHUB_REPOSITORY#*/}"
+          if [[ "$PAGES_ROOT" == "true" || "$REPO" == *.github.io ]]; then
+            echo "NEXT_PUBLIC_BASE_PATH=" >> "$GITHUB_ENV"
+          else
+            echo "NEXT_PUBLIC_BASE_PATH=/$REPO" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build (static export)
+        run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

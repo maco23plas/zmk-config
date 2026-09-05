@@ -16,6 +16,8 @@
 
 .card {
   background: #fff;
+  /* ゴールドカードと内側の幅を揃えるため、全カードに同じ太さの枠を持たせる（通常は透明） */
+  border: 2px solid transparent;
   border-radius: 14px;
   padding: 12px 8px 14px;
   box-shadow: var(--shadow-2);
@@ -26,7 +28,7 @@
 
 .cardGold {
   background: var(--grad-gold-card);
-  border: 2px solid #d8a94a;
+  border-color: #d8a94a;
   box-shadow: 0 16px 40px rgba(184, 134, 44, 0.18);
   --spec-label: var(--gold-text-2);
   --spec-value: var(--gold-text);
@@ -64,6 +66,11 @@
   margin: 0 auto 12px;
   border-radius: 0;
   object-fit: contain;
+}
+
+/* 画像に白背景が含まれているため、クリーム地のカードでは白を透過させる */
+.cardGold .img {
+  mix-blend-mode: multiply;
 }
 
 .specs {

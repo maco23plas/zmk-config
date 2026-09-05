@@ -33,7 +33,9 @@ NEXT_PUBLIC_BASE_PATH=/<repo> npm run build
 1. 元データ用リポジトリ `maco23plas/jewelry-dungeon-lp` を開き、「Use this template」→「Create a new repository」で
    公開用アカウントにコピーを作る（Public にする）。作成直後にワークフローが走り、自動でビルド・公開されます。
    ※ 元データ用リポジトリ（maco23plas 配下）ではワークフローは動かず、サイトは公開されません。
-2. 以後、元データ側の更新を取り込むときは、コピー側でファイルを差し替えて `main` に push すると再公開されます。
+2. 以後の更新は、公開用リポジトリに `.github/workflows/publish-from-source.yml` を置いておけば、
+   元データ用リポジトリの main を取得して自動で再公開されます（6時間ごと。すぐ反映したいときは
+   Actions > Publish from source > Run workflow）。公開用リポジトリ側のファイルは直接編集しません。
 3. コピー先リポジトリの Settings > Pages > Build and deployment > Source を **GitHub Actions** にする（初回のみ・必須）。
    初回のワークフローはこの設定前に走って失敗するので、設定後に Actions で「Re-run all jobs」を押す。
 4. 公開URL: `https://<account>.github.io/<repo>/`。

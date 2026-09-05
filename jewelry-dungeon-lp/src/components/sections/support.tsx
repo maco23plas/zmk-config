@@ -40,7 +40,7 @@ export function Support() {
           </span>
           <span className={styles.cardBody}>
             <span className={styles.cardTitle}>LINEで相談する</span>
-            <span className={styles.cardSub}>気軽にすぐに質問可能</span>
+            <span className={styles.cardSub}>気軽にすぐに質問</span>
           </span>
           <span className={styles.arrow} aria-hidden="true">
             →
@@ -51,8 +51,8 @@ export function Support() {
             ▤
           </span>
           <span className={styles.cardBody}>
-            <span className={styles.cardTitle}>無料説明会に参加</span>
-            <span className={styles.cardSub}>仕組みと初め方を知る</span>
+            <span className={styles.cardTitle}>説明会に参加</span>
+            <span className={styles.cardSub}>仕組みを知る</span>
           </span>
           <span className={styles.arrow} aria-hidden="true">
             →
