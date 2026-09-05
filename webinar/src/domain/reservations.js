@@ -1,5 +1,5 @@
-import { all, get, run, tx } from '../db.js';
-import { newId, randomToken, randomCode } from '../lib/ids.js';
+import { all, get, run } from '../db.js';
+import { newId, randomToken, randomCode } from '../lib/crypto.js';
 import { getSession, seatsLeft, isReservable } from './sessions.js';
 
 const RES_SELECT = `
@@ -30,10 +30,11 @@ export class ReservationError extends Error {
 }
 
 /**
- * 予約を作る。定員チェックと採番を1トランザクションで行うので、
- * 同時アクセスでも定員を超えない。
+ * 予約を作る。
+ * 定員チェックと挿入を1本のSQL（INSERT ... SELECT ... WHERE EXISTS）で行うため、
+ * 同時アクセスでも定員を超えない。対話的なトランザクションが使えないD1でも安全。
  */
-export function createReservation(input, now = Date.now()) {
+export async function createReservation(input, now = Date.now()) {
   const name = String(input.name || '').trim();
   if (!name) throw new ReservationError('name_required', 'お名前を入力してください');
   if (name.length > 80) throw new ReservationError('name_too_long', 'お名前が長すぎます');
@@ -43,54 +44,66 @@ export function createReservation(input, now = Date.now()) {
     throw new ReservationError('email_invalid', 'メールアドレスの形式が正しくありません');
   }
 
-  return tx(() => {
-    const session = getSession(input.sessionId);
-    if (!session) throw new ReservationError('session_not_found', '選択された開催枠が見つかりません');
-    if (!isReservable(session, now)) {
-      const left = seatsLeft(session);
-      if (left === 0) throw new ReservationError('full', 'この回は満席です');
-      throw new ReservationError('closed', 'この回は受付を終了しました');
-    }
+  const session = await getSession(input.sessionId);
+  if (!session) throw new ReservationError('session_not_found', '選択された開催枠が見つかりません');
+  if (!isReservable(session, now)) {
+    if (seatsLeft(session) === 0) throw new ReservationError('full', 'この回は満席です');
+    throw new ReservationError('closed', 'この回は受付を終了しました');
+  }
 
-    if (input.lineUserId) {
-      const dup = get(
-        `SELECT id FROM reservations WHERE session_id = ? AND line_user_id = ? AND status = 'active'`,
-        input.sessionId, input.lineUserId,
-      );
-      if (dup) throw new ReservationError('duplicate', 'この回はすでに予約済みです');
-    }
-
-    const id = newId('res');
-    run(
-      `INSERT INTO reservations
-         (id, session_id, name, email, phone, note, watch_token, link_code,
-          line_user_id, line_display_name, linked_at, status, source, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,'active',?,?,?)`,
-      id, input.sessionId, name, email,
-      String(input.phone || '').trim().slice(0, 32),
-      String(input.note || '').trim().slice(0, 1000),
-      uniqueWatchToken(), uniqueLinkCode(),
-      input.lineUserId || null, String(input.lineDisplayName || '').slice(0, 100),
-      input.lineUserId ? now : null,
-      input.source || 'web', now, now,
+  if (input.lineUserId) {
+    const dup = await get(
+      `SELECT id FROM reservations WHERE session_id = ? AND line_user_id = ? AND status = 'active'`,
+      input.sessionId, input.lineUserId,
     );
-    return getReservation(id);
-  });
+    if (dup) throw new ReservationError('duplicate', 'この回はすでに予約済みです');
+  }
+
+  const id = newId('res');
+  const result = await run(
+    `INSERT INTO reservations
+       (id, session_id, name, email, phone, note, watch_token, link_code,
+        line_user_id, line_display_name, linked_at, status, source, created_at, updated_at)
+     SELECT ?,?,?,?,?,?,?,?,?,?,?,'active',?,?,?
+      WHERE EXISTS (
+        SELECT 1 FROM sessions s
+         WHERE s.id = ? AND s.status = 'open'
+           AND (s.capacity <= 0
+                OR (SELECT COUNT(*) FROM reservations r
+                     WHERE r.session_id = s.id AND r.status = 'active') < s.capacity)
+      )`,
+    id, input.sessionId, name, email,
+    String(input.phone || '').trim().slice(0, 32),
+    String(input.note || '').trim().slice(0, 1000),
+    await uniqueWatchToken(), await uniqueLinkCode(),
+    input.lineUserId || null, String(input.lineDisplayName || '').slice(0, 100),
+    input.lineUserId ? now : null,
+    input.source || 'web', now, now,
+    input.sessionId,
+  );
+
+  // 挿入されなかった＝この瞬間に満席になった、または受付が閉じられた
+  if (result.changes === 0) {
+    const fresh = await getSession(input.sessionId);
+    if (fresh && seatsLeft(fresh) === 0) throw new ReservationError('full', 'この回は満席です');
+    throw new ReservationError('closed', 'この回は受付を終了しました');
+  }
+  return getReservation(id);
 }
 
-function uniqueWatchToken() {
+async function uniqueWatchToken() {
   for (let i = 0; i < 5; i++) {
     const token = randomToken(18);
-    if (!get('SELECT 1 AS x FROM reservations WHERE watch_token = ?', token)) return token;
+    if (!(await get('SELECT 1 AS x FROM reservations WHERE watch_token = ?', token))) return token;
   }
   throw new ReservationError('token_conflict', '受付に失敗しました。もう一度お試しください');
 }
 
-function uniqueLinkCode() {
+async function uniqueLinkCode() {
   for (let len = 6; len <= 8; len++) {
     for (let i = 0; i < 12; i++) {
       const code = randomCode(len);
-      if (!get('SELECT 1 AS x FROM reservations WHERE link_code = ?', code)) return code;
+      if (!(await get('SELECT 1 AS x FROM reservations WHERE link_code = ?', code))) return code;
     }
   }
   throw new ReservationError('code_conflict', '受付に失敗しました。もう一度お試しください');
@@ -98,59 +111,61 @@ function uniqueLinkCode() {
 
 /**
  * 予約とLINEユーザーを紐付ける。これが済んで初めてリマインドを送れる。
- * @returns {{ok:boolean, reason?:string, reservation?:object}}
+ * 条件付きUPDATE1本で行うので、同じコードが同時に送られても片方しか通らない。
+ * @returns {Promise<{ok:boolean, reason?:string, already?:boolean, reservation?:object}>}
  */
-export function linkLineUser(code, lineUserId, displayName, now = Date.now()) {
-  return tx(() => {
-    const reservation = getByLinkCode(code);
-    if (!reservation) return { ok: false, reason: 'not_found' };
-    if (reservation.status !== 'active') return { ok: false, reason: 'canceled' };
-    if (reservation.line_user_id && reservation.line_user_id !== lineUserId) {
-      return { ok: false, reason: 'already_linked_other' };
-    }
-    if (reservation.line_user_id === lineUserId) {
-      return { ok: true, already: true, reservation };
-    }
-    // 同じ人が同じ枠を別コードで二重予約していないか
-    const dup = get(
-      `SELECT id FROM reservations WHERE session_id = ? AND line_user_id = ? AND status = 'active' AND id != ?`,
-      reservation.session_id, lineUserId, reservation.id,
-    );
-    if (dup) return { ok: false, reason: 'duplicate' };
+export async function linkLineUser(code, lineUserId, displayName, now = Date.now()) {
+  const result = await run(
+    `UPDATE reservations
+        SET line_user_id = ?, line_display_name = ?, linked_at = ?, updated_at = ?
+      WHERE link_code = ?
+        AND status = 'active'
+        AND line_user_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM reservations r2
+           WHERE r2.session_id = reservations.session_id
+             AND r2.line_user_id = ?
+             AND r2.status = 'active')`,
+    lineUserId, String(displayName || '').slice(0, 100), now, now, code, lineUserId,
+  );
 
-    run(
-      `UPDATE reservations SET line_user_id = ?, line_display_name = ?, linked_at = ?, updated_at = ? WHERE id = ?`,
-      lineUserId, String(displayName || '').slice(0, 100), now, now, reservation.id,
-    );
-    return { ok: true, reservation: getReservation(reservation.id) };
-  });
+  if (result.changes > 0) {
+    return { ok: true, reservation: await getByLinkCode(code) };
+  }
+
+  // 更新できなかった理由を特定して、利用者に返す文面を分ける
+  const existing = await getByLinkCode(code);
+  if (!existing) return { ok: false, reason: 'not_found' };
+  if (existing.status !== 'active') return { ok: false, reason: 'canceled' };
+  if (existing.line_user_id === lineUserId) return { ok: true, already: true, reservation: existing };
+  if (existing.line_user_id) return { ok: false, reason: 'already_linked_other' };
+  return { ok: false, reason: 'duplicate' };
 }
 
-export function cancelReservation(id, now = Date.now()) {
-  run(`UPDATE reservations SET status = 'canceled', updated_at = ? WHERE id = ? AND status = 'active'`, now, id);
+export async function cancelReservation(id, now = Date.now()) {
+  await run(`UPDATE reservations SET status = 'canceled', updated_at = ? WHERE id = ? AND status = 'active'`, now, id);
   return getReservation(id);
 }
 
 export function recordWatchEvent({ reservationId, sessionId, kind, atSec }, now = Date.now()) {
-  run('INSERT INTO watch_events (reservation_id, session_id, kind, at_sec, created_at) VALUES (?,?,?,?,?)',
+  return run('INSERT INTO watch_events (reservation_id, session_id, kind, at_sec, created_at) VALUES (?,?,?,?,?)',
     reservationId, sessionId, kind, Math.max(0, Math.round(Number(atSec) || 0)), now);
 }
 
-export function addQuestion({ reservationId, sessionId, body, atSec }, now = Date.now()) {
+export async function addQuestion({ reservationId, sessionId, body, atSec }, now = Date.now()) {
   const trimmed = String(body || '').trim().slice(0, 1000);
   if (!trimmed) return null;
-  run('INSERT INTO questions (reservation_id, session_id, body, at_sec, created_at) VALUES (?,?,?,?,?)',
+  await run('INSERT INTO questions (reservation_id, session_id, body, at_sec, created_at) VALUES (?,?,?,?,?)',
     reservationId, sessionId, trimmed, Math.max(0, Math.round(Number(atSec) || 0)), now);
   return trimmed;
 }
 
 /** 視聴の到達状況（管理画面の分析用） */
-export function watchSummary(reservationId) {
-  const row = get(
+export async function watchSummary(reservationId) {
+  const row = await get(
     `SELECT MIN(created_at) AS first_at, MAX(created_at) AS last_at,
             MAX(at_sec) AS max_sec, COUNT(*) AS events,
             SUM(CASE WHEN kind = 'cta_click' THEN 1 ELSE 0 END) AS cta_clicks
        FROM watch_events WHERE reservation_id = ?`, reservationId);
-  if (!row || !row.events) return null;
-  return row;
+  return row && row.events ? row : null;
 }

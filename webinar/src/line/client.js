@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { run } from '../db.js';
 import { log } from '../lib/log.js';
@@ -50,9 +49,9 @@ async function callApi(path, { method = 'POST', body, headers = {} } = {}) {
   });
 }
 
-function logOutbound(to, kind, messages, ok, detail, now = Date.now()) {
+async function logOutbound(to, kind, messages, ok, detail, now = Date.now()) {
   try {
-    run('INSERT INTO outbound_log (to_user, kind, payload, ok, detail, created_at) VALUES (?,?,?,?,?,?)',
+    await run('INSERT INTO outbound_log (to_user, kind, payload, ok, detail, created_at) VALUES (?,?,?,?,?,?)',
       to, kind, JSON.stringify(messages).slice(0, 4000), ok ? 1 : 0, String(detail || '').slice(0, 500), now);
   } catch (err) {
     log.error('送信ログの記録に失敗', err.message);
@@ -68,19 +67,19 @@ export async function pushMessage(userId, messages, { kind = 'push', retryKey } 
 
   if (config.dryRun) {
     log.info(`[ドライラン] push → ${userId} (${kind})`);
-    logOutbound(userId, `${kind}:dry-run`, list, true, 'LINE_CHANNEL_ACCESS_TOKEN 未設定のため未送信');
+    await logOutbound(userId, `${kind}:dry-run`, list, true, 'LINE_CHANNEL_ACCESS_TOKEN 未設定のため未送信');
     return { dryRun: true };
   }
 
   try {
     const result = await callApi('/message/push', {
       body: { to: userId, messages: list },
-      headers: { 'X-Line-Retry-Key': retryKey || crypto.randomUUID() },
+      headers: { 'X-Line-Retry-Key': retryKey || crypto.randomUUID() },  // crypto はグローバル(Web Crypto)
     });
-    logOutbound(userId, kind, list, true, result.deduplicated ? '重複排除(409)' : '');
+    await logOutbound(userId, kind, list, true, result.deduplicated ? '重複排除(409)' : '');
     return result;
   } catch (err) {
-    logOutbound(userId, kind, list, false, err.message);
+    await logOutbound(userId, kind, list, false, err.message);
     throw err;
   }
 }
@@ -91,17 +90,17 @@ export async function replyMessage(replyToken, messages, { kind = 'reply' } = {}
 
   if (config.dryRun) {
     log.info(`[ドライラン] reply (${kind}):`, JSON.stringify(list).slice(0, 200));
-    logOutbound('(reply)', `${kind}:dry-run`, list, true, '');
+    await logOutbound('(reply)', `${kind}:dry-run`, list, true, '');
     return { dryRun: true };
   }
 
   try {
     const result = await callApi('/message/reply', { body: { replyToken, messages: list } });
-    logOutbound('(reply)', kind, list, true, '');
+    await logOutbound('(reply)', kind, list, true, '');
     return result;
   } catch (err) {
     // 応答トークンは1分で失効する。失効は運用上の異常ではないので警告に留める。
-    logOutbound('(reply)', kind, list, false, err.message);
+    await logOutbound('(reply)', kind, list, false, err.message);
     log.warn('LINE返信に失敗:', err.message);
     return { error: err.message };
   }

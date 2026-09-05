@@ -3,3 +3,5 @@ data/
 .env
 media/*
 !media/.gitkeep
+.dev.vars
+.wrangler/

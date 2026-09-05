@@ -2,7 +2,8 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb } from './helpers.js';
 import { verifySignature, signBody } from '../src/line/signature.js';
-import { codeCandidates, sign, unsign, safeEqual } from '../src/lib/ids.js';
+import { codeCandidates } from '../src/lib/ids.js';
+import { sign, unsign, timingSafeEqual } from '../src/lib/crypto.js';
 import { buildMessage, buildContext, welcomeMessage } from '../src/line/messages.js';
 import { handleEvents } from '../src/line/webhook.js';
 import { createWebinar } from '../src/domain/webinars.js';
@@ -14,14 +15,14 @@ import { parseJstLocal, HOUR, DAY } from '../src/lib/time.js';
 const SECRET = 'test-channel-secret';
 const START = parseJstLocal('2026-09-10T20:00');
 
-test('署名が一致するリクエストだけを受け付ける', () => {
-  const body = Buffer.from(JSON.stringify({ events: [] }));
-  const sig = signBody(body, SECRET);
-  assert.equal(verifySignature(body, sig, SECRET), true);
-  assert.equal(verifySignature(body, sig, '別のシークレット'), false, 'シークレットが違えば拒否');
-  assert.equal(verifySignature(Buffer.from('改ざん'), sig, SECRET), false, '本文が変わっていれば拒否');
-  assert.equal(verifySignature(body, '', SECRET), false, '署名なしは拒否');
-  assert.equal(verifySignature(body, sig, ''), false, 'シークレット未設定なら拒否');
+test('署名が一致するリクエストだけを受け付ける', async () => {
+  const body = new TextEncoder().encode(JSON.stringify({ events: [] }));
+  const sig = await signBody(body, SECRET);
+  assert.equal(await verifySignature(body, sig, SECRET), true);
+  assert.equal(await verifySignature(body, sig, '別のシークレット'), false, 'シークレットが違えば拒否');
+  assert.equal(await verifySignature(new TextEncoder().encode('改ざん'), sig, SECRET), false, '本文が変わっていれば拒否');
+  assert.equal(await verifySignature(body, '', SECRET), false, '署名なしは拒否');
+  assert.equal(await verifySignature(body, sig, ''), false, 'シークレット未設定なら拒否');
 });
 
 test('メッセージ本文から予約コードを拾う（全角・前後の文章込み）', () => {
@@ -37,19 +38,19 @@ test('紛らわしい文字（0とO、1とI）の打ち間違いを吸収する'
   assert.ok(candidates.includes('ABCIOO'), 'I/1 の解釈違いを候補に含む');
 });
 
-test('署名付きCookieの改ざんを検出する', () => {
-  const signed = sign('12345', 'secret');
-  assert.equal(unsign(signed, 'secret'), '12345');
-  assert.equal(unsign(signed.replace('12345', '99999'), 'secret'), null);
-  assert.equal(unsign(signed, 'other-secret'), null);
-  assert.equal(unsign('でたらめ', 'secret'), null);
+test('署名付きCookieの改ざんを検出する', async () => {
+  const signed = await sign('12345', 'secret');
+  assert.equal(await unsign(signed, 'secret'), '12345');
+  assert.equal(await unsign(signed.replace('12345', '99999'), 'secret'), null);
+  assert.equal(await unsign(signed, 'other-secret'), null);
+  assert.equal(await unsign('でたらめ', 'secret'), null);
 });
 
 test('パスワード照合は長さが違っても例外を出さない', () => {
-  assert.equal(safeEqual('abc', 'abc'), true);
-  assert.equal(safeEqual('abc', 'abd'), false);
-  assert.equal(safeEqual('abc', 'abcdef'), false);
-  assert.equal(safeEqual('', ''), true);
+  assert.equal(timingSafeEqual('abc', 'abc'), true);
+  assert.equal(timingSafeEqual('abc', 'abd'), false);
+  assert.equal(timingSafeEqual('abc', 'abcdef'), false);
+  assert.equal(timingSafeEqual('', ''), true);
 });
 
 test('3時間前の通知に、視聴ページのボタンが入っている', () => {
@@ -96,9 +97,9 @@ test('通知の種類ごとにメッセージを作れる', () => {
 
 beforeEach(() => freshDb());
 
-function makeReservation(now) {
-  const w = createWebinar({ title: 'テスト説明会', video_url: 'file:a.mp4', duration_sec: 3600 }, now);
-  const s = createSession({ webinarId: w.id, startAt: START }, now);
+async function makeReservation(now) {
+  const w = await createWebinar({ title: 'テスト説明会', video_url: 'file:a.mp4', duration_sec: 3600 }, now);
+  const s = await createSession({ webinarId: w.id, startAt: START }, now);
   return createReservation({ sessionId: s.id, name: 'テスト太郎' }, now);
 }
 
@@ -110,71 +111,71 @@ const textEvent = (text, { userId = 'U_1', eventId = 'evt_1' } = {}) => ({
 
 test('予約コードを送るとLINEと紐づき、通知予定が作られる', async () => {
   const now = START - DAY;
-  const reservation = makeReservation(now);
+  const reservation = await makeReservation(now);
 
   await handleEvents([textEvent(`予約コード ${reservation.link_code}`)], now);
 
-  const after = get('SELECT line_user_id FROM reservations WHERE id = ?', reservation.id);
+  const after = await get('SELECT line_user_id FROM reservations WHERE id = ?', reservation.id);
   assert.equal(after.line_user_id, 'U_1');
 
-  const kinds = all('SELECT kind FROM notification_jobs').map((j) => j.kind);
+  const kinds = (await all('SELECT kind FROM notification_jobs')).map((j) => j.kind);
   assert.ok(kinds.includes('watch_link_3h'), '3時間前の視聴リンクが積まれている');
 });
 
 test('同じイベントが再送されても二重に処理しない', async () => {
   const now = START - DAY;
-  const reservation = makeReservation(now);
+  const reservation = await makeReservation(now);
   const event = textEvent(`${reservation.link_code}`, { eventId: 'evt_same' });
 
   await handleEvents([event], now);
   await handleEvents([event], now);
 
-  const replies = all(`SELECT * FROM outbound_log WHERE kind LIKE 'linked%'`);
+  const replies = await all(`SELECT * FROM outbound_log WHERE kind LIKE 'linked%'`);
   assert.equal(replies.length, 1, '返信は1回だけ');
 });
 
 test('存在しないコードには「確認できません」と返す', async () => {
   await handleEvents([textEvent('ZZZZZZ')], START - DAY);
-  const logs = all('SELECT kind FROM outbound_log');
+  const logs = await all('SELECT kind FROM outbound_log');
   assert.ok(logs.some((l) => l.kind.startsWith('code_not_found')), `実際: ${JSON.stringify(logs)}`);
 });
 
 test('他人が連携済みのコードは横取りできない', async () => {
   const now = START - DAY;
-  const reservation = makeReservation(now);
+  const reservation = await makeReservation(now);
   await handleEvents([textEvent(reservation.link_code, { userId: 'U_first', eventId: 'e1' })], now);
   await handleEvents([textEvent(reservation.link_code, { userId: 'U_second', eventId: 'e2' })], now);
 
-  assert.equal(get('SELECT line_user_id FROM reservations WHERE id=?', reservation.id).line_user_id, 'U_first');
-  assert.ok(all('SELECT kind FROM outbound_log').some((l) => l.kind.startsWith('link_already_linked_other')));
+  assert.equal((await get('SELECT line_user_id FROM reservations WHERE id=?', reservation.id)).line_user_id, 'U_first');
+  assert.ok((await all('SELECT kind FROM outbound_log')).some((l) => l.kind.startsWith('link_already_linked_other')));
 });
 
 test('ブロック（友だち解除）されたら送信対象から外す', async () => {
   const now = START - DAY;
   await handleEvents([{ type: 'follow', webhookEventId: 'f1', replyToken: 'rt', source: { userId: 'U_x' } }], now);
-  assert.equal(get('SELECT followed FROM line_users WHERE user_id=?', 'U_x').followed, 1);
+  assert.equal((await get('SELECT followed FROM line_users WHERE user_id=?', 'U_x')).followed, 1);
 
   await handleEvents([{ type: 'unfollow', webhookEventId: 'u1', source: { userId: 'U_x' } }], now);
-  assert.equal(get('SELECT followed FROM line_users WHERE user_id=?', 'U_x').followed, 0);
+  assert.equal((await get('SELECT followed FROM line_users WHERE user_id=?', 'U_x')).followed, 0);
 
   const { canPushTo } = await import('../src/line/webhook.js');
-  assert.equal(canPushTo('U_x'), false);
+  assert.equal(await canPushTo('U_x'), false);
 });
 
 test('「予約」と送ると日程を案内する', async () => {
   const now = START - DAY;
-  makeReservation(now);
+  await makeReservation(now);
   await handleEvents([textEvent('予約したい')], now);
-  assert.ok(all('SELECT kind FROM outbound_log').some((l) => l.kind.startsWith('session_list')));
+  assert.ok((await all('SELECT kind FROM outbound_log')).some((l) => l.kind.startsWith('session_list')));
 });
 
 test('雑談には自動返信せず、担当者が対応できる状態にする', async () => {
   await handleEvents([textEvent('今日はいい天気ですね。担当の方はいらっしゃいますか')], START - DAY);
-  assert.equal(all('SELECT * FROM outbound_log').length, 0);
+  assert.equal((await all('SELECT * FROM outbound_log')).length, 0);
 });
 
 test('友だち追加時に案内を返す', async () => {
   await handleEvents([{ type: 'follow', webhookEventId: 'f2', replyToken: 'rt', source: { userId: 'U_new' } }], START - DAY);
-  assert.ok(all('SELECT kind FROM outbound_log').some((l) => l.kind.startsWith('follow')));
+  assert.ok((await all('SELECT kind FROM outbound_log')).some((l) => l.kind.startsWith('follow')));
   assert.ok(welcomeMessage());
 });

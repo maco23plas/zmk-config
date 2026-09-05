@@ -4,38 +4,41 @@
 import { config } from '../config.js';
 import { clock } from '../clock.js';
 import { log } from '../lib/log.js';
-import { send } from '../lib/http.js';
+import { text } from '../lib/http.js';
 import { verifySignature } from '../line/signature.js';
 import { handleEvents } from '../line/webhook.js';
 
 export function register(router) {
-  router.post('/line/webhook', (req, res, ctx) => {
+  router.post('/line/webhook', async (ctx) => {
     if (!config.line.channelSecret) {
       log.warn('LINE_CHANNEL_SECRET が未設定のため Webhook を拒否しました');
-      return send(res, 503, 'channel secret not configured');
+      return text('channel secret not configured', 503);
     }
 
-    const signature = req.headers['x-line-signature'];
-    if (!verifySignature(ctx.rawBody, signature, config.line.channelSecret)) {
+    const signature = ctx.request.headers.get('x-line-signature');
+    if (!(await verifySignature(ctx.rawBody, signature, config.line.channelSecret))) {
       log.warn('LINE Webhook の署名検証に失敗しました');
-      return send(res, 401, 'invalid signature');
+      return text('invalid signature', 401);
     }
 
     let payload;
     try {
-      payload = JSON.parse(ctx.rawBody.toString('utf8') || '{}');
+      payload = JSON.parse(new TextDecoder().decode(ctx.rawBody) || '{}');
     } catch {
-      return send(res, 400, 'invalid json');
+      return text('invalid json', 400);
     }
 
-    // 先に200を返してから処理する（LINEの3秒タイムアウト対策）
-    send(res, 200, 'ok');
-
     const events = Array.isArray(payload.events) ? payload.events : [];
-    if (events.length === 0) return; // 接続確認（Verify）はイベント無しで飛んでくる
+    // 接続確認（Verify）はイベント無しで飛んでくる
+    if (events.length === 0) return text('ok');
 
-    handleEvents(events, clock.now()).catch((err) => {
+    // 200を先に返し、処理は裏で続ける（LINEの3秒タイムアウト対策）。
+    // waitUntil があればレスポンス後も実行が保証される。
+    const work = handleEvents(events, clock.now()).catch((err) => {
       log.error('Webhook処理で例外:', err?.stack || err);
     });
+    if (ctx.waitUntil) ctx.waitUntil(work); else await work;
+
+    return text('ok');
   }, { noCsrf: true });
 }

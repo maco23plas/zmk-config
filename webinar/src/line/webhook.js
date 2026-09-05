@@ -19,9 +19,9 @@ const KEYWORDS = [
 ];
 
 /** すでに処理済みのイベントなら true（LINEの再送対策） */
-function seenBefore(eventId, now) {
+async function seenBefore(eventId, now) {
   if (!eventId) return false;
-  const result = run(
+  const result = await run(
     'INSERT INTO webhook_events (event_id, created_at) VALUES (?, ?) ON CONFLICT(event_id) DO NOTHING',
     eventId, now,
   );
@@ -29,7 +29,7 @@ function seenBefore(eventId, now) {
 }
 
 export function upsertLineUser(userId, displayName, now, followed = 1) {
-  run(
+  return run(
     `INSERT INTO line_users (user_id, display_name, followed, created_at, updated_at)
      VALUES (?,?,?,?,?)
      ON CONFLICT(user_id) DO UPDATE SET
@@ -44,7 +44,7 @@ export function upsertLineUser(userId, displayName, now, followed = 1) {
 export async function handleEvents(events, now = Date.now()) {
   for (const event of events || []) {
     try {
-      if (seenBefore(event.webhookEventId, now)) {
+      if (await seenBefore(event.webhookEventId, now)) {
         log.info('重複イベントを無視:', event.webhookEventId);
         continue;
       }
@@ -60,14 +60,14 @@ async function handleEvent(event, now) {
 
   if (event.type === 'follow' && userId) {
     const profile = await getProfile(userId);
-    upsertLineUser(userId, profile.displayName, now, 1);
+    await upsertLineUser(userId, profile.displayName, now, 1);
     await replyMessage(event.replyToken, msg.welcomeMessage(), { kind: 'follow' });
     return;
   }
 
   if (event.type === 'unfollow' && userId) {
     // ブロックされた相手にプッシュしても失敗するだけなので、送信対象から外す
-    upsertLineUser(userId, '', now, 0);
+    await upsertLineUser(userId, '', now, 0);
     log.info('ブロックまたは友だち解除:', userId);
     return;
   }
@@ -84,7 +84,7 @@ async function handleTextMessage(event, userId, body, now) {
   // 1) 予約コードとして解釈できるか（最優先）
   const candidates = codeCandidates(trimmed);
   for (const code of candidates) {
-    if (!getByLinkCode(code)) continue;
+    if (!(await getByLinkCode(code))) continue;
     await linkByCode(event, userId, code, now);
     return;
   }
@@ -106,9 +106,9 @@ async function handleTextMessage(event, userId, body, now) {
 
 async function linkByCode(event, userId, code, now) {
   const profile = await getProfile(userId);
-  upsertLineUser(userId, profile.displayName, now, 1);
+  await upsertLineUser(userId, profile.displayName, now, 1);
 
-  const result = linkLineUser(code, userId, profile.displayName, now);
+  const result = await linkLineUser(code, userId, profile.displayName, now);
 
   if (!result.ok) {
     const reply = result.reason === 'already_linked_other' ? msg.alreadyLinkedOtherMessage()
@@ -119,15 +119,15 @@ async function linkByCode(event, userId, code, now) {
   }
 
   const reservation = result.reservation;
-  syncJobs(reservation.id, now);
+  await syncJobs(reservation.id, now);
 
   // いま返信で「予約完了」を伝えたので、同じ内容のconfirm通知は送らない
-  const confirmJob = get(
+  const confirmJob = await get(
     `SELECT id FROM notification_jobs WHERE reservation_id = ? AND kind = 'confirm' AND status = 'pending'`,
     reservation.id,
   );
   if (confirmJob) {
-    run(`UPDATE notification_jobs SET status='sent', sent_at=?, updated_at=?, last_error='返信で通知済み' WHERE id=?`,
+    await run(`UPDATE notification_jobs SET status='sent', sent_at=?, updated_at=?, last_error='返信で通知済み' WHERE id=?`,
       now, now, confirmJob.id);
   }
 
@@ -141,15 +141,15 @@ async function linkByCode(event, userId, code, now) {
 }
 
 async function handleSessionList(event, userId, now) {
-  await replyMessage(event.replyToken, msg.sessionListMessage(listOpenSessions(now, 5)), { kind: 'session_list' });
+  await replyMessage(event.replyToken, msg.sessionListMessage(await listOpenSessions(now, 5)), { kind: 'session_list' });
 }
 
 async function handleMyReservations(event, userId, now) {
-  await replyMessage(event.replyToken, msg.myReservationsMessage(listUpcomingByLineUser(userId, now)), { kind: 'my_reservations' });
+  await replyMessage(event.replyToken, msg.myReservationsMessage(await listUpcomingByLineUser(userId, now)), { kind: 'my_reservations' });
 }
 
 async function handleCancelGuide(event, userId, now) {
-  await replyMessage(event.replyToken, msg.cancelGuideMessage(listUpcomingByLineUser(userId, now)), { kind: 'cancel_guide' });
+  await replyMessage(event.replyToken, msg.cancelGuideMessage(await listUpcomingByLineUser(userId, now)), { kind: 'cancel_guide' });
 }
 
 async function handleHelp(event) {
@@ -157,8 +157,8 @@ async function handleHelp(event) {
 }
 
 /** プッシュしてよい相手か（ブロック済みを除外） */
-export function canPushTo(userId) {
-  const row = get('SELECT followed FROM line_users WHERE user_id = ?', userId);
+export async function canPushTo(userId) {
+  const row = await get('SELECT followed FROM line_users WHERE user_id = ?', userId);
   // 記録が無い場合は「サイト予約→未フォロー」ではなく取りこぼしの可能性があるので送信を試みる
   return !row || row.followed === 1;
 }

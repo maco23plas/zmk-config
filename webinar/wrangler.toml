@@ -1,0 +1,43 @@
+# Cloudflare Workers の設定（無料プランで動きます）
+#
+# 初回セットアップ:
+#   npx wrangler d1 create antai-webinar        ← 出力された database_id を下に貼る
+#   npx wrangler d1 execute antai-webinar --remote --file=src/schema.sql
+#   npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+#   npx wrangler secret put LINE_CHANNEL_SECRET
+#   npx wrangler secret put ADMIN_PASS
+#   npx wrangler secret put SESSION_SECRET
+#   npx wrangler deploy
+
+name = "antai-webinar"
+main = "src/worker-entry.js"
+compatibility_date = "2026-09-01"
+
+# CSS/JS を配信する。public/static/app.css → /static/app.css
+[assets]
+directory = "./public"
+
+# 予約・通知の保存先（SQLite互換）
+[[d1_databases]]
+binding = "DB"
+database_name = "antai-webinar"
+# ↓ npx wrangler d1 create antai-webinar が出力した database_id に必ず差し替えてください
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# 通知ワーカー。無料プランでも1分ごとに実行できる。
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# デプロイ後に払い出される https://<name>.<subdomain>.workers.dev に差し替える
+BASE_URL = "https://antai-webinar.example.workers.dev"
+LINE_BASIC_ID = ""
+LINE_ADD_FRIEND_URL = "https://lin.ee/tyGZJqhE"
+ADMIN_USER = "admin"
+NOTIFY_CONFIRM = "on"
+NOTIFY_REMIND_1D = "on"
+NOTIFY_REMIND_10M = "on"
+NOTIFY_START = "off"
+NOTIFY_FOLLOWUP = "off"
+# 1回の実行で送る上限。無料プランのサブリクエスト上限(50)に収まるようにしている。
+MAX_SENDS_PER_RUN = "40"

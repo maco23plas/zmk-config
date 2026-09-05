@@ -2,7 +2,7 @@
 // 予約が確定した時点で「いつ・何を送るか」をDBに積んでおき、
 // ワーカーが期限の来たものを順に送る。プロセスが落ちても予定は消えない。
 
-import { all, get, run } from '../db.js';
+import { all, get, run, batch } from '../db.js';
 import { config } from '../config.js';
 import { HOUR, MINUTE, DAY } from '../lib/time.js';
 
@@ -50,6 +50,9 @@ export const JOB_ORDER = ['confirm', 'remind_1d', 'watch_link_3h', 'remind_10m',
 export const RETRY_BACKOFF_MS = [30 * 1000, 2 * MINUTE, 10 * MINUTE, 30 * MINUTE];
 export const MAX_ATTEMPTS = RETRY_BACKOFF_MS.length + 1;
 
+/** 送信中のまま固まったジョブを戻すまでの時間 */
+const STUCK_AFTER_MS = 5 * MINUTE;
+
 /**
  * 送るべきジョブの一覧を組み立てる純粋関数。
  * @param {{startAt:number, durationSec:number}} session
@@ -70,8 +73,7 @@ export function planJobs(session, now, enabled = config.notify) {
     const deadlineAt = spec.deadline(ctx);
     // 予定時刻が過去なら「今すぐ」に繰り上げる（開催直前の駆け込み予約でも視聴リンクが届く）
     const scheduledAt = rawOffset === null ? now : Math.max(rawOffset, now);
-    const status = now > deadlineAt ? 'skipped' : 'pending';
-    jobs.push({ kind, scheduledAt, deadlineAt, status });
+    jobs.push({ kind, scheduledAt, deadlineAt, status: now > deadlineAt ? 'skipped' : 'pending' });
   }
   return jobs;
 }
@@ -80,8 +82,8 @@ export function planJobs(session, now, enabled = config.notify) {
  * 予約に対する通知予定をDBへ反映する（何度呼んでも安全）。
  * LINE未連携の間は送る手段が無いので積まない。連携された時点で呼び直す。
  */
-export function syncJobs(reservationId, now) {
-  const res = get(
+export async function syncJobs(reservationId, now) {
+  const res = await get(
     `SELECT r.id, r.status, r.line_user_id, s.start_at, w.duration_sec
        FROM reservations r
        JOIN sessions s ON s.id = r.session_id
@@ -91,40 +93,39 @@ export function syncJobs(reservationId, now) {
   );
   if (!res) return [];
   if (res.status !== 'active' || !res.line_user_id) {
-    cancelJobs(reservationId);
+    await cancelJobs(reservationId, now);
     return [];
   }
 
   const jobs = planJobs({ startAt: res.start_at, durationSec: res.duration_sec }, now);
-  for (const job of jobs) {
-    run(
-      `INSERT INTO notification_jobs
-         (reservation_id, kind, scheduled_at, deadline_at, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(reservation_id, kind) DO UPDATE SET
-         scheduled_at = excluded.scheduled_at,
-         deadline_at  = excluded.deadline_at,
-         status       = excluded.status,
-         updated_at   = excluded.updated_at
-       WHERE notification_jobs.status IN ('pending', 'skipped', 'canceled')`,
-      reservationId, job.kind, job.scheduledAt, job.deadlineAt, job.status, now, now,
-    );
-  }
+  await batch(jobs.map((job) => ({
+    sql: `INSERT INTO notification_jobs
+            (reservation_id, kind, scheduled_at, deadline_at, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(reservation_id, kind) DO UPDATE SET
+            scheduled_at = excluded.scheduled_at,
+            deadline_at  = excluded.deadline_at,
+            status       = excluded.status,
+            updated_at   = excluded.updated_at
+          WHERE notification_jobs.status IN ('pending', 'skipped', 'canceled')`,
+    params: [reservationId, job.kind, job.scheduledAt, job.deadlineAt, job.status, now, now],
+  })));
   return jobs;
 }
 
 /** 予約キャンセル時など。未送信のジョブを止める。 */
-export function cancelJobs(reservationId) {
-  run(
-    `UPDATE notification_jobs SET status = 'canceled', updated_at = ?
-      WHERE reservation_id = ? AND status IN ('pending', 'skipped', 'failed')`,
-    Date.now(), reservationId,
-  );
-}
+export const cancelJobs = (reservationId, now = Date.now()) =>
+  run(`UPDATE notification_jobs SET status = 'canceled', updated_at = ?
+        WHERE reservation_id = ? AND status IN ('pending', 'skipped', 'failed')`, now, reservationId);
+
+/** 送信中のまま止まったジョブを送信待ちに戻す（プロセス強制終了などの後始末） */
+export const reclaimStuckJobs = (now) =>
+  run(`UPDATE notification_jobs SET status = 'pending', updated_at = ?
+        WHERE status = 'sending' AND updated_at < ?`, now, now - STUCK_AFTER_MS);
 
 /** 送信すべきジョブを取り出す（配信対象の情報を結合して返す） */
-export function dueJobs(now, limit = 50) {
-  return all(
+export const dueJobs = (now, limit = 50) =>
+  all(
     `SELECT j.*, r.watch_token, r.link_code, r.name, r.line_user_id, r.status AS reservation_status,
             s.id AS session_id, s.start_at, s.status AS session_status,
             w.title, w.duration_sec
@@ -137,36 +138,45 @@ export function dueJobs(now, limit = 50) {
       LIMIT ?`,
     now, limit,
   );
+
+/**
+ * ジョブを自分のものとして確保する。
+ * 実行が重なっても、同じジョブを2回送ってしまうことがない。
+ * @returns {Promise<boolean>} 確保できたら true
+ */
+export async function claimJob(jobId, now) {
+  const r = await run(
+    `UPDATE notification_jobs SET status = 'sending', updated_at = ? WHERE id = ? AND status = 'pending'`,
+    now, jobId,
+  );
+  return r.changes > 0;
 }
 
-export function markSent(jobId, now) {
+export const markSent = (jobId, now) =>
   run(`UPDATE notification_jobs SET status='sent', sent_at=?, updated_at=?, last_error='' WHERE id=?`, now, now, jobId);
-}
 
-export function markSkipped(jobId, reason, now) {
+export const markSkipped = (jobId, reason, now) =>
   run(`UPDATE notification_jobs SET status='skipped', last_error=?, updated_at=? WHERE id=?`, reason, now, jobId);
-}
 
 /**
  * 送信失敗の記録。一時的なエラーなら指数バックオフで再試行、
  * 恒久的なエラー（ブロック済み等）は即 failed。
  */
-export function markFailure(job, error, now, { permanent = false } = {}) {
+export async function markFailure(job, error, now, { permanent = false } = {}) {
   const attempts = job.attempts + 1;
   const message = String(error).slice(0, 500);
   if (permanent || attempts >= MAX_ATTEMPTS) {
-    run(`UPDATE notification_jobs SET status='failed', attempts=?, last_error=?, updated_at=? WHERE id=?`,
+    await run(`UPDATE notification_jobs SET status='failed', attempts=?, last_error=?, updated_at=? WHERE id=?`,
       attempts, message, now, job.id);
     return { retryAt: null, attempts };
   }
   const retryAt = now + RETRY_BACKOFF_MS[attempts - 1];
-  run(`UPDATE notification_jobs SET status='pending', attempts=?, last_error=?, scheduled_at=?, updated_at=? WHERE id=?`,
+  await run(`UPDATE notification_jobs SET status='pending', attempts=?, last_error=?, scheduled_at=?, updated_at=? WHERE id=?`,
     attempts, message, retryAt, now, job.id);
   return { retryAt, attempts };
 }
 
 /** 管理画面から手動で再送する */
-export function requeue(jobId, now) {
+export const requeue = (jobId, now) =>
   run(`UPDATE notification_jobs SET status='pending', attempts=0, last_error='', scheduled_at=?, updated_at=?
         WHERE id=? AND status IN ('failed','skipped','sent')`, now, now, jobId);
-}

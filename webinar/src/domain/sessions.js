@@ -1,5 +1,5 @@
 import { all, get, run } from '../db.js';
-import { newId } from '../lib/ids.js';
+import { newId } from '../lib/crypto.js';
 import { jstDayStart, jstParts, parseHhMm, DAY } from '../lib/time.js';
 import { playbackState, PlaybackState } from './playback.js';
 
@@ -13,24 +13,23 @@ const SESSION_SELECT = `
 
 export const getSession = (id) => get(`${SESSION_SELECT} WHERE s.id = ?`, id);
 
-/** 予約受付中の開催枠。終了済みの枠は出さない。 */
-export function listOpenSessions(now, limit = 20) {
-  return all(
+/** 予約受付中の開催枠。終了済みと満席の枠は出さない。 */
+export async function listOpenSessions(now, limit = 20) {
+  const rows = await all(
     `${SESSION_SELECT}
       WHERE s.status = 'open' AND s.start_at + w.duration_sec * 1000 > ?
       ORDER BY s.start_at ASC LIMIT ?`,
     now, limit,
-  ).filter((s) => seatsLeft(s) !== 0);
+  );
+  return rows.filter((s) => seatsLeft(s) !== 0);
 }
 
 /** 管理画面用（中止・満席も含む） */
-export function listSessions(fromMs, limit = 200) {
-  return all(`${SESSION_SELECT} WHERE s.start_at >= ? ORDER BY s.start_at ASC LIMIT ?`, fromMs, limit);
-}
+export const listSessions = (fromMs, limit = 200) =>
+  all(`${SESSION_SELECT} WHERE s.start_at >= ? ORDER BY s.start_at ASC LIMIT ?`, fromMs, limit);
 
-export function listRecentSessions(limit = 50) {
-  return all(`${SESSION_SELECT} ORDER BY s.start_at DESC LIMIT ?`, limit);
-}
+export const listRecentSessions = (limit = 50) =>
+  all(`${SESSION_SELECT} ORDER BY s.start_at DESC LIMIT ?`, limit);
 
 /** 残席。capacity=0 は無制限なので null を返す。 */
 export function seatsLeft(session) {
@@ -55,15 +54,15 @@ export const toPlan = (session) => ({
   status: session.status,
 });
 
-export function createSession({ webinarId, startAt, capacity = 0, ruleId = null }, now = Date.now()) {
+export async function createSession({ webinarId, startAt, capacity = 0, ruleId = null }, now = Date.now()) {
   const id = newId('ses');
-  run('INSERT INTO sessions (id, webinar_id, start_at, capacity, status, rule_id, created_at) VALUES (?,?,?,?,?,?,?)',
+  await run('INSERT INTO sessions (id, webinar_id, start_at, capacity, status, rule_id, created_at) VALUES (?,?,?,?,?,?,?)',
     id, webinarId, startAt, capacity, 'open', ruleId, now);
   return getSession(id);
 }
 
-export function setSessionStatus(id, status) {
-  run('UPDATE sessions SET status = ? WHERE id = ?', status, id);
+export async function setSessionStatus(id, status) {
+  await run('UPDATE sessions SET status = ? WHERE id = ?', status, id);
   return getSession(id);
 }
 
@@ -72,12 +71,13 @@ export const deleteSession = (id) => run('DELETE FROM sessions WHERE id = ?', id
 // ---- 定期開催ルール --------------------------------------------------------
 
 export const listRules = () =>
-  all(`SELECT sr.*, w.title FROM schedule_rules sr JOIN webinars w ON w.id = sr.webinar_id ORDER BY sr.id`);
+  all('SELECT sr.*, w.title FROM schedule_rules sr JOIN webinars w ON w.id = sr.webinar_id ORDER BY sr.id');
 
-export function createRule({ webinarId, weekdays, timeJst, capacity = 0, horizonDays = 14 }, now = Date.now()) {
-  run('INSERT INTO schedule_rules (webinar_id, weekdays, time_jst, capacity, horizon_days, active, created_at) VALUES (?,?,?,?,?,1,?)',
+export async function createRule({ webinarId, weekdays, timeJst, capacity = 0, horizonDays = 14 }, now = Date.now()) {
+  const result = await run(
+    'INSERT INTO schedule_rules (webinar_id, weekdays, time_jst, capacity, horizon_days, active, created_at) VALUES (?,?,?,?,?,1,?)',
     webinarId, weekdays, timeJst, capacity, horizonDays, now);
-  return get('SELECT * FROM schedule_rules WHERE id = last_insert_rowid()');
+  return get('SELECT * FROM schedule_rules WHERE id = ?', result.lastInsertRowid);
 }
 
 export const setRuleActive = (id, active) =>
@@ -87,11 +87,11 @@ export const deleteRule = (id) => run('DELETE FROM schedule_rules WHERE id = ?',
 
 /**
  * 定期開催ルールから、まだ存在しない開催枠を作る。
- * 起動時とワーカーの巡回で呼ばれるので、毎日ぶんの枠が自動的に先まで用意される。
- * @returns {number} 追加した枠の数
+ * 起動時とワーカーの巡回で呼ばれるので、先の日程の枠が自動的に用意され続ける。
+ * @returns {Promise<number>} 追加した枠の数
  */
-export function generateSessionsFromRules(now = Date.now()) {
-  const rules = all('SELECT * FROM schedule_rules WHERE active = 1');
+export async function generateSessionsFromRules(now = Date.now()) {
+  const rules = await all('SELECT * FROM schedule_rules WHERE active = 1');
   let created = 0;
 
   for (const rule of rules) {
@@ -105,10 +105,9 @@ export function generateSessionsFromRules(now = Date.now()) {
       const dayStart = today + d * DAY;
       const startAt = dayStart + timeOffset;
       if (startAt <= now) continue;
-      const weekday = jstParts(dayStart).weekday;
-      if (!weekdays.has(weekday)) continue;
+      if (!weekdays.has(jstParts(dayStart).weekday)) continue;
 
-      const result = run(
+      const result = await run(
         `INSERT INTO sessions (id, webinar_id, start_at, capacity, status, rule_id, created_at)
          VALUES (?,?,?,?, 'open', ?, ?)
          ON CONFLICT(rule_id, start_at) WHERE rule_id IS NOT NULL DO NOTHING`,

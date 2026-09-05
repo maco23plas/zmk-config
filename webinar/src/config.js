@@ -1,72 +1,76 @@
-// 環境変数の読み込みと既定値。.env があれば読む（依存ライブラリなしの簡易パーサ）。
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// 設定。Node では process.env（＋.env）、Cloudflare Workers では env バインディングを渡す。
+// ※ Workers にもバンドルされるため node: 系を import しないこと。
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-function loadDotEnv() {
-  const file = path.join(ROOT, '.env');
-  if (!fs.existsSync(file)) return;
-  for (const raw of fs.readFileSync(file, 'utf8').split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    if (eq < 0) continue;
-    const key = line.slice(0, eq).trim();
-    let val = line.slice(eq + 1).trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    if (process.env[key] === undefined) process.env[key] = val;
-  }
-}
-loadDotEnv();
-
-const env = process.env;
-const bool = (v, dflt) => (v === undefined || v === '' ? dflt : /^(1|on|true|yes)$/i.test(v));
-const num = (v, dflt) => (Number.isFinite(Number(v)) && v !== '' && v !== undefined ? Number(v) : dflt);
-const resolve = (p) => (path.isAbsolute(p) ? p : path.join(ROOT, p));
-
-const basicId = (env.LINE_BASIC_ID || '').trim();
-
-export const config = {
-  port: num(env.PORT, 3000),
-  baseUrl: (env.BASE_URL || `http://localhost:${num(env.PORT, 3000)}`).replace(/\/+$/, ''),
-
-  line: {
-    accessToken: (env.LINE_CHANNEL_ACCESS_TOKEN || '').trim(),
-    channelSecret: (env.LINE_CHANNEL_SECRET || '').trim(),
-    basicId,
-    // 友だち追加URL。未設定ならベーシックIDから組み立てる。
-    addFriendUrl: (env.LINE_ADD_FRIEND_URL || '').trim()
-      || (basicId ? `https://line.me/R/ti/p/${encodeURIComponent(basicId)}` : ''),
-  },
-
-  admin: {
-    user: env.ADMIN_USER || 'admin',
-    pass: env.ADMIN_PASS || '',
-    sessionSecret: env.SESSION_SECRET || '',
-  },
-
-  dbPath: resolve(env.DB_PATH || './data/webinar.db'),
-  mediaDir: resolve(env.MEDIA_DIR || './media'),
-
-  notify: {
-    confirm: bool(env.NOTIFY_CONFIRM, true),
-    remind_1d: bool(env.NOTIFY_REMIND_1D, true),
-    // watch_link_3h（3時間前の視聴リンク送付）は本システムの中核要件のため常時有効。
-    watch_link_3h: true,
-    remind_10m: bool(env.NOTIFY_REMIND_10M, true),
-    start: bool(env.NOTIFY_START, false),
-    followup: bool(env.NOTIFY_FOLLOWUP, false),
-  },
-
-  workerIntervalMs: num(env.WORKER_INTERVAL_MS, 20000),
-
-  // アクセストークン未設定ならドライラン（送信せずログのみ）。ローカル検証用。
-  get dryRun() { return !this.line.accessToken; },
+const bool = (v, dflt) => (v === undefined || v === '' ? dflt : /^(1|on|true|yes)$/i.test(String(v)));
+const num = (v, dflt) => {
+  const n = Number(v);
+  return v !== undefined && v !== '' && Number.isFinite(n) ? n : dflt;
 };
+
+export function makeConfig(source = {}) {
+  const env = source || {};
+  const port = num(env.PORT, 3000);
+  const basicId = String(env.LINE_BASIC_ID || '').trim();
+  const accessToken = String(env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+
+  return {
+    port,
+    baseUrl: String(env.BASE_URL || `http://localhost:${port}`).replace(/\/+$/, ''),
+
+    line: {
+      accessToken,
+      channelSecret: String(env.LINE_CHANNEL_SECRET || '').trim(),
+      basicId,
+      addFriendUrl: String(env.LINE_ADD_FRIEND_URL || '').trim()
+        || (basicId ? `https://line.me/R/ti/p/${encodeURIComponent(basicId)}` : ''),
+    },
+
+    admin: {
+      user: String(env.ADMIN_USER || 'admin'),
+      pass: String(env.ADMIN_PASS || ''),
+      sessionSecret: String(env.SESSION_SECRET || ''),
+    },
+
+    dbPath: String(env.DB_PATH || './data/webinar.db'),
+    mediaDir: String(env.MEDIA_DIR || './media'),
+    publicDir: String(env.PUBLIC_DIR || './public'),
+
+    notify: {
+      confirm: bool(env.NOTIFY_CONFIRM, true),
+      remind_1d: bool(env.NOTIFY_REMIND_1D, true),
+      // watch_link_3h（3時間前の視聴リンク）は本システムの中核要件のため常時有効。
+      watch_link_3h: true,
+      remind_10m: bool(env.NOTIFY_REMIND_10M, true),
+      start: bool(env.NOTIFY_START, false),
+      followup: bool(env.NOTIFY_FOLLOWUP, false),
+    },
+
+    workerIntervalMs: num(env.WORKER_INTERVAL_MS, 20000),
+
+    // 1回の実行で送るLINEメッセージの上限。
+    // Cloudflare Workers の無料プランは1呼び出しあたり50サブリクエストまでなので、
+    // 余裕を見て既定を40にしている（1分ごとに実行されるので毎時2400通まで捌ける）。
+    maxSendsPerRun: num(env.MAX_SENDS_PER_RUN, 40),
+
+    // 動画ファイルの自前配信ができる環境か（Workers はディスクを持たない）
+    canServeFiles: true,
+
+    // アクセストークン未設定ならドライラン（送信せずログのみ）
+    dryRun: !accessToken,
+  };
+}
+
+/** 実行中の設定。initRuntime / configure で中身が入る。 */
+export const config = makeConfig({});
+
+export function configure(source, overrides = {}) {
+  const next = makeConfig(source);
+  Object.assign(config, next, overrides);
+  Object.assign(config.line, next.line, overrides.line || {});
+  Object.assign(config.admin, next.admin, overrides.admin || {});
+  Object.assign(config.notify, next.notify, overrides.notify || {});
+  return config;
+}
 
 /** 起動時の設定チェック。致命的でないものは警告として返す。 */
 export function configWarnings() {
@@ -76,6 +80,8 @@ export function configWarnings() {
   if (!config.line.addFriendUrl) w.push('LINE_BASIC_ID / LINE_ADD_FRIEND_URL 未設定 → 友だち追加ボタンが出せません');
   if (!config.admin.pass) w.push('ADMIN_PASS 未設定 → 管理画面はロックされます');
   if (!config.admin.sessionSecret) w.push('SESSION_SECRET 未設定 → 管理画面はロックされます');
-  if (config.baseUrl.startsWith('http://localhost')) w.push(`BASE_URL が ${config.baseUrl} です。本番では公開URLを設定してください`);
+  if (!/^https:\/\//.test(config.baseUrl)) {
+    w.push(`BASE_URL が ${config.baseUrl} です。LINEはhttps以外のリンクを受け付けないため、本番では公開URL(https)を設定してください`);
+  }
   return w;
 }

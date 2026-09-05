@@ -1,7 +1,6 @@
 -- 説明会ウェビナーシステム スキーマ
 -- 時刻はすべて UTC の epoch ミリ秒（INTEGER）で保存する。
-
-PRAGMA foreign_keys = ON;
+-- SQLite / Cloudflare D1 の両方でそのまま使える DDL のみで構成している。
 
 -- 配信コンテンツ（何を流すか）
 CREATE TABLE IF NOT EXISTS webinars (

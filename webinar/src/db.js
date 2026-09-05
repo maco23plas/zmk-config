@@ -1,58 +1,32 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { config, ROOT } from './config.js';
+// データベースへの唯一の入口。
+// 実体は差し替え可能なドライバ（Nodeの node:sqlite / Cloudflareの D1）。
+// どちらも非同期のインターフェースに揃えてあるので、上位のコードは環境を意識しない。
+//
+// ※ このファイルは Cloudflare Workers にもバンドルされるため、node: 系を import しないこと。
 
-let db = null;
+let driver = null;
 
-export function openDb(dbPath = config.dbPath) {
-  if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  const handle = new DatabaseSync(dbPath);
-  handle.exec('PRAGMA journal_mode = WAL');
-  handle.exec('PRAGMA foreign_keys = ON');
-  handle.exec('PRAGMA busy_timeout = 5000');
-  handle.exec('PRAGMA synchronous = NORMAL');
-  handle.exec(fs.readFileSync(path.join(ROOT, 'src', 'schema.sql'), 'utf8'));
-  return handle;
+export function setDriver(d) { driver = d; }
+export function getDriver() {
+  if (!driver) throw new Error('データベースドライバが未設定です（initRuntime を呼んでください）');
+  return driver;
 }
 
-export function getDb() {
-  if (!db) db = openDb();
-  return db;
-}
+export const all = (sql, ...params) => getDriver().all(sql, params);
+export const get = (sql, ...params) => getDriver().get(sql, params);
+export const run = (sql, ...params) => getDriver().run(sql, params);
 
-/** テスト用に別のDBハンドルへ差し替える */
-export function setDb(handle) { db = handle; }
+/**
+ * 複数の書き込みをまとめて実行する（途中で失敗したら全部取り消す）。
+ * @param {Array<{sql:string, params:any[]}>} statements
+ */
+export const batch = (statements) => getDriver().batch(statements);
 
-export function closeDb() {
-  if (db) { db.close(); db = null; }
-}
-
-const plain = (row) => (row ? { ...row } : row);
-
-export const all = (sql, ...params) => getDb().prepare(sql).all(...params).map(plain);
-export const get = (sql, ...params) => plain(getDb().prepare(sql).get(...params)) ?? null;
-export const run = (sql, ...params) => getDb().prepare(sql).run(...params);
-
-/** 複数の書き込みをまとめてコミットする。例外時はロールバック。 */
-export function tx(fn) {
-  const handle = getDb();
-  handle.exec('BEGIN IMMEDIATE');
-  try {
-    const result = fn();
-    handle.exec('COMMIT');
-    return result;
-  } catch (err) {
-    try { handle.exec('ROLLBACK'); } catch { /* すでにロールバック済み */ }
-    throw err;
-  }
-}
-
-export function getSetting(key, dflt = null) {
-  const row = get('SELECT v FROM settings WHERE k = ?', key);
+export async function getSetting(key, dflt = null) {
+  const row = await get('SELECT v FROM settings WHERE k = ?', key);
   return row ? row.v : dflt;
 }
 
-export function setSetting(key, value) {
-  run('INSERT INTO settings (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v', key, String(value));
+export async function setSetting(key, value) {
+  await run('INSERT INTO settings (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v', key, String(value));
 }

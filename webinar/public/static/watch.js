@@ -401,6 +401,6 @@
     else { sendEvent('open', positionSec()); }
     tick();
     setInterval(tick, 500);
-    setInterval(function () { if (started && !ended) sendEvent('heartbeat', positionSec()); }, 30000);
+    // 30秒ごとの /state 同期がハートビートを兼ねるので、別途の送信はしない
   }
 })();

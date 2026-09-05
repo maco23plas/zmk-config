@@ -32,9 +32,9 @@ after(async () => {
 beforeEach(() => { freshDb(); clock.setNow(START - 5 * DAY); });
 
 /** 説明会と開催枠を用意する */
-function setup({ capacity = 0, durationSec = 3600 } = {}) {
+async function setup({ capacity = 0, durationSec = 3600 } = {}) {
   const now = clock.now();
-  const webinar = createWebinar({
+  const webinar = await createWebinar({
     title: 'オンライン説明会', video_url: 'file:test.mp4', duration_sec: durationSec,
     cta_label: '無料相談を申し込む', cta_url: 'https://lin.ee/example', cta_at_sec: 1800,
   }, now);
@@ -47,20 +47,20 @@ async function reserve(session, name = '山田太郎') {
     form({ session_id: session.id, name, email: 'test@example.com', agree: '1' }), formHeaders);
   assert.equal(res.status, 303, '予約が受理される');
   const token = res.headers.get('location').split('/').pop();
-  const code = get('SELECT link_code FROM reservations WHERE watch_token = ?', token).link_code;
+  const code = (await get('SELECT link_code FROM reservations WHERE watch_token = ?', token)).link_code;
   return { token, code };
 }
 
 /** 署名付きでWebhookを叩く */
 async function webhook(events) {
   const body = JSON.stringify({ destination: 'x', events });
-  const res = await fetch(server.base + '/line/webhook', {
+  const signature = await signBody(new TextEncoder().encode(body), 'test-channel-secret');
+  // Node アダプタでは waitUntil が無く、応答前に処理が完了している
+  return fetch(server.base + '/line/webhook', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-line-signature': signBody(Buffer.from(body), 'test-channel-secret') },
+    headers: { 'Content-Type': 'application/json', 'x-line-signature': signature },
     body,
   });
-  await new Promise((r) => setTimeout(r, 30)); // 200を返した後の非同期処理を待つ
-  return res;
 }
 
 const linkEvent = (code, userId = 'U_e2e') => ([{
@@ -71,7 +71,7 @@ const linkEvent = (code, userId = 'U_e2e') => ([{
 // ---------------------------------------------------------------------------
 
 test('予約サイトに開催枠が並ぶ', async () => {
-  setup();
+  await setup();
   const html = await (await server.get('/')).text();
   assert.match(html, /オンライン説明会/);
   assert.match(html, /2026年9月10日\(木\) 20:00/);
@@ -79,7 +79,7 @@ test('予約サイトに開催枠が並ぶ', async () => {
 });
 
 test('通し: 予約 → LINE連携 → 3時間前に視聴リンク → 開始時刻に再生 → 終了', async () => {
-  const session = setup();
+  const session = await setup();
 
   // 1. 予約する
   const { token, code } = await reserve(session);
@@ -89,20 +89,20 @@ test('通し: 予約 → LINE連携 → 3時間前に視聴リンク → 開始�
 
   // 2. LINEで連携コードを送る
   await webhook(linkEvent(code));
-  assert.equal(get('SELECT line_user_id FROM reservations WHERE watch_token=?', token).line_user_id, 'U_e2e');
+  assert.equal((await get('SELECT line_user_id FROM reservations WHERE watch_token=?', token)).line_user_id, 'U_e2e');
 
   // 3. 開始4時間前 … まだ視聴リンクは送らない
   clock.setNow(START - 4 * HOUR);
   await runOnce(clock.now());
-  assert.equal(get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`).status, 'pending');
+  assert.equal((await get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`)).status, 'pending');
 
   // 4. 開始3時間前 … 視聴リンクが届く（本システムの中核）
   clock.setNow(START - 3 * HOUR);
   const stats = await runOnce(clock.now());
   assert.ok(stats.sent >= 1);
-  assert.equal(get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`).status, 'sent');
+  assert.equal((await get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`)).status, 'sent');
 
-  const sentPayload = get(`SELECT payload FROM outbound_log WHERE kind LIKE 'watch_link_3h%'`).payload;
+  const sentPayload = (await get(`SELECT payload FROM outbound_log WHERE kind LIKE 'watch_link_3h%'`)).payload;
   assert.match(sentPayload, new RegExp(`/watch/${token}`), '通知に視聴ページのURLが入っている');
 
   // 5. 開始前に視聴ページを開くとカウントダウン。動画はまだ渡さない。
@@ -134,7 +134,7 @@ test('通し: 予約 → LINE連携 → 3時間前に視聴リンク → 開始�
 });
 
 test('開始3時間を切ってからの駆け込み予約でも、視聴リンクがすぐ届く', async () => {
-  const session = setup();
+  const session = await setup();
   clock.setNow(START - 40 * MINUTE);
 
   const { token, code } = await reserve(session, '駆け込み花子');
@@ -142,16 +142,16 @@ test('開始3時間を切ってからの駆け込み予約でも、視聴リン�
 
   const sent = await runOnce(clock.now());
   assert.ok(sent.sent >= 1);
-  const link = get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`);
+  const link = await get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`);
   assert.equal(link.status, 'sent', '3時間前を過ぎていても即時送信される');
   assert.match(
-    get(`SELECT payload FROM outbound_log WHERE kind LIKE 'watch_link_3h%'`).payload,
+    (await get(`SELECT payload FROM outbound_log WHERE kind LIKE 'watch_link_3h%'`)).payload,
     new RegExp(`/watch/${token}`),
   );
 });
 
 test('動画のRangeリクエストに対応する（途中からの読み込み・シークに必要）', async () => {
-  const session = setup();
+  const session = await setup();
   const { token, code } = await reserve(session);
   await webhook(linkEvent(code));
   clock.setNow(START + 5 * MINUTE);
@@ -163,34 +163,34 @@ test('動画のRangeリクエストに対応する（途中からの読み込み
 });
 
 test('定員に達したら受け付けない', async () => {
-  const session = setup({ capacity: 1 });
+  const session = await setup({ capacity: 1 });
   await reserve(session, '一人目');
 
   const res = await server.post('/reserve',
     form({ session_id: session.id, name: '二人目', agree: '1' }), formHeaders);
   assert.equal(res.status, 400);
   assert.match(await res.text(), /満席/);
-  assert.equal(get('SELECT COUNT(*) c FROM reservations').c, 1);
+  assert.equal((await get('SELECT COUNT(*) c FROM reservations')).c, 1);
 });
 
 test('同意のチェックが無ければ受け付けない', async () => {
-  const session = setup();
+  const session = await setup();
   const res = await server.post('/reserve', form({ session_id: session.id, name: '未同意' }), formHeaders);
   assert.equal(res.status, 400);
-  assert.equal(get('SELECT COUNT(*) c FROM reservations').c, 0);
+  assert.equal((await get('SELECT COUNT(*) c FROM reservations')).c, 0);
 });
 
 test('中止した回の視聴ページは開けず、通知も止まる', async () => {
-  const session = setup();
+  const session = await setup();
   const { token, code } = await reserve(session);
   await webhook(linkEvent(code));
 
   const { setSessionStatus } = await import('../src/domain/sessions.js');
-  setSessionStatus(session.id, 'canceled');
+  await setSessionStatus(session.id, 'canceled');
 
   clock.setNow(START - 3 * HOUR);
   await runOnce(clock.now());
-  assert.equal(get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`).status, 'skipped');
+  assert.equal((await get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`)).status, 'skipped');
 
   clock.setNow(START + 5 * MINUTE);
   assert.match(await (await server.get(`/watch/${token}`)).text(), /中止/);
@@ -198,19 +198,19 @@ test('中止した回の視聴ページは開けず、通知も止まる', async
 });
 
 test('利用者が予約をキャンセルすると通知が止まる', async () => {
-  const session = setup();
+  const session = await setup();
   const { token, code } = await reserve(session);
   await webhook(linkEvent(code));
 
   const res = await server.post(`/r/${token}/cancel`, '', formHeaders);
   assert.equal(res.status, 303);
 
-  const statuses = all('SELECT status FROM notification_jobs').map((j) => j.status);
+  const statuses = (await all('SELECT status FROM notification_jobs')).map((j) => j.status);
   assert.ok(statuses.every((s) => s === 'canceled' || s === 'sent'), `実際: ${statuses}`);
 
   clock.setNow(START - 3 * HOUR);
   await runOnce(clock.now());
-  assert.notEqual(get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`).status, 'sent');
+  assert.notEqual((await get(`SELECT status FROM notification_jobs WHERE kind='watch_link_3h'`)).status, 'sent');
 });
 
 test('存在しないトークンの視聴ページは404', async () => {
@@ -220,14 +220,14 @@ test('存在しないトークンの視聴ページは404', async () => {
 });
 
 test('外部サイトからのフォーム送信（CSRF）を拒否する', async () => {
-  const session = setup();
+  const session = await setup();
   const res = await fetch(server.base + '/reserve', {
     method: 'POST', redirect: 'manual',
     headers: { ...formHeaders, Origin: 'https://evil.example.com' },
     body: form({ session_id: session.id, name: '攻撃者', agree: '1' }),
   });
   assert.equal(res.status, 403);
-  assert.equal(get('SELECT COUNT(*) c FROM reservations').c, 0);
+  assert.equal((await get('SELECT COUNT(*) c FROM reservations')).c, 0);
 });
 
 test('署名のないWebhookは受け付けない', async () => {
@@ -256,7 +256,7 @@ test('管理画面はログインしないと見られない', async () => {
 });
 
 test('管理画面で予約とCSVを確認できる', async () => {
-  const session = setup();
+  const session = await setup();
   const { code } = await reserve(session, '確認 太郎');
   await webhook(linkEvent(code));
 
@@ -276,7 +276,7 @@ test('管理画面で予約とCSVを確認できる', async () => {
 });
 
 test('視聴ログと質問が記録される', async () => {
-  const session = setup();
+  const session = await setup();
   const { token, code } = await reserve(session);
   await webhook(linkEvent(code));
   clock.setNow(START + 20 * MINUTE);
@@ -284,8 +284,8 @@ test('視聴ログと質問が記録される', async () => {
   await server.post(`/watch/${token}/event`, JSON.stringify({ kind: 'cta_click', atSec: 1200 }), { 'Content-Type': 'application/json' });
   await server.post(`/watch/${token}/question`, JSON.stringify({ body: '対象になりますか？', atSec: 1250 }), { 'Content-Type': 'application/json' });
 
-  assert.equal(get(`SELECT COUNT(*) c FROM watch_events WHERE kind='cta_click'`).c, 1);
-  assert.equal(get('SELECT body FROM questions').body, '対象になりますか？');
+  assert.equal((await get(`SELECT COUNT(*) c FROM watch_events WHERE kind='cta_click'`)).c, 1);
+  assert.equal((await get('SELECT body FROM questions')).body, '対象になりますか？');
 
   const empty = await server.post(`/watch/${token}/question`, JSON.stringify({ body: '   ' }), { 'Content-Type': 'application/json' });
   assert.equal(empty.status, 400, '空の質問は保存しない');

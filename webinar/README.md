@@ -7,6 +7,9 @@
 > 「Zoomの入り方が分からない」で離脱していた人を取りこぼさないことが目的です。
 > 参加者の操作は「LINEに届いたボタンを押す」だけになります。
 
+**Cloudflare Workers の無料プランで、サーバー代0円のまま運用できます。**
+手元の Node.js でもそのまま動くので、開発と検証はローカルで完結します。
+
 ---
 
 ## 目次
@@ -17,7 +20,7 @@
 4. [LINE公式アカウントの設定](#4-line公式アカウントの設定)
 5. [動画の用意](#5-動画の用意)
 6. [運用の流れ](#6-運用の流れ)
-7. [本番環境へのデプロイ](#7-本番環境へのデプロイ)
+7. [本番環境へのデプロイ（無料）](#7-本番環境へのデプロイ無料)
 8. [法令上の注意（重要）](#8-法令上の注意重要)
 9. [設定項目の一覧](#9-設定項目の一覧)
 10. [困ったときは](#10-困ったときは)
@@ -93,7 +96,8 @@
 
 ## 3. 5分で動かす
 
-必要なもの: **Node.js 22.5 以上**（それ以外の依存パッケージはゼロ。`npm install` は不要です）
+まずは手元で動かして、感触を確かめてください。
+必要なもの: **Node.js 22.5 以上**（実行時の依存パッケージはゼロ。`npm install` は不要です）
 
 ```bash
 cd webinar
@@ -192,6 +196,9 @@ file:seminar.mp4
 `webinar/media/` に置いた動画を配信します。Rangeリクエストに対応しているので、
 途中からの読み込みも問題ありません。**配信時間中しか取得できません**（それ以外は 403）。
 
+> ⚠️ この方式は **Node.js で動かす場合のみ**です。Cloudflare Workers はディスクを持たないため
+> 501 を返します。無料運用したい場合は ① か ③ を選んでください。
+
 ### ③ CDN / S3 のURL
 
 ```
@@ -237,33 +244,104 @@ CloudFront や S3 の**署名付きURL**を都度発行する実装に差し替�
 
 ---
 
-## 7. 本番環境へのデプロイ
+## 7. 本番環境へのデプロイ（無料）
 
-**必須条件**: `BASE_URL` が **https** であること
-（LINEはhttps以外のURLを含むメッセージを受け付けません。httpの場合は自動でテキスト形式に退避しますが、見た目が簡素になります）
+### なぜ Cloudflare Workers なのか
 
-### Docker
+本システムは「開催3時間前に必ず送信する」ため、**止まらない実行環境**が要ります。
+無料で使える候補を比べると、実質これ一択でした。
+
+| 候補 | 判定 |
+|---|---|
+| Render 無料 | 15分で停止し、**無料プランに永続ディスクが無い** → 通知が飛ばず予約も消える ✗ |
+| Fly.io | 2026年に新規の無料枠が廃止 ✗ |
+| Oracle Cloud 無料VM | 7日間CPU20%未満で**インスタンスを回収**される → 低負荷の本アプリは消される ✗ |
+| **Cloudflare Workers + D1** | 10万リクエスト/日・**1分ごとのCron**・DB 5GB・停止なし・クレジットカード不要 ✓ |
+
+無料プランの上限（10万リクエスト/日、D1 は 5GB・500万行読み取り/日）に対し、
+本システムの想定利用（1日100人が45分視聴しても1万リクエスト程度）は十分に収まります。
+
+> **Workers では動画の自前配信ができません**（ディスクを持たないため）。
+> 動画は **YouTube限定公開** か **CDNのURL** を使ってください（`file:` 指定は 501 を返します）。
+> 自前ファイルを配信したい場合は、下の「Node.js で動かす場合」を選んでください。
+
+### 手順（30分ほど）
+
+```bash
+cd webinar
+npm install          # wrangler（デプロイ用ツール）だけを入れます
+
+# 1. Cloudflare にログイン（ブラウザが開きます。カード登録は不要）
+npx wrangler login
+
+# 2. データベースを作る → 出力された database_id を wrangler.toml に貼る
+npm run cf:db:create
+
+# 3. テーブルを作る
+npm run cf:db:init
+
+# 4. 秘密の値を登録する（画面に貼り付ける形で聞かれます）
+npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+npx wrangler secret put LINE_CHANNEL_SECRET
+npx wrangler secret put ADMIN_PASS
+npx wrangler secret put SESSION_SECRET     # openssl rand -hex 32 で生成した値
+
+# 5. 公開する
+npm run cf:deploy
+```
+
+デプロイすると `https://antai-webinar.＜あなたのサブドメイン＞.workers.dev` が払い出されます。
+
+**最後に必ず2つ:**
+1. `wrangler.toml` の `[vars] BASE_URL` を、払い出されたURLに書き換えて `npm run cf:deploy` をやり直す
+   （このURLを元に、LINEに送る視聴リンクを組み立てているため）
+2. LINE Developers の Webhook URL に `https://＜払い出されたURL＞/line/webhook` を設定して「検証」
+
+`[vars] LINE_BASIC_ID` も忘れずに埋めてください（1タップ連携リンクの生成に使います）。
+
+### ローカルでCloudflare版を確認する
+
+```bash
+npx wrangler d1 execute antai-webinar --local --file=src/schema.sql   # 初回のみ
+npm run cf:dev     # → http://localhost:8788
+```
+
+`.dev.vars` に環境変数を書いておけば、本番と同じ構成のまま手元で試せます。
+Cron（通知送信）を手で動かすには `http://localhost:8788/cdn-cgi/handler/scheduled?cron=*+*+*+*+*` を開きます。
+
+### 運用コマンド
+
+```bash
+npm run cf:logs                                             # 稼働中のログを見る
+npx wrangler d1 execute antai-webinar --remote --command "SELECT COUNT(*) FROM reservations"
+npx wrangler d1 export antai-webinar --remote --output backup.sql   # バックアップ
+```
+
+D1のバックアップは月1回ほど手元に保存しておくことをおすすめします。
+
+### 独自ドメインを使う場合
+
+Cloudflare にドメインを追加し、**Workers & Pages → 対象のWorker → 設定 → ドメインとルート**
+からカスタムドメインを追加します。追加後に `BASE_URL` を書き換えて再デプロイしてください。
+
+---
+
+### Node.js で動かす場合（自前サーバー・動画も自前配信したいとき）
+
+同じコードが Node.js でも動きます。**動画ファイルの自前配信（`file:` 指定）が必要な場合はこちら**です。
+ただし常時起動できるサーバー（有料のVPSやPaaS）が要ります。
+
+**Docker:**
 
 ```bash
 docker build -t antai-webinar .
-docker run -d --name webinar -p 3000:3000 \
-  --env-file .env \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/media:/app/media \
-  antai-webinar
+docker run -d --name webinar -p 3000:3000 --env-file .env \
+  -v $(pwd)/data:/app/data -v $(pwd)/media:/app/media antai-webinar
 ```
 
 `data/`（データベース）と `media/`（動画）は**必ず永続化**してください。
 
-### Render / Railway / Fly.io などのPaaS
-
-- ビルドコマンド: なし（依存パッケージがありません）
-- 起動コマンド: `node --disable-warning=ExperimentalWarning src/server.js`
-- **永続ディスクを `/app/data` にマウント**してください（無いと再デプロイで予約が消えます）
-- 環境変数は `.env.example` の内容を設定します
-- **スリープする無料プランは避けてください**。通知ワーカーが止まると3時間前の送信が行われません
-
-### VPS（systemd）
+**systemd:**
 
 ```ini
 # /etc/systemd/system/webinar.service
@@ -284,16 +362,11 @@ WantedBy=multi-user.target
 ```
 
 nginx などのリバースプロキシで https 終端し、`/` をこのアプリへ渡してください。
-
-### バックアップ
-
-`data/webinar.db` をコピーするだけです（SQLite）。日次のcronを推奨します。
+バックアップは `data/webinar.db` をコピーするだけです（SQLite）。
 
 ```bash
 sqlite3 /opt/webinar/data/webinar.db ".backup '/backup/webinar-$(date +%F).db'"
 ```
-
----
 
 ## 8. 法令上の注意（重要）
 
@@ -345,7 +418,8 @@ sqlite3 /opt/webinar/data/webinar.db ".backup '/backup/webinar-$(date +%F).db'"
 | `NOTIFY_REMIND_10M` | `on` | 10分前リマインド |
 | `NOTIFY_START` | `off` | 開始通知 |
 | `NOTIFY_FOLLOWUP` | `off` | 終了30分後のフォローアップ |
-| `WORKER_INTERVAL_MS` | `20000` | 通知ワーカーの巡回間隔 |
+| `WORKER_INTERVAL_MS` | `20000` | 通知ワーカーの巡回間隔（Node版のみ。Cloudflare版はCronが1分ごと） |
+| `MAX_SENDS_PER_RUN` | `40` | 1回の実行で送る上限（Workers無料プランのサブリクエスト上限50に収めるため） |
 
 > **3時間前の視聴リンク送信は本システムの中核要件のため、オフにできません。**
 
@@ -362,7 +436,10 @@ sqlite3 /opt/webinar/data/webinar.db ".backup '/backup/webinar-$(date +%F).db'"
 | 動画が再生されない | ①本編の長さと動画の実尺が合っているか ②`file:` 指定のファイルが `media/` にあるか ③配信時間外は仕様上403です |
 | 音が出ない | ブラウザの制限でミュート開始します。「🔊 音声をオンにする」を押してください |
 | 再生位置がずれる | 5秒ごとにサーバー時刻へ自動補正します。大きくずれる場合はサーバーの時刻同期（NTP）を確認してください |
-| 再起動したら通知が飛ばない | 通知はDBに残るため消えません。起動後の巡回（最大20秒）で送信されます |
+| 再起動したら通知が飛ばない | 通知はDBに残るため消えません。起動後の巡回（Node版は最大20秒、Cloudflare版は最大1分）で送信されます |
+| Cloudflare版で動画が501になる | `file:` 指定は Workers では使えません。`youtube:動画ID` かCDNのURLに変えてください |
+| Cloudflare版でCronが動かない | `npm run cf:logs` でログを確認。`wrangler.toml` の `[triggers] crons` が設定されているかも確認 |
+| 「1027」エラーが出る | Workers無料プランの1日10万リクエストを超えました（翌0時UTCに復帰）。通常運用ではまず到達しません |
 
 ログはすべて標準出力に出ます（`docker logs` / `journalctl -u webinar`）。
 
@@ -373,16 +450,20 @@ sqlite3 /opt/webinar/data/webinar.db ".backup '/backup/webinar-$(date +%F).db'"
 ```
 webinar/
 ├─ src/
-│  ├─ server.js          HTTPサーバー・ルーティング・CSRF対策
-│  ├─ worker.js          通知ワーカー（送信・再試行・枠の自動生成）
-│  ├─ config.js          環境変数
-│  ├─ clock.js           時刻の入口（テストで固定できる）
-│  ├─ db.js / schema.sql SQLite
+│  ├─ app.js            ルーティングとリクエスト処理（両環境で共通）
+│  ├─ server.js         Node.js アダプタ（HTTPサーバー・ファイル配信・常駐ワーカー）
+│  ├─ worker-entry.js   Cloudflare アダプタ（fetch と Cron Trigger）
+│  ├─ worker.js         通知の送信処理（送信・再試行・枠の自動生成）
+│  ├─ config.js         設定（process.env / Workers の env を同じ形に）
+│  ├─ clock.js          時刻の入口（テストで固定できる）
+│  ├─ db.js             DBの入口（ドライバ差し替え式）
+│  ├─ db-node.js / db-d1.js   SQLite / Cloudflare D1 のドライバ
+│  ├─ schema.sql        テーブル定義（両環境で共通）
 │  ├─ domain/
 │  │  ├─ playback.js     ★疑似ライブの状態計算（純粋関数）
 │  │  ├─ notifications.js ★通知スケジューリング
 │  │  ├─ sessions.js     開催枠・定期開催ルール
-│  │  ├─ reservations.js 予約
+│  │  ├─ reservations.js 予約（定員チェックはSQL1本で競合を防ぐ）
 │  │  ├─ webinars.js     配信コンテンツ
 │  │  └─ presence.js     視聴者数
 │  ├─ line/
@@ -390,14 +471,21 @@ webinar/
 │  │  ├─ client.js       Messaging API
 │  │  ├─ messages.js     Flexメッセージの組み立て
 │  │  └─ webhook.js      受信イベントの処理
+│  ├─ lib/
+│  │  ├─ crypto.js       署名・乱数（Web Crypto。両環境で動く）
+│  │  ├─ http.js         ルーター（Web標準のRequest/Response）
+│  │  ├─ html.js         自動エスケープ付きテンプレート
+│  │  └─ time.js         日本時間の変換
 │  ├─ routes/            public / watch / line / admin
-│  └─ views/             HTML生成（自動エスケープ）
-├─ public/
-│  ├─ app.css            デザイン（ANTAIサイトと同じ配色）
-│  └─ watch.js           ★視聴プレイヤー（同期・シーク禁止・CTA・コメント）
-├─ media/                file: 指定の動画置き場
-├─ data/                 SQLite（gitignore）
-└─ test/                 60件のテスト（npm test）
+│  └─ views/             HTML生成
+├─ public/static/
+│  ├─ app.css           デザイン（ANTAIサイトと同じ配色）
+│  └─ watch.js          ★視聴プレイヤー（同期・シーク禁止・CTA・コメント）
+├─ wrangler.toml        Cloudflare の設定
+├─ Dockerfile           Node.js で動かす場合
+├─ media/               file: 指定の動画置き場（Node版のみ）
+├─ data/                SQLite（Node版のみ・gitignore）
+└─ test/                60件のテスト（npm test）
 ```
 
 ★ が中心的なロジックです。

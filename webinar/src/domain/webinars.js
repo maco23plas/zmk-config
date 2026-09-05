@@ -1,5 +1,5 @@
-import { all, get, run } from '../db.js';
-import { newId } from '../lib/ids.js';
+import { all, get, run, batch } from '../db.js';
+import { newId } from '../lib/crypto.js';
 
 const FIELDS = [
   'title', 'description', 'video_url', 'duration_sec', 'poster_url', 'presenter',
@@ -10,10 +10,10 @@ const FIELDS = [
 export const listWebinars = () => all('SELECT * FROM webinars ORDER BY created_at DESC');
 export const getWebinar = (id) => get('SELECT * FROM webinars WHERE id = ?', id);
 
-export function createWebinar(data, now = Date.now()) {
+export async function createWebinar(data, now = Date.now()) {
   const id = newId('web');
   const values = FIELDS.map((f) => data[f] ?? defaultFor(f));
-  run(
+  await run(
     `INSERT INTO webinars (id, ${FIELDS.join(', ')}, created_at, updated_at)
      VALUES (?, ${FIELDS.map(() => '?').join(', ')}, ?, ?)`,
     id, ...values, now, now,
@@ -21,10 +21,10 @@ export function createWebinar(data, now = Date.now()) {
   return getWebinar(id);
 }
 
-export function updateWebinar(id, data, now = Date.now()) {
+export async function updateWebinar(id, data, now = Date.now()) {
   const present = FIELDS.filter((f) => data[f] !== undefined);
   if (present.length === 0) return getWebinar(id);
-  run(
+  await run(
     `UPDATE webinars SET ${present.map((f) => `${f} = ?`).join(', ')}, updated_at = ? WHERE id = ?`,
     ...present.map((f) => data[f]), now, id,
   );
@@ -40,13 +40,19 @@ function defaultFor(field) {
 export const listChatScript = (webinarId) =>
   all('SELECT * FROM chat_script WHERE webinar_id = ? ORDER BY at_sec ASC, id ASC', webinarId);
 
+/** 台本チャットを丸ごと入れ替える（削除と追加をひとまとめに実行する） */
 export function replaceChatScript(webinarId, lines) {
-  run('DELETE FROM chat_script WHERE webinar_id = ?', webinarId);
-  for (const line of lines) {
-    run('INSERT INTO chat_script (webinar_id, at_sec, author, body, kind) VALUES (?, ?, ?, ?, ?)',
-      webinarId, Math.max(0, Number(line.at_sec) || 0), String(line.author || ''), String(line.body || ''),
-      line.kind === 'host' ? 'host' : 'guest');
-  }
+  return batch([
+    { sql: 'DELETE FROM chat_script WHERE webinar_id = ?', params: [webinarId] },
+    ...lines.map((line) => ({
+      sql: 'INSERT INTO chat_script (webinar_id, at_sec, author, body, kind) VALUES (?, ?, ?, ?, ?)',
+      params: [
+        webinarId, Math.max(0, Number(line.at_sec) || 0),
+        String(line.author || ''), String(line.body || ''),
+        line.kind === 'host' ? 'host' : 'guest',
+      ],
+    })),
+  ]);
 }
 
 /**
@@ -61,8 +67,10 @@ export function parseChatScriptText(text) {
     const m = /^(\*?)\s*(?:(\d+):)?(\d{1,2}):(\d{2})\s+(\S+)\s+(.+)$/.exec(line);
     if (!m) continue;
     const [, star, h, mm, ss, author, body] = m;
-    const at = (Number(h || 0) * 3600) + (Number(mm) * 60) + Number(ss);
-    lines.push({ at_sec: at, author, body, kind: star ? 'host' : 'guest' });
+    lines.push({
+      at_sec: (Number(h || 0) * 3600) + (Number(mm) * 60) + Number(ss),
+      author, body, kind: star ? 'host' : 'guest',
+    });
   }
   return lines.sort((a, b) => a.at_sec - b.at_sec);
 }

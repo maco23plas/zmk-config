@@ -4,8 +4,8 @@ import { clock } from '../clock.js';
 import { config, configWarnings } from '../config.js';
 import { log } from '../lib/log.js';
 import { all, get } from '../db.js';
-import { html, redirect, send, parseBody, parseCookies, setCookie } from '../lib/http.js';
-import { sign, unsign, safeEqual } from '../lib/ids.js';
+import { html, redirect, text, parseCookies, withCookie } from '../lib/http.js';
+import { sign, unsign, timingSafeEqual } from '../lib/crypto.js';
 import { DAY, parseJstLocal, parseHhMm, formatJstShort } from '../lib/time.js';
 import {
   listSessions, listRecentSessions, createSession, setSessionStatus,
@@ -21,26 +21,23 @@ import * as views from '../views/admin.js';
 const COOKIE = 'wadm';
 const SESSION_MS = 12 * 3600 * 1000;
 
-function isConfigured() {
-  return Boolean(config.admin.pass && config.admin.sessionSecret);
-}
+const isConfigured = () => Boolean(config.admin.pass && config.admin.sessionSecret);
 
-function isLoggedIn(req) {
+async function isLoggedIn(request) {
   if (!isConfigured()) return false;
-  const cookie = parseCookies(req.headers.cookie || '')[COOKIE];
-  const value = unsign(cookie || '', config.admin.sessionSecret);
-  if (!value) return false;
+  const cookie = parseCookies(request.headers.get('cookie') || '')[COOKIE];
+  const value = await unsign(cookie || '', config.admin.sessionSecret);
   const expiry = Number(value);
   return Number.isFinite(expiry) && expiry > clock.now();
 }
 
 /** ログイン必須のハンドラを包む */
-const guard = (handler) => (req, res, ctx) => {
+const guard = (handler) => async (ctx) => {
   if (!isConfigured()) {
-    return html(res, views.loginPage('ADMIN_PASS と SESSION_SECRET が未設定です。.env を設定して再起動してください。'), 503);
+    return html(views.loginPage('ADMIN_PASS と SESSION_SECRET が未設定です。環境変数を設定して再起動してください。'), 503);
   }
-  if (!isLoggedIn(req)) return redirect(res, '/admin/login', 302);
-  return handler(req, res, ctx);
+  if (!(await isLoggedIn(ctx.request))) return redirect('/admin/login', 302);
+  return handler(ctx);
 };
 
 const int = (v, dflt = 0) => {
@@ -50,161 +47,165 @@ const int = (v, dflt = 0) => {
 
 export function register(router) {
   // ---- ログイン ----
-  router.get('/admin/login', (req, res) => {
-    if (isLoggedIn(req)) return redirect(res, '/admin', 302);
-    html(res, views.loginPage(isConfigured() ? '' : 'ADMIN_PASS と SESSION_SECRET が未設定です。'));
+  router.get('/admin/login', async (ctx) => {
+    if (await isLoggedIn(ctx.request)) return redirect('/admin', 302);
+    return html(views.loginPage(isConfigured() ? '' : 'ADMIN_PASS と SESSION_SECRET が未設定です。'));
   });
 
-  router.post('/admin/login', (req, res, ctx) => {
-    if (!isConfigured()) return html(res, views.loginPage('ADMIN_PASS と SESSION_SECRET が未設定です。'), 503);
-    const form = parseBody(ctx.rawBody, req.headers['content-type'] || '');
-    const ok = safeEqual(form.user || '', config.admin.user) && safeEqual(form.pass || '', config.admin.pass);
+  router.post('/admin/login', async (ctx) => {
+    if (!isConfigured()) return html(views.loginPage('ADMIN_PASS と SESSION_SECRET が未設定です。'), 503);
+    const ok = timingSafeEqual(ctx.form.user || '', config.admin.user)
+      && timingSafeEqual(ctx.form.pass || '', config.admin.pass);
     if (!ok) {
       log.warn('管理画面のログインに失敗しました');
-      return html(res, views.loginPage('ユーザー名またはパスワードが違います。'), 401);
+      return html(views.loginPage('ユーザー名またはパスワードが違います。'), 401);
     }
-    const expiry = String(clock.now() + SESSION_MS);
-    setCookie(res, COOKIE, sign(expiry, config.admin.sessionSecret), {
+    const token = await sign(String(clock.now() + SESSION_MS), config.admin.sessionSecret);
+    return withCookie(redirect('/admin', 303), COOKIE, token, {
       maxAge: SESSION_MS / 1000,
       secure: config.baseUrl.startsWith('https://'),
     });
-    redirect(res, '/admin', 303);
   });
 
-  router.post('/admin/logout', (req, res) => {
-    setCookie(res, COOKIE, '', { maxAge: 0 });
-    redirect(res, '/admin/login', 303);
-  });
+  router.post('/admin/logout', () =>
+    withCookie(redirect('/admin/login', 303), COOKIE, '', { maxAge: 0 }));
 
   // ---- ダッシュボード ----
-  router.get('/admin', guard((req, res) => {
+  router.get('/admin', guard(async () => {
     const now = clock.now();
+    const [upcomingSessions, activeReservations, pendingJobs, failedJobs, linked] = await Promise.all([
+      get(`SELECT COUNT(*) c FROM sessions WHERE start_at > ? AND status = 'open'`, now),
+      get(`SELECT COUNT(*) c FROM reservations WHERE status = 'active'`),
+      get(`SELECT COUNT(*) c FROM notification_jobs WHERE status IN ('pending','sending')`),
+      get(`SELECT COUNT(*) c FROM notification_jobs WHERE status = 'failed'`),
+      get(`SELECT COUNT(*) c FROM reservations WHERE status='active' AND line_user_id IS NOT NULL`),
+    ]);
     const stats = {
-      upcomingSessions: get(`SELECT COUNT(*) c FROM sessions WHERE start_at > ? AND status = 'open'`, now).c,
-      activeReservations: get(`SELECT COUNT(*) c FROM reservations WHERE status = 'active'`).c,
-      pendingJobs: get(`SELECT COUNT(*) c FROM notification_jobs WHERE status = 'pending'`).c,
-      failedJobs: get(`SELECT COUNT(*) c FROM notification_jobs WHERE status = 'failed'`).c,
+      upcomingSessions: upcomingSessions.c,
+      activeReservations: activeReservations.c,
+      pendingJobs: pendingJobs.c,
+      failedJobs: failedJobs.c,
+      linkedRate: activeReservations.c > 0 ? Math.round((linked.c / activeReservations.c) * 100) : 0,
     };
-    const linked = get(`SELECT COUNT(*) c FROM reservations WHERE status='active' AND line_user_id IS NOT NULL`).c;
-    stats.linkedRate = stats.activeReservations > 0 ? Math.round((linked / stats.activeReservations) * 100) : 0;
 
-    html(res, views.dashboardPage({
+    return html(views.dashboardPage({
       stats,
-      upcoming: listSessions(now - 3 * 3600 * 1000, 10),
-      recentJobs: all(`SELECT j.*, r.name FROM notification_jobs j JOIN reservations r ON r.id = j.reservation_id
-                       ORDER BY j.updated_at DESC LIMIT 15`),
+      upcoming: await listSessions(now - 3 * 3600 * 1000, 10),
+      recentJobs: await all(`SELECT j.*, r.name FROM notification_jobs j
+                               JOIN reservations r ON r.id = j.reservation_id
+                              ORDER BY j.updated_at DESC LIMIT 15`),
       warnings: configWarnings(),
       now,
     }));
   }));
 
   // ---- 開催枠 ----
-  router.get('/admin/sessions', guard((req, res, ctx) => {
+  router.get('/admin/sessions', guard(async (ctx) => {
     const now = clock.now();
-    html(res, views.sessionsPage({
-      sessions: listSessions(now - 7 * DAY, 200),
-      webinars: listWebinars(),
-      rules: listRules(),
+    return html(views.sessionsPage({
+      sessions: await listSessions(now - 7 * DAY, 200),
+      webinars: await listWebinars(),
+      rules: await listRules(),
       now,
       notice: ctx.query.get('ok') === '1' ? '保存しました。' : '',
     }));
   }));
 
-  router.post('/admin/sessions', guard((req, res, ctx) => {
-    const form = parseBody(ctx.rawBody, req.headers['content-type'] || '');
-    const startAt = parseJstLocal(form.start_at);
-    if (!startAt || !getWebinar(form.webinar_id)) return send(res, 400, '入力内容が正しくありません');
-    createSession({ webinarId: form.webinar_id, startAt, capacity: Math.max(0, int(form.capacity)) }, clock.now());
-    redirect(res, '/admin/sessions?ok=1', 303);
+  router.post('/admin/sessions', guard(async (ctx) => {
+    const startAt = parseJstLocal(ctx.form.start_at);
+    if (!startAt || !(await getWebinar(ctx.form.webinar_id))) return text('入力内容が正しくありません', 400);
+    await createSession({
+      webinarId: ctx.form.webinar_id, startAt, capacity: Math.max(0, int(ctx.form.capacity)),
+    }, clock.now());
+    return redirect('/admin/sessions?ok=1', 303);
   }));
 
-  router.post('/admin/sessions/:id/status', guard((req, res, ctx) => {
-    const form = parseBody(ctx.rawBody, req.headers['content-type'] || '');
-    const status = ['open', 'closed', 'canceled'].includes(form.status) ? form.status : null;
-    if (!status) return send(res, 400, '不正な状態です');
-    setSessionStatus(ctx.params.id, status);
-    redirect(res, '/admin/sessions?ok=1', 303);
+  router.post('/admin/sessions/:id/status', guard(async (ctx) => {
+    const status = ['open', 'closed', 'canceled'].includes(ctx.form.status) ? ctx.form.status : null;
+    if (!status) return text('不正な状態です', 400);
+    await setSessionStatus(ctx.params.id, status);
+    return redirect('/admin/sessions?ok=1', 303);
   }));
 
-  router.post('/admin/rules', guard((req, res, ctx) => {
-    const raw = ctx.rawBody.toString('utf8');
-    const form = new URLSearchParams(raw);
+  router.post('/admin/rules', guard(async (ctx) => {
+    // weekdays は同名で複数送られてくるので、生の本文から取り出す
+    const form = new URLSearchParams(new TextDecoder().decode(ctx.rawBody));
     const weekdays = form.getAll('weekdays').map((d) => int(d, -1)).filter((d) => d >= 0 && d <= 6);
     const timeJst = (form.get('time_jst') || '').trim();
-    if (weekdays.length === 0 || parseHhMm(timeJst) === null || !getWebinar(form.get('webinar_id'))) {
-      return send(res, 400, '曜日・時刻・コンテンツをご確認ください');
+    if (weekdays.length === 0 || parseHhMm(timeJst) === null || !(await getWebinar(form.get('webinar_id')))) {
+      return text('曜日・時刻・コンテンツをご確認ください', 400);
     }
-    createRule({
+    await createRule({
       webinarId: form.get('webinar_id'),
       weekdays: [...new Set(weekdays)].sort().join(','),
       timeJst,
       capacity: Math.max(0, int(form.get('capacity'))),
       horizonDays: Math.min(90, Math.max(1, int(form.get('horizon_days'), 14))),
     }, clock.now());
-    const created = generateSessionsFromRules(clock.now());
+    const created = await generateSessionsFromRules(clock.now());
     log.info(`定期開催ルールを追加し、開催枠を${created}件作成しました`);
-    redirect(res, '/admin/sessions?ok=1', 303);
+    return redirect('/admin/sessions?ok=1', 303);
   }));
 
-  router.post('/admin/rules/:id/delete', guard((req, res, ctx) => {
-    deleteRule(int(ctx.params.id));
-    redirect(res, '/admin/sessions?ok=1', 303);
+  router.post('/admin/rules/:id/delete', guard(async (ctx) => {
+    await deleteRule(int(ctx.params.id));
+    return redirect('/admin/sessions?ok=1', 303);
   }));
 
   // ---- コンテンツ ----
-  router.get('/admin/webinars', guard((req, res, ctx) => {
+  router.get('/admin/webinars', guard(async (ctx) => {
     const editId = ctx.query.get('edit');
-    const editing = editId ? getWebinar(editId) : null;
-    html(res, views.webinarsPage({
-      webinars: listWebinars(),
+    const editing = editId ? await getWebinar(editId) : null;
+    return html(views.webinarsPage({
+      webinars: await listWebinars(),
       editing,
-      chatText: editing ? chatScriptToText(listChatScript(editing.id)) : '',
+      chatText: editing ? chatScriptToText(await listChatScript(editing.id)) : '',
       notice: ctx.query.get('ok') === '1' ? '保存しました。' : '',
     }));
   }));
 
-  router.post('/admin/webinars', guard((req, res, ctx) => {
-    const form = parseBody(ctx.rawBody, req.headers['content-type'] || '');
-    const title = String(form.title || '').trim();
-    const videoUrl = String(form.video_url || '').trim();
-    if (!title || !videoUrl) return send(res, 400, 'タイトルと動画は必須です');
+  router.post('/admin/webinars', guard(async (ctx) => {
+    const f = ctx.form;
+    const title = String(f.title || '').trim();
+    const videoUrl = String(f.video_url || '').trim();
+    if (!title || !videoUrl) return text('タイトルと動画は必須です', 400);
 
     const data = {
       title,
-      description: String(form.description || '').trim(),
+      description: String(f.description || '').trim(),
       video_url: videoUrl,
-      duration_sec: Math.max(60, int(form.duration_min, 60) * 60),
-      presenter: String(form.presenter || '').trim(),
-      cta_label: String(form.cta_label || '').trim(),
-      cta_url: String(form.cta_url || '').trim(),
-      cta_at_sec: Math.max(0, int(form.cta_at_min) * 60),
-      late_join_sec: Math.max(0, int(form.late_join_min) * 60),
-      archive_hours: Math.max(0, int(form.archive_hours)),
-      show_viewer_count: form.show_viewer_count === '1' ? 1 : 0,
-      viewer_base: Math.max(0, int(form.viewer_base)),
-      show_chat: form.show_chat === '1' ? 1 : 0,
+      duration_sec: Math.max(60, int(f.duration_min, 60) * 60),
+      presenter: String(f.presenter || '').trim(),
+      cta_label: String(f.cta_label || '').trim(),
+      cta_url: String(f.cta_url || '').trim(),
+      cta_at_sec: Math.max(0, int(f.cta_at_min) * 60),
+      late_join_sec: Math.max(0, int(f.late_join_min) * 60),
+      archive_hours: Math.max(0, int(f.archive_hours)),
+      show_viewer_count: f.show_viewer_count === '1' ? 1 : 0,
+      viewer_base: Math.max(0, int(f.viewer_base)),
+      show_chat: f.show_chat === '1' ? 1 : 0,
     };
 
     const now = clock.now();
-    const webinar = form.id ? updateWebinar(form.id, data, now) : createWebinar(data, now);
-    if (!webinar) return send(res, 404, 'コンテンツが見つかりません');
-    replaceChatScript(webinar.id, parseChatScriptText(form.chat_script));
-    redirect(res, `/admin/webinars?edit=${webinar.id}&ok=1`, 303);
+    const webinar = f.id ? await updateWebinar(f.id, data, now) : await createWebinar(data, now);
+    if (!webinar) return text('コンテンツが見つかりません', 404);
+    await replaceChatScript(webinar.id, parseChatScriptText(f.chat_script));
+    return redirect(`/admin/webinars?edit=${webinar.id}&ok=1`, 303);
   }));
 
   // ---- 予約 ----
-  router.get('/admin/reservations', guard((req, res, ctx) => {
+  router.get('/admin/reservations', guard(async (ctx) => {
     const sessionId = ctx.query.get('session') || '';
-    html(res, views.reservationsPage({
-      reservations: queryReservations(sessionId),
-      sessions: listRecentSessions(60),
+    return html(views.reservationsPage({
+      reservations: await queryReservations(sessionId),
+      sessions: await listRecentSessions(60),
       sessionId,
       now: clock.now(),
     }));
   }));
 
-  router.get('/admin/reservations.csv', guard((req, res, ctx) => {
-    const rows = queryReservations(ctx.query.get('session') || '');
+  router.get('/admin/reservations.csv', guard(async (ctx) => {
+    const rows = await queryReservations(ctx.query.get('session') || '');
     const header = ['開催日時', 'お名前', 'メール', '電話', 'LINE連携', 'LINE表示名', '状態', '予約コード', '視聴分数', 'CTAクリック', '備考'];
     const csv = [header, ...rows.map((r) => [
       formatJstShort(r.start_at), r.name, r.email, r.phone,
@@ -214,42 +215,44 @@ export function register(router) {
     ])].map((cols) => cols.map(csvCell).join(',')).join('\r\n');
 
     // Excelで文字化けしないよう BOM を付ける
-    send(res, 200, '﻿' + csv, {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="reservations-${new Date().toISOString().slice(0, 10)}.csv"`,
+    return new Response('﻿' + csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="reservations-${new Date().toISOString().slice(0, 10)}.csv"`,
+      },
     });
   }));
 
   // ---- 通知 ----
-  router.get('/admin/jobs', guard((req, res, ctx) => {
+  router.get('/admin/jobs', guard(async (ctx) => {
     const counts = {};
-    for (const row of all(`SELECT status, COUNT(*) c FROM notification_jobs GROUP BY status`)) counts[row.status] = row.c;
-    html(res, views.jobsPage({
-      jobs: all(`SELECT j.*, r.name, s.start_at
-                   FROM notification_jobs j
-                   JOIN reservations r ON r.id = j.reservation_id
-                   JOIN sessions s ON s.id = r.session_id
-                  ORDER BY CASE j.status WHEN 'failed' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
-                           j.scheduled_at DESC LIMIT 200`),
+    for (const row of await all('SELECT status, COUNT(*) c FROM notification_jobs GROUP BY status')) {
+      counts[row.status] = row.c;
+    }
+    return html(views.jobsPage({
+      jobs: await all(`SELECT j.*, r.name, s.start_at
+                         FROM notification_jobs j
+                         JOIN reservations r ON r.id = j.reservation_id
+                         JOIN sessions s ON s.id = r.session_id
+                        ORDER BY CASE j.status WHEN 'failed' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
+                                 j.scheduled_at DESC LIMIT 200`),
       counts,
       now: clock.now(),
-      notice: ctx.query.get('ok') === '1' ? '再送を予約しました。数十秒以内に送信されます。' : '',
+      notice: ctx.query.get('ok') === '1' ? '再送を予約しました。まもなく送信されます。' : '',
     }));
   }));
 
-  router.post('/admin/jobs/:id/requeue', guard((req, res, ctx) => {
-    requeue(int(ctx.params.id), clock.now());
-    redirect(res, '/admin/jobs?ok=1', 303);
+  router.post('/admin/jobs/:id/requeue', guard(async (ctx) => {
+    await requeue(int(ctx.params.id), clock.now());
+    return redirect('/admin/jobs?ok=1', 303);
   }));
 
   // ---- 質問 ----
-  router.get('/admin/questions', guard((req, res) => {
-    html(res, views.questionsPage({
-      questions: all(`SELECT q.*, r.name FROM questions q
-                        LEFT JOIN reservations r ON r.id = q.reservation_id
-                       ORDER BY q.created_at DESC LIMIT 200`),
-    }));
-  }));
+  router.get('/admin/questions', guard(async () => html(views.questionsPage({
+    questions: await all(`SELECT q.*, r.name FROM questions q
+                            LEFT JOIN reservations r ON r.id = q.reservation_id
+                           ORDER BY q.created_at DESC LIMIT 200`),
+  }))));
 }
 
 function queryReservations(sessionId) {
