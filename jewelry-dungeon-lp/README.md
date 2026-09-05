@@ -30,9 +30,10 @@ NEXT_PUBLIC_BASE_PATH=/<repo> npm run build
 
 ### GitHub Pages で公開する手順
 
-1. 公開用の GitHub アカウントでリポジトリを作る（例: `jewelry-dungeon-lp`）。
-2. このフォルダ（`jewelry-dungeon-lp/`）の中身をそのリポジトリのルートに置いて `main` に push する。
-   `.github/workflows/deploy-pages.yml` が同梱されているので、push のたびに自動でビルド・公開されます。
+1. 元データ用リポジトリ `maco23plas/jewelry-dungeon-lp` を開き、「Use this template」→「Create a new repository」で
+   公開用アカウントにコピーを作る（Public にする）。作成直後にワークフローが走り、自動でビルド・公開されます。
+   ※ 元データ用リポジトリ（maco23plas 配下）ではワークフローは動かず、サイトは公開されません。
+2. 以後、元データ側の更新を取り込むときは、コピー側でファイルを差し替えて `main` に push すると再公開されます。
 3. Pages の有効化はワークフローが自動で行います（うまくいかない場合のみ Settings > Pages > Source を **GitHub Actions** に）。
 4. 公開URL: `https://<account>.github.io/<repo>/`。
    リポジトリ名を `<account>.github.io` にすると `https://<account>.github.io/` で公開されます。

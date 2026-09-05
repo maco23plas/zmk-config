@@ -20,6 +20,9 @@ concurrency:
 
 jobs:
   build:
+    # 元データ用のテンプレートリポジトリ（maco23plas 配下）では公開しない。
+    # 「Use this template」やフォークで作った公開用リポジトリでのみ実行する。
+    if: ${{ !github.event.repository.is_template && github.repository_owner != 'maco23plas' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
