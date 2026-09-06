@@ -37,8 +37,8 @@ export function Hero() {
         <Image
           src={asset("/assets/fv-mobile-top.png")}
           alt="隙間時間から始める、令和の新しいデジタル物販。オーブを購入し、会員同士で売買することで売却の差益を目指す、新しい収益のカタチ。スマホで完結／1日5分／在庫・仕入れなし"
-          width={864}
-          height={1246}
+          width={1044}
+          height={1506}
           priority
           sizes="(min-width: 560px) 560px, 100vw"
           className={styles.visualImg}

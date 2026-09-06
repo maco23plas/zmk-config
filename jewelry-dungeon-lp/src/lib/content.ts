@@ -64,8 +64,8 @@ export const orbs: Orb[] = [
     key: "silver",
     nameJa: "シルバーオーブ",
     image: "/parts/orb-silver.png",
-    imageWidth: 626,
-    imageHeight: 602,
+    imageWidth: 619,
+    imageHeight: 620,
     specs: [
       { label: "販売価格", value: "55,000〜165,000円" },
       { label: "値上げ率", value: "15%" },
