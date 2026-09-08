@@ -35,7 +35,19 @@ const SHEETS = {
   URLS: 'URL一覧',
   DASH: 'ダッシュボード',
   DEALS: '成約ログ',
+  CUSTOMERS: '顧客',
+  IMPORT: '取込',
 };
+
+// 顧客シートのステータス（面談後にここを変えると全画面に反映される）
+const STATUSES = ['未対応', '予約済', '面談済', '成約', '非成約', '追客', '離脱'];
+// ファネル判定：この状態まで進んだ人は「面談予約あり」とみなす
+const MET_STATUSES = ['予約済', '面談済', '成約', '非成約', '追客'];
+const DONE_STATUSES = ['面談済', '成約', '非成約', '追客'];
+
+const CUSTOMER_HEADERS = [
+  'LINE ID', 'LINE名', 'QR ID', 'QR名', '登録日時', '面談予約日時', 'ステータス', 'メモ', '更新日時',
+];
 
 const TZ = 'Asia/Tokyo';
 
@@ -54,6 +66,9 @@ function onOpen() {
     .addItem('③ テスト配信（今すぐレポート送信）', 'dailyReport')
     .addItem('④ ダッシュボード＆個人タブを更新', 'buildDashboards')
     .addItem('⑤ 最新版に更新（取得→自動デプロイ）', 'selfUpdate')
+    .addSeparator()
+    .addItem('⑥ 取込シートを反映（CSV貼り付け後に実行）', 'importPastedData')
+    .addItem('⑦ 顧客シートを登録ログから補完', 'syncCustomersFromRegs')
     .addToUi();
 }
 
@@ -134,6 +149,33 @@ function setup() {
         .requireValueInList(idList, true)
         .setAllowInvalid(true)
         .build());
+  }
+
+  // 顧客シート（1人1行。面談予約日時とステータスをここで管理する）
+  const cus = ensureSheet_(ss, SHEETS.CUSTOMERS, CUSTOMER_HEADERS);
+  cus.getRange(2, 7, 2000, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(STATUSES, true)
+      .setAllowInvalid(true)
+      .build());
+  if (idList.length) {
+    cus.getRange(2, 3, 2000, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList(idList, true)
+        .setAllowInvalid(true)
+        .build());
+  }
+  cus.setColumnWidth(1, 240).setColumnWidth(2, 140).setColumnWidth(4, 200)
+    .setColumnWidth(5, 150).setColumnWidth(6, 150).setColumnWidth(8, 240);
+
+  // 取込シート（エルメのCSVをそのまま貼り付ける場所）
+  const imp = ensureSheet_(ss, SHEETS.IMPORT, ['ここにエルメのCSVを貼り付けて、メニュー⑥を実行してください']);
+  if (imp.getLastRow() <= 1) {
+    imp.getRange(1, 1).setValue(
+      'ここにエルメのCSV（友だち情報 or 予約情報）を1行目のヘッダーごと貼り付けて、メニュー「⑥ 取込シートを反映」を実行してください。' +
+      '／ 認識できる列: ユーザーID・LINE表示名・友だち追加日・流入経路・対応ステータス・予約日時 など')
+      .setWrap(true).setFontColor('#8A968E');
+    imp.setColumnWidth(1, 900);
   }
 
   // 毎日トリガーを（再）登録
@@ -302,6 +344,21 @@ function doGet(e) {
     } catch (err) {
       console.error('登録ログ記録失敗: ' + err);
     }
+    // 顧客シートにも1人1行で反映（LINE IDが送られてきた場合のみ）
+    try {
+      const lineId = pickLineId_(p);
+      if (lineId) {
+        upsertCustomer_({
+          lineId: lineId,
+          name: pickLineName_(p),
+          qrId: id,
+          qrName: qr ? qr.name : '',
+          registeredAt: new Date(),
+        });
+      }
+    } catch (err) {
+      console.error('顧客シート反映失敗: ' + err);
+    }
     return ContentService.createTextOutput('ok');
   }
 
@@ -377,6 +434,327 @@ function appendLog_(sheetName, id, name, note) {
 
 function escapeHtmlAttr_(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+// ════════════════════════════════════════════
+// 顧客シート（LINE IDで名寄せするCRM層）
+//   登録 → 面談予約 → 成約 までを1人1行で追跡する
+// ════════════════════════════════════════════
+
+/** 受信パラメータからLINE IDらしき値を取り出す（U＋32桁の16進） */
+function pickLineId_(params) {
+  for (const k of Object.keys(params || {})) {
+    const v = String(params[k] || '').trim();
+    if (/^U[0-9a-f]{32}$/i.test(v)) return v;
+  }
+  return '';
+}
+
+/** 受信パラメータから表示名らしき値を取り出す */
+function pickLineName_(params) {
+  const keys = Object.keys(params || {});
+  const prefer = keys.filter(k => /name|名前|表示名|nick/i.test(k));
+  for (const k of prefer.concat(keys)) {
+    if (k === 'ev' || k === 'id' || k === 'p' || k === 'stats' || k === 'admin') continue;
+    const v = String(params[k] || '').trim();
+    if (!v) continue;
+    if (/^U[0-9a-f]{32}$/i.test(v)) continue;   // LINE ID
+    if (/^(new|old|block)$/i.test(v)) continue; // 友だち追加情報
+    if (v.indexOf('@') >= 0) continue;          // メールアドレス
+    return v;
+  }
+  return '';
+}
+
+/** 顧客シートを丸ごと読む */
+function readCustomers_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ensureSheet_(ss, SHEETS.CUSTOMERS, CUSTOMER_HEADERS);
+  const rows = sh.getLastRow() > 1
+    ? sh.getRange(2, 1, sh.getLastRow() - 1, CUSTOMER_HEADERS.length).getValues()
+    : [];
+  const byId = {};
+  const byName = {};
+  rows.forEach((v, i) => {
+    const id = String(v[0]).trim();
+    const nm = String(v[1]).trim();
+    if (id) byId[id] = i;
+    if (nm && byName[nm] === undefined) byName[nm] = i;
+  });
+  return { sheet: sh, rows: rows, byId: byId, byName: byName };
+}
+
+/** 顧客1行に情報をマージする（空欄の項目は既存値を壊さない） */
+function mergeCustomerRow_(v, f, now) {
+  const set = (i, val, overwrite) => {
+    if (val === undefined || val === null || val === '') return;
+    if (overwrite || !String(v[i]).trim()) v[i] = val;
+  };
+  if (f.lineId) v[0] = f.lineId;
+  set(1, f.name);
+  set(2, f.qrId);
+  set(3, f.qrName);
+  set(4, f.registeredAt);
+  set(5, f.meetingAt, true);                 // 面談予約日時は新しい情報で上書き
+  set(6, f.status, !!f.statusOverwrite);     // ステータスは手動編集を尊重（CSV由来のみ上書き）
+  set(7, f.memo);
+  v[8] = now;
+  return v;
+}
+
+/** 顧客を1件upsert（Webアプリからのリアルタイム記録用） */
+function upsertCustomer_(fields) {
+  if (!fields || !fields.lineId) return;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const cs = readCustomers_();
+    const now = new Date();
+    const idx = cs.byId[fields.lineId];
+    if (idx !== undefined) {
+      const merged = mergeCustomerRow_(cs.rows[idx].slice(), fields, now);
+      cs.sheet.getRange(idx + 2, 1, 1, CUSTOMER_HEADERS.length).setValues([merged]);
+    } else {
+      const merged = mergeCustomerRow_(new Array(CUSTOMER_HEADERS.length).fill(''), fields, now);
+      if (!merged[6]) merged[6] = STATUSES[0];
+      cs.sheet.appendRow(merged);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** CSVのヘッダー名 → 内部フィールド名 */
+function headerKind_(cell) {
+  const s = String(cell || '').trim().replace(/\s+/g, '');
+  if (!s) return '';
+  if (/ユーザーID|LINEID|lineId|userId/i.test(s)) return 'lineId';
+  if (/表示名|LINE名|ニックネーム|お名前|氏名|^名前$/i.test(s)) return 'name';
+  if (/友だち追加日|登録日|追加日時/.test(s)) return 'registeredAt';
+  if (/流入経路|経路|流入元/.test(s)) return 'route';
+  if (/対応ステータス|ステータス|対応状況/.test(s)) return 'status';
+  if (/予約日|予約日時|面談日|面談日時|開始日時|来店日/.test(s)) return 'meetingAt';
+  if (/メモ|備考/.test(s)) return 'memo';
+  return '';
+}
+
+/** 流入経路の文字列 → QR ID */
+function routeToQrId_(route, qrs) {
+  const r = String(route || '').trim();
+  if (!r) return '';
+  const ids = Object.keys(qrs);
+  for (const id of ids) if (r === String(qrs[id].name).trim()) return id;   // 完全一致
+  for (const id of ids) if (r.indexOf(id) >= 0) return id;                  // IDが含まれる
+  const m = r.match(/(?:アフィ|affi)[\s_]*0*(\d+)/i);                        // 番号で照合
+  if (m) {
+    const n = Number(m[1]);
+    for (const id of ids) {
+      const idn = String(id).match(/(\d+)/);
+      const nmn = String(qrs[id].name).match(/(?:アフィ|affi)[\s_]*0*(\d+)/i);
+      if ((idn && Number(idn[1]) === n) || (nmn && Number(nmn[1]) === n)) return id;
+    }
+  }
+  return '';
+}
+
+/** 登録ログに既に存在する「LINE ID」と「QR ID＋分単位の日時」の集合を作る（二重取込の防止） */
+function existingRegKeys_() {
+  const ids = {};
+  const stamps = {};
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.REGS);
+  if (!sh || sh.getLastRow() < 2) return { ids: ids, stamps: stamps };
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+  for (const [when, qid, , note] of values) {
+    const m = String(note || '').match(/U[0-9a-f]{32}/i);
+    if (m) ids[m[0]] = true;
+    if (when instanceof Date) {
+      stamps[String(qid).trim() + '@' + Utilities.formatDate(when, TZ, 'yyyy-MM-dd HH:mm')] = true;
+    }
+  }
+  return { ids: ids, stamps: stamps };
+}
+
+/** 値を日付に変換（Dateならそのまま、文字列なら緩めにパース） */
+function toDate_(v) {
+  if (v instanceof Date) return v;
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const m = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+    Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+}
+
+// ────────────────────────────────────────────
+// ⑥ 取込シートに貼ったCSVを反映（顧客シート＋登録ログの穴埋め）
+// ────────────────────────────────────────────
+function importPastedData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEETS.IMPORT);
+  if (!sh || sh.getLastRow() < 2) {
+    toast_('「取込」シートにエルメのCSVを貼り付けてから⑥を実行してください。');
+    return;
+  }
+  const all = sh.getDataRange().getValues();
+
+  // ヘッダー行を探す（認識できる列名が2つ以上ある行）
+  let hi = -1;
+  for (let i = 0; i < Math.min(all.length, 12); i++) {
+    if (all[i].filter(c => headerKind_(c)).length >= 2) { hi = i; break; }
+  }
+  if (hi < 0) {
+    toast_('ヘッダー行が見つかりません。エルメのCSVを見出し行ごと貼り付けてください。');
+    return;
+  }
+  const kinds = all[hi].map(c => headerKind_(c));
+  if (kinds.indexOf('lineId') < 0 && kinds.indexOf('name') < 0) {
+    toast_('「ユーザーID」または「表示名」の列が必要です。CSVの出力項目を確認してください。');
+    return;
+  }
+
+  const qrs = getQrMap_();
+  const cs = readCustomers_();
+  const reg = existingRegKeys_();
+  const now = new Date();
+  const newRegRows = [];
+  let updated = 0;
+  let added = 0;
+  let backfilled = 0;
+  let noRoute = 0;
+
+  for (let i = hi + 1; i < all.length; i++) {
+    const row = all[i];
+    const f = {};
+    kinds.forEach((k, c) => { if (k) f[k] = row[c]; });
+    const lineId = String(f.lineId || '').trim();
+    const name = String(f.name || '').trim();
+    if (!lineId && !name) continue;
+
+    const qrId = routeToQrId_(f.route, qrs);
+    if (f.route && !qrId) noRoute++;
+    const regAt = toDate_(f.registeredAt);
+    const metAt = toDate_(f.meetingAt);
+    const status = String(f.status || '').trim();
+
+    const fields = {
+      lineId: lineId,
+      name: name,
+      qrId: qrId,
+      qrName: qrId && qrs[qrId] ? qrs[qrId].name : '',
+      registeredAt: regAt || '',
+      meetingAt: metAt || '',
+      status: status,
+      statusOverwrite: !!status,   // CSVにステータス列があるときだけ上書き
+      memo: String(f.memo || '').trim(),
+    };
+
+    // 顧客シートへ反映（LINE ID優先、無ければ表示名で照合）
+    let idx = lineId ? cs.byId[lineId] : undefined;
+    if (idx === undefined && name) idx = cs.byName[name];
+    if (idx !== undefined) {
+      cs.rows[idx] = mergeCustomerRow_(cs.rows[idx], fields, now);
+      updated++;
+    } else {
+      const v = mergeCustomerRow_(new Array(CUSTOMER_HEADERS.length).fill(''), fields, now);
+      if (!v[6]) v[6] = STATUSES[0];
+      cs.rows.push(v);
+      if (lineId) cs.byId[lineId] = cs.rows.length - 1;
+      if (name) cs.byName[name] = cs.rows.length - 1;
+      added++;
+    }
+
+    // 登録ログの穴埋め（計測が止まっていた期間の登録を復元。重複は入れない）
+    if (qrId && regAt) {
+      const stampKey = qrId + '@' + Utilities.formatDate(regAt, TZ, 'yyyy-MM-dd HH:mm');
+      const dupe = (lineId && reg.ids[lineId]) || reg.stamps[stampKey];
+      if (!dupe) {
+        newRegRows.push([regAt, qrId, qrs[qrId].name,
+          JSON.stringify({ src: 'CSV取込', lineId: lineId, name: name })]);
+        if (lineId) reg.ids[lineId] = true;
+        reg.stamps[stampKey] = true;
+        backfilled++;
+      }
+    }
+  }
+
+  // まとめて書き込み
+  if (cs.rows.length) {
+    cs.sheet.getRange(2, 1, cs.rows.length, CUSTOMER_HEADERS.length).setValues(cs.rows);
+  }
+  if (newRegRows.length) {
+    const rsh = ensureSheet_(ss, SHEETS.REGS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
+    rsh.getRange(rsh.getLastRow() + 1, 1, newRegRows.length, 4).setValues(newRegRows);
+  }
+
+  toast_('取込完了： 顧客 追加' + added + '件／更新' + updated + '件、登録ログ補完' + backfilled + '件' +
+    (noRoute ? '（経路を判定できない行が' + noRoute + '件ありました）' : '') +
+    '。④で画面を更新できます。');
+}
+
+// ────────────────────────────────────────────
+// ⑦ 登録ログ（パラメーターエクスポート受信分）から顧客シートを補完
+// ────────────────────────────────────────────
+function syncCustomersFromRegs() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEETS.REGS);
+  if (!sh || sh.getLastRow() < 2) { toast_('登録ログが空です。'); return; }
+  const qrs = getQrMap_();
+  const cs = readCustomers_();
+  const now = new Date();
+  const values = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+  let added = 0;
+  let updated = 0;
+
+  for (const [when, qid, qname, note] of values) {
+    let params = {};
+    try { params = JSON.parse(String(note || '{}')); } catch (err) { params = {}; }
+    const lineId = params.lineId || pickLineId_(params);
+    if (!lineId) continue;
+    const qrId = String(qid).trim();
+    const fields = {
+      lineId: lineId,
+      name: params.name || pickLineName_(params),
+      qrId: qrId,
+      qrName: qrs[qrId] ? qrs[qrId].name : String(qname || ''),
+      registeredAt: when instanceof Date ? when : '',
+    };
+    const idx = cs.byId[lineId];
+    if (idx !== undefined) {
+      cs.rows[idx] = mergeCustomerRow_(cs.rows[idx], fields, now);
+      updated++;
+    } else {
+      const v = mergeCustomerRow_(new Array(CUSTOMER_HEADERS.length).fill(''), fields, now);
+      v[6] = v[6] || STATUSES[0];
+      cs.rows.push(v);
+      cs.byId[lineId] = cs.rows.length - 1;
+      added++;
+    }
+  }
+  if (cs.rows.length) {
+    cs.sheet.getRange(2, 1, cs.rows.length, CUSTOMER_HEADERS.length).setValues(cs.rows);
+  }
+  toast_('顧客シートを補完しました： 追加' + added + '件／更新' + updated + '件');
+}
+
+/** 顧客シートからQR別のファネル集計を作る */
+function funnelByQr_() {
+  const out = { any: false, byId: {} };
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CUSTOMERS);
+  if (!sh || sh.getLastRow() < 2) return out;
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, CUSTOMER_HEADERS.length).getValues();
+  for (const v of rows) {
+    const qrId = String(v[2]).trim();
+    if (!qrId) continue;
+    const st = String(v[6]).trim();
+    const hasMeeting = !!v[5] || MET_STATUSES.indexOf(st) >= 0;
+    const b = out.byId[qrId] || (out.byId[qrId] = { people: 0, meeting: 0, done: 0, won: 0, lost: 0 });
+    b.people++;
+    if (hasMeeting) { b.meeting++; out.any = true; }
+    if (DONE_STATUSES.indexOf(st) >= 0) b.done++;
+    if (st === '成約') { b.won++; out.any = true; }
+    if (st === '非成約') b.lost++;
+  }
+  return out;
 }
 
 // ────────────────────────────────────────────
@@ -888,6 +1266,12 @@ const PAGE_CSS =
   '.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}' +
   '.legend span{font-size:11px;color:#6B7A72;white-space:nowrap}' +
   '.dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:4px}' +
+  '.fstep{position:relative;margin-bottom:6px;border-radius:10px;overflow:hidden;background:#F2F6F3}' +
+  '.fbar{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,166,62,.22),rgba(62,212,122,.30));border-radius:10px}' +
+  '.frow{position:relative;display:flex;align-items:baseline;gap:10px;padding:8px 12px}' +
+  '.flabel{font-size:12px;font-weight:700;min-width:64px}' +
+  '.fnum{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
+  '.fpct{margin-left:auto;font-size:12px;font-weight:700;color:#00842F}' +
   '.tbox{overflow-x:auto}' +
   'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
   'td,th{padding:7px 8px;border-top:1px solid #EEF2EF;text-align:left;white-space:nowrap}' +
@@ -1150,6 +1534,10 @@ function renderAdminPage_() {
   }
   const useDeals = dealAll > 0;
 
+  // 顧客シート由来のファネル（面談予約・成約）
+  const funnel = funnelByQr_();
+  const useFunnel = funnel.any;
+
   // KPI
   const t0 = dcAll[gDay_(0)] || 0;
   const t1 = dcAll[gDay_(1)] || 0;
@@ -1188,6 +1576,9 @@ function renderAdminPage_() {
       r30: sumOffsets_(d, 0, 29),
       dealM: dealMonth[id] || 0,
       dealT: dealTotals[id] || 0,
+      fPeople: (funnel.byId[id] || {}).people || 0,
+      fMeet: (funnel.byId[id] || {}).meeting || 0,
+      fWon: (funnel.byId[id] || {}).won || 0,
     };
   }).sort((a, b) => b.month - a.month || b.total - a.total);
 
@@ -1211,6 +1602,12 @@ function renderAdminPage_() {
         ? '<td class="num">' + x.dealM + '</td>' +
           '<td class="num">' + (x.total > 0 ? Math.round((x.dealT / x.total) * 100) + '%' : '—') + '</td>'
         : '') +
+      (useFunnel
+        ? '<td class="num">' + x.fMeet + '</td>' +
+          '<td class="num">' + (x.fPeople > 0 ? Math.round((x.fMeet / x.fPeople) * 100) + '%' : '—') + '</td>' +
+          '<td class="num">' + x.fWon + '</td>' +
+          '<td class="num">' + (x.fMeet > 0 ? Math.round((x.fWon / x.fMeet) * 100) + '%' : '—') + '</td>'
+        : '') +
       '<td>' + (x.key ? '<a class="open" target="_blank" href="' + esc(base + '?stats=' + x.key) + '">開く</a>' : '') + '</td>' +
       '</tr>';
   }).join('');
@@ -1231,6 +1628,25 @@ function renderAdminPage_() {
   }).join('');
   const legend = '<div class="legend">' + list.map(x =>
     '<span><span class="dot" style="background:' + colorOf[x.id] + '"></span>' + esc(x.name) + '</span>').join('') + '</div>';
+
+  // 全体ファネル（顧客シートにデータがあるときだけ表示）
+  let funnelHtml = '';
+  if (useFunnel) {
+    const fp = list.reduce((s, x) => s + x.fPeople, 0);
+    const fm = list.reduce((s, x) => s + x.fMeet, 0);
+    const fw = list.reduce((s, x) => s + x.fWon, 0);
+    const step = (label, n, base) =>
+      '<div class="fstep"><div class="fbar" style="width:' +
+      (base > 0 ? Math.max(6, Math.round((n / base) * 100)) : 6) + '%"></div>' +
+      '<div class="frow"><span class="flabel">' + label + '</span>' +
+      '<span class="fnum">' + n + '</span>' +
+      '<span class="fpct">' + (base > 0 && base !== n ? Math.round((n / base) * 100) + '%' : '') + '</span></div></div>';
+    funnelHtml = '<div class="panel"><div class="ph">ファネル（顧客シート基準・全期間）</div>' +
+      step('登録', fp, fp) + step('面談予約', fm, fp) + step('成約', fw, fp) +
+      '<div class="note">面談率 ' + (fp > 0 ? Math.round((fm / fp) * 100) : 0) + '% ／ ' +
+      '面談→成約 ' + (fm > 0 ? Math.round((fw / fm) * 100) : 0) + '% ／ ' +
+      '登録→成約 ' + (fp > 0 ? Math.round((fw / fp) * 100) : 0) + '%</div></div>';
+  }
 
   // 時間帯・曜日（全体）
   const maxHour = Math.max(1, ...hourAll);
@@ -1256,13 +1672,15 @@ function renderAdminPage_() {
     '<div class="upd">' + Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm') + ' 更新</div>' +
     '<div class="hero"><div class="hv">' + monthAll + '</div><div class="hl">今月の登録件数（全体）</div></div>' +
     '<div class="stats">' + stats + '</div>' +
+    funnelHtml +
     '<div class="panel"><div class="ph">アフィリエイター別（今月順）</div><div class="tbox"><table>' +
     '<tr class="thead"><td>#</td><td>名前</td><td class="num">今日</td><td class="num">7日</td><td>前週比</td>' +
     '<td class="num">今月</td><td class="num">シェア</td><td class="num">先月</td><td class="num">累計</td>' +
     (useClicks ? '<td class="num">クリック30日</td><td class="num">登録率</td>' : '') +
     (useDeals ? '<td class="num">成約今月</td><td class="num">成約率</td>' : '') +
+    (useFunnel ? '<td class="num">面談</td><td class="num">面談率</td><td class="num">成約</td><td class="num">面談→成約</td>' : '') +
     '<td></td></tr>' +
-    (tableRows || '<tr><td colspan="14" style="color:#98A69E">QR設定シートが空です</td></tr>') +
+    (tableRows || '<tr><td colspan="18" style="color:#98A69E">QR設定シートが空です</td></tr>') +
     '</table></div></div>' +
     '<div class="panel"><div class="ph">日別登録数 — 直近30日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
