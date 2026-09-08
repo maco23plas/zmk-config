@@ -41,9 +41,21 @@ const SHEETS = {
 
 // 顧客シートのステータス（面談後にここを変えると全画面に反映される）
 const STATUSES = ['未対応', '予約済', '面談済', '成約', '非成約', '追客', '離脱'];
-// ファネル判定：この状態まで進んだ人は「面談予約あり」とみなす
-const MET_STATUSES = ['予約済', '面談済', '成約', '非成約', '追客'];
-const DONE_STATUSES = ['面談済', '成約', '非成約', '追客'];
+/**
+ * ステータス名を意味で判定する（エルメ側で自由に名付けたステータスにも追随する）
+ * 例:「クロージング_成約」→ 成約、「非成約（見送り）」→ 非成約 として扱う
+ */
+function classifyStatus_(s) {
+  const t = String(s || '').trim();
+  const out = { met: false, done: false, won: false, lost: false };
+  if (!t) return out;
+  if (/非成約|失注|見送|不成立|お断り/.test(t)) { out.met = true; out.done = true; out.lost = true; return out; }
+  if (/成約|受注|契約|申込/.test(t)) { out.met = true; out.done = true; out.won = true; return out; }
+  if (/追客|検討|保留|再アプローチ/.test(t)) { out.met = true; out.done = true; return out; }
+  if (/面談済|実施済|商談済|対応済|完了/.test(t)) { out.met = true; out.done = true; return out; }
+  if (/予約|アポ|日程確定/.test(t)) { out.met = true; return out; }
+  return out;
+}
 
 const CUSTOMER_HEADERS = [
   'LINE ID', 'LINE名', 'QR ID', 'QR名', '登録日時', '面談予約日時', 'ステータス', 'メモ', '更新日時',
@@ -545,7 +557,7 @@ function headerKind_(cell) {
   if (/表示名|LINE名|ニックネーム|お名前|氏名|^名前$/i.test(s)) return 'name';
   if (/友だち追加日|登録日|追加日時/.test(s)) return 'registeredAt';
   if (/流入経路|経路|流入元/.test(s)) return 'route';
-  if (/対応ステータス|ステータス|対応状況/.test(s)) return 'status';
+  if (/対応マーク|対応ステータス|ステータス|対応状況|商談状況/.test(s)) return 'status';
   if (/予約日|予約日時|面談日|面談日時|開始日時|来店日/.test(s)) return 'meetingAt';
   if (/メモ|備考/.test(s)) return 'memo';
   return '';
@@ -947,14 +959,13 @@ function funnelByQr_() {
   for (const v of rows) {
     const qrId = String(v[2]).trim();
     if (!qrId) continue;
-    const st = String(v[6]).trim();
-    const hasMeeting = !!v[5] || MET_STATUSES.indexOf(st) >= 0;
+    const c = classifyStatus_(v[6]);
     const b = out.byId[qrId] || (out.byId[qrId] = { people: 0, meeting: 0, done: 0, won: 0, lost: 0 });
     b.people++;
-    if (hasMeeting) { b.meeting++; out.any = true; }
-    if (DONE_STATUSES.indexOf(st) >= 0) b.done++;
-    if (st === '成約') { b.won++; out.any = true; }
-    if (st === '非成約') b.lost++;
+    if (v[5] || c.met) { b.meeting++; out.any = true; }
+    if (c.done) b.done++;
+    if (c.won) { b.won++; out.any = true; }
+    if (c.lost) b.lost++;
   }
   return out;
 }
