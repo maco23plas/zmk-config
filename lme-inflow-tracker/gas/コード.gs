@@ -1052,14 +1052,12 @@ function hasRows_(sheetName) {
 
 /** 指定日（yyyy-MM-dd、nullなら全期間）のQR IDごとの件数を数える */
 function countByQr_(sheetName, day) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  let rows = collectLogRows_(sheetName);
+  if (sheetName === SHEETS.REGS) rows = dedupeRegRows_(rows);
   const out = {};
-  if (!sh || sh.getLastRow() < 2) return out;
-  const values = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
-  for (const [when, id] of values) {
-    if (!(when instanceof Date)) continue;
-    if (day && Utilities.formatDate(when, TZ, 'yyyy-MM-dd') !== day) continue;
-    out[id] = (out[id] || 0) + 1;
+  for (const r of rows) {
+    if (day && r.day !== day) continue;
+    out[r.id] = (out[r.id] || 0) + 1;
   }
   return out;
 }
@@ -1102,17 +1100,10 @@ function buildDashboards() {
   const counts = {};
   qrIds.forEach(id => counts[id] = {});
   let firstDay = null;
-  const regSh = ss.getSheetByName(SHEETS.REGS);
-  if (regSh && regSh.getLastRow() > 1) {
-    const values = regSh.getRange(2, 1, regSh.getLastRow() - 1, 2).getValues();
-    for (const [when, rawId] of values) {
-      if (!(when instanceof Date)) continue;
-      const id = String(rawId).trim();
-      if (!counts[id]) counts[id] = {}; // QR設定から消えたIDも一応拾う
-      const day = Utilities.formatDate(when, TZ, 'yyyy-MM-dd');
-      counts[id][day] = (counts[id][day] || 0) + 1;
-      if (!firstDay || day < firstDay) firstDay = day;
-    }
+  for (const r of collectRegRows_()) {   // 重複（再スキャン・同一LINE ID）は除外済み
+    if (!counts[r.id]) counts[r.id] = {}; // QR設定から消えたIDも一応拾う
+    counts[r.id][r.day] = (counts[r.id][r.day] || 0) + 1;
+    if (!firstDay || r.day < firstDay) firstDay = r.day;
   }
 
   // 日付の並び（最初のログの日〜今日。ログが無ければ今日1日分）
@@ -1372,22 +1363,48 @@ function invalidPage_() {
 
 /** 登録ログを {id, day, hour, wd} の配列で返す（1回読むだけ） */
 function collectRegRows_() {
-  return collectLogRows_(SHEETS.REGS);
+  return dedupeRegRows_(collectLogRows_(SHEETS.REGS));
 }
 
-/** 任意のログシートを {id, day, hour, wd} の配列で返す */
+/** 任意のログシートを {id, day, hour, wd, lineId, isOld} の配列で返す */
 function collectLogRows_(sheetName) {
   const out = [];
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sh || sh.getLastRow() < 2) return out;
-  for (const [when, rawId] of sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()) {
+  const width = Math.min(4, sh.getLastColumn());
+  for (const row of sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues()) {
+    const when = row[0];
     if (!(when instanceof Date)) continue;
+    const note = String(row[3] || '');
+    const m = note.match(/U[0-9a-f]{32}/i);
     out.push({
-      id: String(rawId).trim(),
+      id: String(row[1]).trim(),
       day: Utilities.formatDate(when, TZ, 'yyyy-MM-dd'),
       hour: Number(Utilities.formatDate(when, TZ, 'H')),
       wd: Number(Utilities.formatDate(when, TZ, 'u')) - 1,
+      lineId: m ? m[0] : '',
+      isOld: /"friend_type"\s*:\s*"old"/i.test(note),
     });
+  }
+  return out;
+}
+
+/**
+ * 登録ログの重複を除く。
+ *  - friend_type が "old"（既存の友だちがQRを読み直しただけ）の行を除外
+ *  - 同じLINE IDが複数回記録されている場合は最初の1件だけ残す
+ * これをしないと、同じ人が別のアフィリエイターの実績として二重計上される。
+ */
+function dedupeRegRows_(rows) {
+  const seen = {};
+  const out = [];
+  for (const r of rows) {
+    if (r.isOld) continue;
+    if (r.lineId) {
+      if (seen[r.lineId]) continue;
+      seen[r.lineId] = true;
+    }
+    out.push(r);
   }
   return out;
 }
