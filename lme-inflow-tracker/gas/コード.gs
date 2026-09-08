@@ -69,6 +69,8 @@ function onOpen() {
     .addSeparator()
     .addItem('⑥ 取込シートを反映（CSV貼り付け後に実行）', 'importPastedData')
     .addItem('⑦ 顧客シートを登録ログから補完', 'syncCustomersFromRegs')
+    .addItem('⑧ 面談予約を取り込む（予約シート）', 'syncReservations')
+    .addItem('⑨ 面談予約を取り込む（カレンダー・予備）', 'syncCalendar')
     .addToUi();
 }
 
@@ -84,6 +86,10 @@ const CONFIG_DEFAULTS = [
   ['CHATWORK_ROOM_ID', '', '送りたいチャットのURLの「#!rid」の後ろの数字'],
   ['REPORT_HOUR', 9, '毎日レポートを送る時刻（0〜23）。変更したら①を再実行'],
   ['REPORT_TITLE', 'QRコード流入レポート', 'レポートの見出し（自由に変更可）'],
+  ['RESERVATION_SHEET_URL', '', '★エルメの予約機能が自動生成した「予約用スプレッドシート」のURL（サロン・面談予約 →スプレッドシート連携）。ここを埋めると面談予約が1時間おきに自動で顧客シートへ入る'],
+  ['CALENDAR_ID', '', '（予備）面談予約が入るGoogleカレンダーのID。空ならメインカレンダー。予約用スプレッドシートが使えない場合のフォールバック'],
+  ['CALENDAR_FILTER', '', '（予備）この文字が予定タイトルに含まれるものだけ面談として取り込む（例: 面談）。空なら全ての予定が対象'],
+  ['CALENDAR_SYNC', 'OFF', 'カレンダー同期を使うなら ON。通常はOFFのまま（予約用スプレッドシートを推奨）'],
 ];
 
 function setup() {
@@ -184,6 +190,13 @@ function setup() {
     .filter(t => t.getHandlerFunction() === 'dailyReport')
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dailyReport').timeBased().atHour(hour).everyDays(1).create();
+
+  // 面談予約の取り込みは1時間おきに自動実行（予約シート／カレンダー）
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'syncCalendarQuiet' ||
+                 t.getHandlerFunction() === 'syncBookingsQuiet')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('syncBookingsQuiet').timeBased().everyHours(1).create();
 
   toast_('セットアップ完了。毎日 ' + hour + ' 時ごろに自動配信されます。次は「デプロイ」→ ②URL生成へ。');
 }
@@ -734,6 +747,195 @@ function syncCustomersFromRegs() {
     cs.sheet.getRange(2, 1, cs.rows.length, CUSTOMER_HEADERS.length).setValues(cs.rows);
   }
   toast_('顧客シートを補完しました： 追加' + added + '件／更新' + updated + '件');
+}
+
+// ────────────────────────────────────────────
+// ⑧ 面談予約の自動取り込み
+//    エルメの予約機能（サロン・面談予約）のスプレッドシート連携で
+//    自動生成されるシートを読み、予約者名で顧客を突き止めて
+//    「面談予約日時」を埋める。1時間おきに自動実行。
+// ────────────────────────────────────────────
+function syncReservations() {
+  const url = String(getConfig_().RESERVATION_SHEET_URL || '').trim();
+  if (!url) {
+    toast_('「設定」シートの RESERVATION_SHEET_URL に、エルメの予約用スプレッドシートのURLを貼ってください。');
+    return 0;
+  }
+  let book;
+  try {
+    book = SpreadsheetApp.openByUrl(url);
+  } catch (err) {
+    toast_('予約用スプレッドシートを開けませんでした。URLと共有設定を確認してください。');
+    return 0;
+  }
+  const sh = book.getSheetByName('シート1') || book.getSheets()[0];
+  if (!sh || sh.getLastRow() < 2) { toast_('予約用スプレッドシートにデータがありません。'); return 0; }
+  const all = sh.getDataRange().getValues();
+
+  // ヘッダー行を探す（認識できる列名が1つ以上ある行）
+  let hi = -1;
+  for (let i = 0; i < Math.min(all.length, 8); i++) {
+    if (all[i].filter(c => headerKind_(c)).length >= 1) { hi = i; break; }
+  }
+  if (hi < 0) { toast_('予約シートの見出し行を認識できませんでした。'); return 0; }
+  const kinds = all[hi].map(c => headerKind_(c));
+
+  const cs = readCustomers_();
+  const nameIndex = buildNameIndex_(cs);
+  const now = new Date();
+  let matched = 0;
+  let unmatched = 0;
+
+  for (let i = hi + 1; i < all.length; i++) {
+    const row = all[i];
+    const f = {};
+    kinds.forEach((k, c) => { if (k && f[k] === undefined) f[k] = row[c]; });
+    const metAt = toDate_(f.meetingAt) || firstDateInRow_(row);
+    if (!metAt) continue;
+
+    const lineId = String(f.lineId || '').trim();
+    let idx = lineId ? cs.byId[lineId] : undefined;
+    if (idx === undefined) idx = matchByName_(nameIndex, String(f.name || '') || row.join(' '));
+    if (idx === undefined) { unmatched++; continue; }
+
+    const v = cs.rows[idx];
+    const cur = v[5] instanceof Date ? v[5] : null;
+    if (!cur || cur.getTime() !== metAt.getTime()) {
+      v[5] = metAt;
+      v[8] = now;
+      if (!String(v[6]).trim() || String(v[6]).trim() === STATUSES[0]) v[6] = '予約済';
+      matched++;
+    }
+  }
+
+  if (cs.rows.length) {
+    cs.sheet.getRange(2, 1, cs.rows.length, CUSTOMER_HEADERS.length).setValues(cs.rows);
+  }
+  toast_('予約取り込み： ' + matched + '件を顧客シートに反映' +
+    (unmatched ? '／照合できない予約 ' + unmatched + '件（顧客シートに同名の友だちが居るか確認）' : ''));
+  return matched;
+}
+
+/** 顧客の名前→行番号の索引（長い名前を優先して誤マッチを減らす） */
+function buildNameIndex_(cs) {
+  const idx = [];
+  cs.rows.forEach((v, i) => {
+    const nm = normalizeName_(v[1]);
+    if (nm && nm.length >= 2) idx.push({ n: nm, i: i });
+  });
+  idx.sort((a, b) => b.n.length - a.n.length);
+  return idx;
+}
+
+/** テキストに含まれる顧客名を探して行番号を返す */
+function matchByName_(nameIndex, text) {
+  const blob = normalizeName_(text);
+  if (!blob) return undefined;
+  for (const x of nameIndex) if (blob.indexOf(x.n) >= 0) return x.i;
+  return undefined;
+}
+
+/** 行の中の最初の日付セルを拾う（列名が想定外でも予約日時を拾えるように） */
+function firstDateInRow_(row) {
+  for (const c of row) {
+    if (c instanceof Date) return c;
+  }
+  for (const c of row) {
+    const d = toDate_(c);
+    if (d) return d;
+  }
+  return null;
+}
+
+// ────────────────────────────────────────────
+// （予備）Googleカレンダー同期（面談予約を自動で顧客シートへ）
+//    エルメの予約→Googleカレンダー連携で作られた予定を読み、
+//    予約者名で顧客を突き止めて「面談予約日時」を埋める
+// ────────────────────────────────────────────
+function syncCalendar() {
+  const conf = getConfig_();
+  const calId = String(conf.CALENDAR_ID || '').trim();
+  let cal = null;
+  try {
+    cal = calId ? CalendarApp.getCalendarById(calId) : CalendarApp.getDefaultCalendar();
+  } catch (err) {
+    cal = null;
+  }
+  if (!cal) {
+    toast_('カレンダーが見つかりません。「設定」シートのCALENDAR_IDを確認してください（空ならメインカレンダー）。');
+    return;
+  }
+  const filter = String(conf.CALENDAR_FILTER || '').trim();
+  const from = new Date(Date.now() - 90 * 86400000);
+  const to = new Date(Date.now() + 180 * 86400000);
+  const events = cal.getEvents(from, to);
+
+  const cs = readCustomers_();
+  const nameIndex = buildNameIndex_(cs);
+  const now = new Date();
+  let matched = 0;
+  let unmatched = 0;
+  const unmatchedTitles = [];
+
+  for (const ev of events) {
+    const title = String(ev.getTitle() || '');
+    if (filter && title.indexOf(filter) < 0) continue;
+    const rawBlob = title + ' ' + (ev.getDescription() || '');
+
+    // LINE IDが説明欄にあれば最優先で照合、無ければ名前で照合
+    let idx;
+    const m = rawBlob.match(/U[0-9a-f]{32}/i);
+    if (m && cs.byId[m[0]] !== undefined) idx = cs.byId[m[0]];
+    else idx = matchByName_(nameIndex, rawBlob);
+
+    if (idx === undefined) {
+      unmatched++;
+      if (unmatchedTitles.length < 3) unmatchedTitles.push(title);
+      continue;
+    }
+    const v = cs.rows[idx];
+    const start = ev.getStartTime();
+    const cur = v[5] instanceof Date ? v[5] : null;
+    if (!cur || cur.getTime() !== start.getTime()) {
+      v[5] = start;
+      v[8] = now;
+      if (!String(v[6]).trim() || String(v[6]).trim() === STATUSES[0]) v[6] = '予約済';
+      matched++;
+    }
+  }
+
+  if (cs.rows.length) {
+    cs.sheet.getRange(2, 1, cs.rows.length, CUSTOMER_HEADERS.length).setValues(cs.rows);
+  }
+  toast_('カレンダー同期： ' + matched + '件の面談予約を顧客シートに反映' +
+    (unmatched ? '／照合できない予定 ' + unmatched + '件（例: ' + unmatchedTitles.join(' / ') + '）' : ''));
+}
+
+/** 1時間おきの自動実行用（未設定・エラーでも静かに終わる） */
+function syncBookingsQuiet() {
+  const conf = getConfig_();
+  if (String(conf.RESERVATION_SHEET_URL || '').trim()) {
+    try {
+      syncReservations();
+    } catch (err) {
+      console.error('予約シート同期失敗: ' + err);
+    }
+  }
+  if (/^on$/i.test(String(conf.CALENDAR_SYNC || '').trim())) {
+    try {
+      syncCalendar();
+    } catch (err) {
+      console.error('カレンダー同期失敗: ' + err);
+    }
+  }
+}
+
+/** 名前照合用の正規化（空白・記号を除去、全角英数を半角に、カタカナ揃え） */
+function normalizeName_(s) {
+  let t = String(s || '');
+  t = t.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  t = t.replace(/[\s　_\-・,、.。（）()【】\[\]「」]/g, '');
+  return t.toLowerCase();
 }
 
 /** 顧客シートからQR別のファネル集計を作る */
