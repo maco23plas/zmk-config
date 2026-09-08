@@ -99,9 +99,9 @@ const CONFIG_DEFAULTS = [
   ['REPORT_HOUR', 9, '毎日レポートを送る時刻（0〜23）。変更したら①を再実行'],
   ['REPORT_TITLE', 'QRコード流入レポート', 'レポートの見出し（自由に変更可）'],
   ['RESERVATION_SHEET_URL', '', '★エルメの予約機能が自動生成した「予約用スプレッドシート」のURL（サロン・面談予約 →スプレッドシート連携）。ここを埋めると面談予約が1時間おきに自動で顧客シートへ入る'],
-  ['CALENDAR_ID', '', '（予備）面談予約が入るGoogleカレンダーのID。空ならメインカレンダー。予約用スプレッドシートが使えない場合のフォールバック'],
-  ['CALENDAR_FILTER', '', '（予備）この文字が予定タイトルに含まれるものだけ面談として取り込む（例: 面談）。空なら全ての予定が対象'],
-  ['CALENDAR_SYNC', 'OFF', 'カレンダー同期を使うなら ON。通常はOFFのまま（予約用スプレッドシートを推奨）'],
+  ['CALENDAR_ID', '', '面談予約が入るGoogleカレンダーのID。空ならメインカレンダー'],
+  ['CALENDAR_FILTER', 'クロージング', 'この文字が予定タイトルに含まれる予定だけ面談として取り込む。空にすると全ての予定が対象になるので注意'],
+  ['CALENDAR_SYNC', 'ON', 'カレンダーから面談予約を自動取得する（ON/OFF）。1時間おきに実行'],
 ];
 
 function setup() {
@@ -210,7 +210,21 @@ function setup() {
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('syncBookingsQuiet').timeBased().everyHours(1).create();
 
-  toast_('セットアップ完了。毎日 ' + hour + ' 時ごろに自動配信されます。次は「デプロイ」→ ②URL生成へ。');
+  // ここまでで土台が揃うので、続けて顧客シートの構築と面談予約の取り込みまで自動で行う
+  let extra = '';
+  try {
+    syncCustomersFromRegs();
+    extra += ' 顧客シートを構築しました。';
+  } catch (err) {
+    console.error('顧客シート補完に失敗: ' + err);
+  }
+  try {
+    const n = syncBookingsQuiet();
+    if (n) extra += ' 面談予約 ' + n + ' 件を取り込みました。';
+  } catch (err) {
+    console.error('面談予約の取り込みに失敗: ' + err);
+  }
+  toast_('セットアップ完了。毎日 ' + hour + ' 時ごろに集計されます。' + extra);
 }
 
 // ────────────────────────────────────────────
@@ -874,8 +888,9 @@ function syncCalendar() {
     cal = null;
   }
   if (!cal) {
-    toast_('カレンダーが見つかりません。「設定」シートのCALENDAR_IDを確認してください（空ならメインカレンダー）。');
-    return;
+    toast_('カレンダーが見つかりません。「設定」シートのCALENDAR_IDを確認してください。' +
+      '別アカウントのカレンダーを見る場合は、そのカレンダーをこのスプレッドシートの所有者アカウントに共有してください。');
+    return 0;
   }
   const filter = String(conf.CALENDAR_FILTER || '').trim();
   const from = new Date(Date.now() - 90 * 86400000);
@@ -921,25 +936,29 @@ function syncCalendar() {
   }
   toast_('カレンダー同期： ' + matched + '件の面談予約を顧客シートに反映' +
     (unmatched ? '／照合できない予定 ' + unmatched + '件（例: ' + unmatchedTitles.join(' / ') + '）' : ''));
+  return matched;
 }
 
 /** 1時間おきの自動実行用（未設定・エラーでも静かに終わる） */
 function syncBookingsQuiet() {
   const conf = getConfig_();
+  let n = 0;
   if (String(conf.RESERVATION_SHEET_URL || '').trim()) {
     try {
-      syncReservations();
+      n += syncReservations() || 0;
     } catch (err) {
       console.error('予約シート同期失敗: ' + err);
     }
   }
   if (/^on$/i.test(String(conf.CALENDAR_SYNC || '').trim())) {
     try {
-      syncCalendar();
+      n += syncCalendar() || 0;
     } catch (err) {
+      // カレンダーの権限が未承認でも、他の集計は止めない
       console.error('カレンダー同期失敗: ' + err);
     }
   }
+  return n;
 }
 
 /** 名前照合用の正規化（空白・記号を除去、全角英数を半角に、カタカナ揃え） */
