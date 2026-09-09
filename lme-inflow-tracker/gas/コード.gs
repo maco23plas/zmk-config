@@ -371,6 +371,16 @@ function ensureSheet_(ss, name, headers) {
   return sh;
 }
 
+/** 原因が長いエラーは、消えないダイアログで表示する（コピーできるように） */
+function showError_(msg) {
+  try {
+    SpreadsheetApp.getUi().alert(msg);
+  } catch (e) {
+    toast_(msg.substring(0, 200));
+  }
+  Logger.log(msg);
+}
+
 function toast_(msg) {
   try {
     SpreadsheetApp.getActiveSpreadsheet().toast(msg, '📊 エルメ流入ツール', 10);
@@ -1366,12 +1376,20 @@ function selfUpdate() {
 
   // 2. 現在のプロジェクト内容を取得（マニフェストは維持し、コードだけ差し替える）
   let r = call(api + '/content', 'get');
-  if (r.getResponseCode() === 403) {
-    toast_('Apps Script APIが無効です。script.google.com/home/usersettings で「Google Apps Script API」をONにしてから⑤を再実行してください。');
-    return;
-  }
   if (r.getResponseCode() !== 200) {
-    toast_('プロジェクト情報の取得に失敗: HTTP ' + r.getResponseCode());
+    const body = r.getContentText();
+    let why;
+    if (/insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(body)) {
+      why = '【権限不足】appsscript.json に script.projects / script.deployments の権限が入っていないか、' +
+        '権限追加後の再承認が済んでいません。エディタで関数 setup を1回実行し、表示される承認画面を許可してください。';
+    } else if (/has not been used in project|Apps Script API has not been used|SERVICE_DISABLED/i.test(body)) {
+      why = '【API無効】script.google.com/home/usersettings で「Google Apps Script API」をONにしてください' +
+        '（このスプレッドシートを所有しているGoogleアカウントで開くこと）。反映に数分かかります。';
+    } else {
+      why = '【想定外のエラー】';
+    }
+    showError_('⑤ 最新版に更新できませんでした\n\n' + why +
+      '\n\nHTTP ' + r.getResponseCode() + '\n' + body.substring(0, 500));
     return;
   }
   const files = JSON.parse(r.getContentText()).files || [];
