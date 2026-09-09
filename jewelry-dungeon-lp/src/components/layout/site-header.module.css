@@ -41,32 +41,11 @@
 }
 
 .brandLogo {
-  width: 34px;
-  height: 34px;
+  width: auto;
+  height: 30px;
+  max-width: 60vw;
   flex: none;
   object-fit: contain;
-}
-
-.brandText {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-
-.brandName {
-  font-family: var(--font-serif);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  color: var(--gold);
-}
-
-.brandSub {
-  font-size: 9px;
-  letter-spacing: 0.34em;
-  color: var(--note);
-  white-space: nowrap;
 }
 
 .nav {

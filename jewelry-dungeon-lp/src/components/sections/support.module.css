@@ -52,9 +52,8 @@
 .operator {
   width: 100%;
   height: auto;
-  border-radius: 22px;
   display: block;
-  box-shadow: 0 14px 36px rgba(18, 48, 94, 0.12);
+  object-fit: contain;
 }
 
 /* 3つのボタンカード */

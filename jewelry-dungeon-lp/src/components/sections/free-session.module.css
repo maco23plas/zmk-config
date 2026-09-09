@@ -15,6 +15,14 @@
   box-shadow: var(--shadow-3);
 }
 
+.gate {
+  width: 100%;
+  max-width: 132px;
+  height: auto;
+  margin: 0 auto 18px;
+  object-fit: contain;
+}
+
 .label {
   margin: 0 0 14px;
   font-size: 12px;
@@ -91,6 +99,10 @@
   }
   .card {
     max-width: 1120px;
+  }
+  .gate {
+    max-width: 180px;
+    margin-bottom: 24px;
   }
   .title {
     font-size: 32px;

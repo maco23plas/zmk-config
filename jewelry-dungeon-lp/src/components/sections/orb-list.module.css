@@ -68,11 +68,6 @@
   object-fit: contain;
 }
 
-/* 画像に白背景が含まれているため、クリーム地のカードでは白を透過させる */
-.cardGold .img {
-  mix-blend-mode: multiply;
-}
-
 .specs {
   background: var(--bg-soft-2);
   border-radius: 14px;

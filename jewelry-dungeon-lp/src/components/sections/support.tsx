@@ -23,10 +23,10 @@ export function Support() {
         </div>
         <div className={styles.splitImg}>
           <Image
-            src={asset("/parts/p-operator.png")}
-            alt="サポートスタッフ"
-            width={420}
-            height={444}
+            src={asset("/parts/mascot-wave.png")}
+            alt="ジュエリーダンジョンのマスコット"
+            width={494}
+            height={760}
             sizes="(min-width: 1024px) 520px, 50vw"
             className={styles.operator}
           />

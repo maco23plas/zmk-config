@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { asset } from "@/lib/asset";
 import { headerNavItems } from "@/lib/content";
-import { SITE_NAME, SITE_NAME_EN } from "@/lib/site";
+import { SITE_NAME } from "@/lib/site";
 import { useUi } from "@/components/ui/ui-context";
 import { SeminarCtaButton } from "@/components/ui/cta-button";
 import styles from "./site-header.module.css";
@@ -17,16 +17,13 @@ export function SiteHeader() {
       <div className={styles.inner}>
         <a href="#top" className={styles.brand} aria-label={`${SITE_NAME} トップへ`}>
           <Image
-            src={asset("/parts/orb-gold.png")}
-            alt=""
-            width={34}
-            height={34}
+            src={asset("/parts/logo-wordmark.png")}
+            alt={SITE_NAME}
+            width={1200}
+            height={193}
+            priority
             className={styles.brandLogo}
           />
-          <span className={styles.brandText}>
-            <span className={styles.brandName}>{SITE_NAME_EN}</span>
-            <span className={styles.brandSub}>{SITE_NAME}</span>
-          </span>
         </a>
         <nav className={styles.nav} aria-label="グローバルナビゲーション">
           {headerNavItems.map((item) => (

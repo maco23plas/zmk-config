@@ -1,3 +1,5 @@
+import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { SeminarCtaButton } from "@/components/ui/cta-button";
 import styles from "./free-session.module.css";
 
@@ -6,6 +8,13 @@ export function FreeSession() {
   return (
     <section id="session" className={styles.section}>
       <div className={styles.card}>
+        <Image
+          src={asset("/parts/gate.png")}
+          alt=""
+          width={783}
+          height={900}
+          className={styles.gate}
+        />
         <p className={styles.label}>FREE SESSION</p>
         <h2 className={styles.title}>まずは無料説明会で、仕組みを詳しく聞く。</h2>
         <p className={styles.text}>

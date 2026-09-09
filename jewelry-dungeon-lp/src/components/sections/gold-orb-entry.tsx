@@ -1,3 +1,5 @@
+import Image from "next/image";
+import { asset } from "@/lib/asset";
 import { cx } from "@/lib/cx";
 import { Section, SectionHead } from "@/components/ui/section";
 import styles from "./gold-orb-entry.module.css";
@@ -21,6 +23,13 @@ export function GoldOrbEntry() {
       <div className={styles.diagram}>
         <div className={cx(styles.card, styles.cardReserve)}>
           <p className={cx(styles.title, styles.titleReserve)}>予約</p>
+          <Image
+            src={asset("/parts/ticket.png")}
+            alt="チケット"
+            width={900}
+            height={376}
+            className={styles.ticket}
+          />
           <p className={styles.big}>
             240枚
             <span className={styles.small}>チケット使用</span>
@@ -28,6 +37,13 @@ export function GoldOrbEntry() {
         </div>
         <div className={cx(styles.card, styles.cardLottery)}>
           <p className={cx(styles.title, styles.titleLottery)}>抽選</p>
+          <Image
+            src={asset("/parts/lottery-machine.png")}
+            alt="抽選機"
+            width={760}
+            height={732}
+            className={styles.lottery}
+          />
         </div>
         <div className={cx(styles.card, styles.cardPlain)}>
           <p className={styles.title}>当選</p>

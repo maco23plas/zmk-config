@@ -61,6 +61,19 @@
   color: #fff;
 }
 
+.ticket,
+.lottery {
+  width: 100%;
+  max-width: 74px;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.lottery {
+  max-width: 56px;
+}
+
 .big {
   margin: 0;
   font-family: var(--font-serif);
@@ -105,6 +118,12 @@
 }
 
 @media (min-width: 1024px) {
+  .ticket {
+    max-width: 120px;
+  }
+  .lottery {
+    max-width: 88px;
+  }
   .title {
     font-size: 12px;
   }
