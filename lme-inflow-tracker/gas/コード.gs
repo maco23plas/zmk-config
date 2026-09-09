@@ -103,6 +103,7 @@ const CONFIG_DEFAULTS = [
   ['CHATWORK_ROOM_ID', '', '送りたいチャットのURLの「#!rid」の後ろの数字'],
   ['REPORT_HOUR', 9, '毎日レポートを送る時刻（0〜23）。変更したら①を再実行'],
   ['REPORT_TITLE', 'QRコード流入レポート', 'レポートの見出し（自由に変更可）'],
+  ['SHOW_FUNNEL_TO_AFFILIATE', 'ON', 'アフィリエイター本人のページにも面談数・成約数を見せる（ON/OFF）'],
   ['RESERVATION_SHEET_URL', '', '★エルメの予約機能が自動生成した「予約用スプレッドシート」のURL（サロン・面談予約 →スプレッドシート連携）。ここを埋めると面談予約が1時間おきに自動で顧客シートへ入る'],
   ['CALENDAR_ID', '', '面談予約が入るGoogleカレンダーのID。空ならメインカレンダー'],
   ['CALENDAR_FILTER', 'クロージング', 'この文字が予定タイトルに含まれる予定だけ面談として取り込む。空にすると全ての予定が対象になるので注意'],
@@ -1208,8 +1209,10 @@ function buildDashboards() {
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   const days = listDays_(firstDay || today, today);
 
+  const funnel = funnelByQr_();   // 面談・成約（顧客シート＋面談ログ）
+
   // 全体ダッシュボード
-  buildOverviewSheet_(ss, qrs, counts, days);
+  buildOverviewSheet_(ss, qrs, counts, days, funnel);
 
   // アフィリエイター別タブ（📈 表示名）
   const usedNames = new Set();
@@ -1217,7 +1220,7 @@ function buildDashboards() {
     let name = '📈 ' + (qr.name || id);
     if (usedNames.has(name)) name += '（' + id + '）';
     usedNames.add(name);
-    buildAffiSheet_(ss, name, qr.name || id, counts[id] || {}, days);
+    buildAffiSheet_(ss, name, qr.name || id, counts[id] || {}, days, funnel.byId[id] || {});
   }
 
   toast_('ダッシュボードと個人タブを更新しました。');
@@ -1249,7 +1252,7 @@ function resetSheet_(ss, name) {
 }
 
 /** 全体ダッシュボード：全員のサマリー表＋日別推移（積み上げ）＋累計比較グラフ */
-function buildOverviewSheet_(ss, qrs, counts, days) {
+function buildOverviewSheet_(ss, qrs, counts, days, funnel) {
   const sh = resetSheet_(ss, SHEETS.DASH);
   const ids = Object.keys(qrs);
   const yesterday = days.length >= 2 ? days[days.length - 2] : null;
@@ -1259,15 +1262,16 @@ function buildOverviewSheet_(ss, qrs, counts, days) {
   sh.getRange(1, 1).setValue('📊 流入ダッシュボード（自動更新: ' +
     Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + '）')
     .setFontWeight('bold').setFontSize(12);
-  const sumHeader = ['アフィリエイター', '累計', '今日', '昨日', '直近7日', '直近30日'];
+  const sumHeader = ['アフィリエイター', '累計', '今日', '昨日', '直近7日', '直近30日', '面談', '成約'];
   const sumRows = ids.map(id => {
     const dc = counts[id] || {};
     const total = Object.values(dc).reduce((a, b) => a + b, 0);
+    const f = (funnel && funnel.byId[id]) || {};
     return [qrs[id].name, total, dc[today] || 0, yesterday ? (dc[yesterday] || 0) : 0,
-      sumLastNDays_(dc, days, 7), sumLastNDays_(dc, days, 30)];
+      sumLastNDays_(dc, days, 7), sumLastNDays_(dc, days, 30), f.meeting || 0, f.won || 0];
   });
-  sh.getRange(3, 1, 1, 6).setValues([sumHeader]).setFontWeight('bold').setBackground('#E4F5EA');
-  if (sumRows.length) sh.getRange(4, 1, sumRows.length, 6).setValues(sumRows);
+  sh.getRange(3, 1, 1, 8).setValues([sumHeader]).setFontWeight('bold').setBackground('#E4F5EA');
+  if (sumRows.length) sh.getRange(4, 1, sumRows.length, 8).setValues(sumRows);
   sh.setColumnWidth(1, 220);
 
   // 日別マトリクス（日付 × アフィリエイター）
@@ -1308,7 +1312,7 @@ function buildOverviewSheet_(ss, qrs, counts, days) {
 }
 
 /** アフィリエイター別タブ：サマリー＋日別表＋棒グラフ */
-function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days) {
+function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days, fn) {
   const sh = resetSheet_(ss, sheetName.substring(0, 90));
   const total = Object.values(dayCounts).reduce((a, b) => a + b, 0);
   const today = days[days.length - 1];
@@ -1316,11 +1320,13 @@ function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days) {
 
   sh.getRange(1, 1).setValue('📈 ' + dispName + ' の流入状況（自動更新）')
     .setFontWeight('bold').setFontSize(12);
-  sh.getRange(2, 1, 1, 5).setValues([['累計', '今日', '昨日', '直近7日', '直近30日']])
+  const f = fn || {};
+  sh.getRange(2, 1, 1, 7).setValues([['累計', '今日', '昨日', '直近7日', '直近30日', '面談', '成約']])
     .setFontWeight('bold').setBackground('#E4F5EA');
-  sh.getRange(3, 1, 1, 5).setValues([[
+  sh.getRange(3, 1, 1, 7).setValues([[
     total, dayCounts[today] || 0, yesterday ? (dayCounts[yesterday] || 0) : 0,
     sumLastNDays_(dayCounts, days, 7), sumLastNDays_(dayCounts, days, 30),
+    f.meeting || 0, f.won || 0,
   ]]).setFontSize(12);
 
   // 日別表（累計つき）
@@ -1745,6 +1751,22 @@ function renderStatsPage_(key, period) {
       '<div class="pbar"><div class="pfill" style="width:' + pct + '%"></div></div></div>';
   }
 
+  // 面談・成約（設定でOFFにすれば本人には見せない）
+  let funnelHtml = '';
+  if (!/^off$/i.test(String(getConfig_().SHOW_FUNNEL_TO_AFFILIATE || 'ON').trim())) {
+    const f = (funnelByQr_().byId || {})[found.id];
+    if (f && (f.meeting || f.won)) {
+      const mrate = f.people > 0 ? Math.round((f.meeting / f.people) * 100) : 0;
+      const wrate = f.meeting > 0 ? Math.round((f.won / f.meeting) * 100) : 0;
+      funnelHtml = '<div class="panel"><div class="ph">紹介した方のその後</div><div class="recs">' +
+        '<div><div class="rv2">' + f.meeting + '<span class="unit">件</span></div><div class="sl">面談まで進んだ方</div></div>' +
+        '<div><div class="rv2">' + mrate + '<span class="unit">%</span></div><div class="sl">面談率</div></div>' +
+        '<div><div class="rv2">' + f.won + '<span class="unit">件</span></div><div class="sl">成約</div></div>' +
+        '<div><div class="rv2">' + wrate + '<span class="unit">%</span></div><div class="sl">面談→成約</div></div>' +
+        '</div><div class="note">面談・成約は確定した分のみ集計しています</div></div>';
+    }
+  }
+
   // 記録
   const recordHtml = '<div class="panel"><div class="ph">記録</div><div class="recs">' +
     '<div><div class="rv2">' + (bestDay ? bestN + '<span class="unit">件</span>' : '—') + '</div><div class="sl">ベスト日' + (bestDay ? ' ' + esc(bestDay.substring(5).replace('-', '/')) : '') + '</div></div>' +
@@ -1797,7 +1819,7 @@ function renderStatsPage_(key, period) {
     '<div class="hero"><div class="hv">' + monthCount + '</div><div class="hl">今月の登録件数</div></div>' +
     pills +
     '<div class="stats">' + stats + '</div>' +
-    clickHtml + goalHtml + rewardHtml + recordHtml +
+    clickHtml + funnelHtml + goalHtml + rewardHtml + recordHtml +
     '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日</div><div class="chart">' + bars + '</div></div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
     '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
