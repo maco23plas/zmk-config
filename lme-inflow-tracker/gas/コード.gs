@@ -1383,8 +1383,12 @@ function selfUpdate() {
       why = '【権限不足】appsscript.json に script.projects / script.deployments の権限が入っていないか、' +
         '権限追加後の再承認が済んでいません。エディタで関数 setup を1回実行し、表示される承認画面を許可してください。';
     } else if (/has not been used in project|Apps Script API has not been used|SERVICE_DISABLED/i.test(body)) {
-      why = '【API無効】script.google.com/home/usersettings で「Google Apps Script API」をONにしてください' +
-        '（このスプレッドシートを所有しているGoogleアカウントで開くこと）。反映に数分かかります。';
+      why = '【API無効】このスクリプトは自動生成のGCPプロジェクトに紐づいており、' +
+        'その設定を変更する権限がないため⑤は使えません。お手数ですが下記から手動で更新してください。\n\n' +
+        '1. ' + UPDATE_SOURCE_URL + ' を開いて全文コピー\n' +
+        '2. コード.gs に全置換して保存\n' +
+        '3. メニュー①を実行\n' +
+        '4. デプロイ → デプロイを管理 → 鉛筆 → バージョン「新バージョン」→ デプロイ';
     } else {
       why = '【想定外のエラー】';
     }
