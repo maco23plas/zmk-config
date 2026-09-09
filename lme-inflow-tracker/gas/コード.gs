@@ -37,7 +37,12 @@ const SHEETS = {
   DEALS: '成約ログ',
   CUSTOMERS: '顧客',
   IMPORT: '取込',
+  MEETINGS: '面談ログ',
 };
+
+// 面談ログの「結果」欄の選択肢
+const MEETING_RESULTS = ['予約済', '実施済', '成約', '非成約', '追客', 'キャンセル'];
+const MEETING_HEADERS = ['面談日', '相手の名前（LINE名）', 'QR ID（空欄なら名前から自動判定）', '結果', 'メモ'];
 
 // 顧客シートのステータス（面談後にここを変えると全画面に反映される）
 const STATUSES = ['未対応', '予約済', '面談済', '成約', '非成約', '追客', '離脱'];
@@ -185,6 +190,19 @@ function setup() {
   }
   cus.setColumnWidth(1, 240).setColumnWidth(2, 140).setColumnWidth(4, 200)
     .setColumnWidth(5, 150).setColumnWidth(6, 150).setColumnWidth(8, 240);
+
+  // 面談ログ（面談が決まった／終わったら1行足すだけ）
+  const met = ensureSheet_(ss, SHEETS.MEETINGS, MEETING_HEADERS);
+  met.getRange(2, 4, 2000, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(MEETING_RESULTS, true).setAllowInvalid(true).build());
+  if (idList.length) {
+    met.getRange(2, 3, 2000, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList(idList, true).setAllowInvalid(true).build());
+  }
+  met.setColumnWidth(1, 120).setColumnWidth(2, 220).setColumnWidth(3, 250)
+    .setColumnWidth(4, 110).setColumnWidth(5, 260);
 
   // 取込シート（エルメのCSVをそのまま貼り付ける場所）
   const imp = ensureSheet_(ss, SHEETS.IMPORT, ['ここにエルメのCSVを貼り付けて、メニュー⑥を実行してください']);
@@ -969,22 +987,73 @@ function normalizeName_(s) {
   return t.toLowerCase();
 }
 
-/** 顧客シートからQR別のファネル集計を作る */
+/**
+ * QR別のファネル集計を作る。
+ * 「顧客」シート（1人1行の台帳）と「面談ログ」（手入力の記録）の両方を見て、
+ * 同じ人が二重に数えられないよう人単位でまとめる。
+ */
 function funnelByQr_() {
   const out = { any: false, byId: {} };
+  const bucket = id => out.byId[id] ||
+    (out.byId[id] = { people: 0, meeting: 0, done: 0, won: 0, lost: 0 });
+
+  // 1) 顧客シート：全員の所属QRと、そこに直接書かれたステータス
+  const people = {};           // キー（LINE名の正規化 or LINE ID）→ {qrId, met, done, won, lost}
+  const nameToKey = {};
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.CUSTOMERS);
-  if (!sh || sh.getLastRow() < 2) return out;
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, CUSTOMER_HEADERS.length).getValues();
-  for (const v of rows) {
-    const qrId = String(v[2]).trim();
-    if (!qrId) continue;
-    const c = classifyStatus_(v[6]);
-    const b = out.byId[qrId] || (out.byId[qrId] = { people: 0, meeting: 0, done: 0, won: 0, lost: 0 });
+  if (sh && sh.getLastRow() > 1) {
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, CUSTOMER_HEADERS.length).getValues();
+    for (const v of rows) {
+      const qrId = String(v[2]).trim();
+      if (!qrId) continue;
+      const key = String(v[0]).trim() || normalizeName_(v[1]);
+      if (!key) continue;
+      const c = classifyStatus_(v[6]);
+      people[key] = {
+        qrId: qrId,
+        met: !!v[5] || c.met,
+        done: c.done, won: c.won, lost: c.lost,
+      };
+      const nm = normalizeName_(v[1]);
+      if (nm && nm.length >= 2 && !nameToKey[nm]) nameToKey[nm] = key;
+    }
+  }
+
+  // 2) 面談ログ：名前（またはQR ID）で本人に結び付けて上書き
+  const msh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.MEETINGS);
+  if (msh && msh.getLastRow() > 1) {
+    const rows = msh.getRange(2, 1, msh.getLastRow() - 1, MEETING_HEADERS.length).getValues();
+    for (let ri = 0; ri < rows.length; ri++) {
+      const r = rows[ri];
+      const nm = normalizeName_(r[1]);
+      const explicitQr = String(r[2]).trim();
+      if (!nm && !explicitQr) continue;
+      const res = String(r[3]).trim();
+      if (/キャンセル/.test(res)) continue;          // キャンセルは面談として数えない
+      const c = classifyStatus_(res || '実施済');
+
+      // 名前で本人を特定。名前が無い行はQR IDだけの匿名記録として1件ずつ数える
+      const key = (nm && nameToKey[nm]) || nm || ('row:' + ri);
+      const p = people[key] || (people[key] = { qrId: explicitQr, met: false, done: false, won: false, lost: false });
+      if (!p.qrId) p.qrId = explicitQr;
+      if (!p.qrId) continue;                          // 所属QRが分からない行は集計に入れない
+      p.met = true;
+      p.done = p.done || c.done;
+      p.won = p.won || c.won;
+      p.lost = p.lost || c.lost;
+    }
+  }
+
+  // 3) 人単位で集計
+  for (const key of Object.keys(people)) {
+    const p = people[key];
+    if (!p.qrId) continue;
+    const b = bucket(p.qrId);
     b.people++;
-    if (v[5] || c.met) { b.meeting++; out.any = true; }
-    if (c.done) b.done++;
-    if (c.won) { b.won++; out.any = true; }
-    if (c.lost) b.lost++;
+    if (p.met) { b.meeting++; out.any = true; }
+    if (p.done) b.done++;
+    if (p.won) { b.won++; out.any = true; }
+    if (p.lost) b.lost++;
   }
   return out;
 }
@@ -1890,7 +1959,7 @@ function renderAdminPage_() {
       '<div class="frow"><span class="flabel">' + label + '</span>' +
       '<span class="fnum">' + n + '</span>' +
       '<span class="fpct">' + (base > 0 && base !== n ? Math.round((n / base) * 100) + '%' : '') + '</span></div></div>';
-    funnelHtml = '<div class="panel"><div class="ph">ファネル（顧客シート基準・全期間）</div>' +
+    funnelHtml = '<div class="panel"><div class="ph">ファネル（全期間）</div>' +
       step('登録', fp, fp) + step('面談予約', fm, fp) + step('成約', fw, fp) +
       '<div class="note">面談率 ' + (fp > 0 ? Math.round((fm / fp) * 100) : 0) + '% ／ ' +
       '面談→成約 ' + (fm > 0 ? Math.round((fw / fm) * 100) : 0) + '% ／ ' +
