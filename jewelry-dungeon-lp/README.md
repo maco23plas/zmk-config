@@ -55,17 +55,15 @@ src/
 │  └─ globals.css         … デザイントークン（色・グラデ・影・フォント）と共通スタイル
 ├─ components/
 │  ├─ ui/
-│  │  ├─ ui-context.tsx   … 状態管理（menuOpen / modal / submitted / scrolled）+ Esc・スクロールロック
+│  │  ├─ ui-context.tsx   … 状態管理（menuOpen / scrolled）+ Esc・スクロールロック
 │  │  ├─ section.tsx      … セクション共通ラッパー（余白・コンテナ幅）とラベル + h2 + リード
-│  │  ├─ cta-button.tsx   … 申込モーダルを開く主CTA
+│  │  ├─ cta-button.tsx   … 公式LINEを開く主CTA（説明会のスケジュールはLINEで配信）
 │  │  └─ line-link.tsx    … 公式LINEリンク（新規タブ）
 │  ├─ layout/             … 固定ヘッダー / ドロワー / 下部固定CTAバー / フッター
-│  ├─ modal/              … モーダル（申込フォーム / 送信完了 / 公式LINE案内）
 │  └─ sections/           … 01 HERO 〜 15 FREE SESSION の各セクション（*.tsx + *.module.css）
 └─ lib/
    ├─ site.ts             … サイト名・公式LINE URL・meta
    ├─ content.ts          … ナビ / オーブ / ステップ / FAQ などの構造化コピー
-   ├─ seminar-form.ts     … フォーム送信処理（送信先未定のため空実装 + TODO）
    └─ cx.ts               … クラス名結合ユーティリティ
 public/
 ├─ assets/                … FV画像・PRICING図版
@@ -87,6 +85,4 @@ SP のタイプスケール: h2 23px / カード見出し 14px / 本文 11px / �
 
 ## 公開前に必要な作業
 
-- **フォーム送信先の接続**: `src/lib/seminar-form.ts` の `submitSeminarForm` が空実装です（TODO コメント参照）。
-  接続後は `src/components/modal/seminar-modal.tsx` の `onSubmit` でエラー表示を追加してください。
-- 公式LINEのURLは `src/lib/site.ts` の `LINE_URL` で一元管理しています（3箇所すべてで使用）。
+- 公式LINEのURLは `src/lib/site.ts` の `LINE_URL` で一元管理しています（主CTA・相談導線すべてで使用）。

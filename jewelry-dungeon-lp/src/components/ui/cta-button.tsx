@@ -1,18 +1,18 @@
-"use client";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { LINE_URL } from "@/lib/site";
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { useUi } from "./ui-context";
-
-type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "type"> & {
+type Props = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "target" | "rel"> & {
   children: ReactNode;
 };
 
-/** 無料説明会の申込モーダルを開く主CTA */
+/**
+ * 無料説明会の主CTA。
+ * 説明会のスケジュールは公式LINEで配信するため、公式LINEを新規タブで開く。
+ */
 export function SeminarCtaButton({ children, ...rest }: Props) {
-  const { openModal } = useUi();
   return (
-    <button type="button" onClick={() => openModal("seminar")} {...rest}>
+    <a href={LINE_URL} target="_blank" rel="noopener noreferrer" {...rest}>
       {children}
-    </button>
+    </a>
   );
 }

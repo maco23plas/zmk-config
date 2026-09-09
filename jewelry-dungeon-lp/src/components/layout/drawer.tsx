@@ -63,7 +63,9 @@ export function Drawer() {
           ))}
         </nav>
         <div className={styles.foot}>
-          <SeminarCtaButton className={styles.primary}>無料説明会に参加する</SeminarCtaButton>
+          <SeminarCtaButton className={styles.primary} onClick={closeMenu}>
+            無料説明会に参加する
+          </SeminarCtaButton>
           <a href="#registration-guide" className={styles.secondary} onClick={closeMenu}>
             会員登録のご案内
           </a>
