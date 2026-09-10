@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { asset, withBasePath } from "@/lib/asset";
 import { companyPageReady, companyRows } from "@/lib/company";
-import { SITE_NAME, SITE_NAME_EN } from "@/lib/site";
+import { SITE_NAME } from "@/lib/site";
 import { SiteFooter } from "@/components/layout/site-footer";
 import styles from "./page.module.css";
 
@@ -19,16 +19,13 @@ export default function CompanyPage() {
         <div className={styles.headerInner}>
           <a href={withBasePath("/")} className={styles.brand} aria-label={`${SITE_NAME} トップへ`}>
             <Image
-              src={asset("/parts/orb-gold.png")}
-              alt=""
-              width={34}
-              height={34}
+              src={asset("/parts/logo-wordmark.png")}
+              alt={SITE_NAME}
+              width={1200}
+              height={193}
+              priority
               className={styles.brandLogo}
             />
-            <span className={styles.brandText}>
-              <span className={styles.brandName}>{SITE_NAME_EN}</span>
-              <span className={styles.brandSub}>{SITE_NAME}</span>
-            </span>
           </a>
           <a href={withBasePath("/")} className={styles.back}>
             トップページへ戻る
@@ -46,7 +43,26 @@ export default function CompanyPage() {
                 {companyRows.map((row) => (
                   <div key={row.label} className={styles.row}>
                     <dt className={styles.dt}>{row.label}</dt>
-                    <dd className={styles.dd}>{row.value}</dd>
+                    <dd className={styles.dd}>
+                      {row.items ? (
+                        <ol className={styles.list}>
+                          {row.items.map((item) => (
+                            <li key={item.text}>
+                              {item.text}
+                              {item.sub ? (
+                                <ul className={styles.subList}>
+                                  {item.sub.map((sub) => (
+                                    <li key={sub}>{sub}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        row.value
+                      )}
+                    </dd>
                   </div>
                 ))}
               </dl>
