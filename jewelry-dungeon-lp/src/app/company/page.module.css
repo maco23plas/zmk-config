@@ -158,26 +158,14 @@
   overflow-wrap: anywhere;
 }
 
-/* 事業内容: 折り返しが番号の下に入らないようリストでぶら下げる */
-.list {
-  margin: 0;
-  padding-left: 1.5em;
-  list-style: decimal;
+.link {
+  color: var(--navy);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.list > li + li {
-  margin-top: 2px;
-}
-
-.subList {
-  margin: 2px 0 4px;
-  padding-left: 0.6em;
-  list-style: none;
-}
-
-.subList > li {
-  padding-left: 2.4em;
-  text-indent: -2.4em;
+.link:hover {
+  color: var(--gold);
 }
 
 @media (min-width: 600px) {

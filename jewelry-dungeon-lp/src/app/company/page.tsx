@@ -44,21 +44,10 @@ export default function CompanyPage() {
                   <div key={row.label} className={styles.row}>
                     <dt className={styles.dt}>{row.label}</dt>
                     <dd className={styles.dd}>
-                      {row.items ? (
-                        <ol className={styles.list}>
-                          {row.items.map((item) => (
-                            <li key={item.text}>
-                              {item.text}
-                              {item.sub ? (
-                                <ul className={styles.subList}>
-                                  {item.sub.map((sub) => (
-                                    <li key={sub}>{sub}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ol>
+                      {row.href ? (
+                        <a href={row.href} className={styles.link}>
+                          {row.value}
+                        </a>
                       ) : (
                         row.value
                       )}
