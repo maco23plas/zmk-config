@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { asset } from "@/lib/asset";
 import { howToStartSteps } from "@/lib/content";
-import { cx } from "@/lib/cx";
 import { Section, SectionHead } from "@/components/ui/section";
 import styles from "./how-to-start.module.css";
 
@@ -29,7 +28,7 @@ export function HowToStart() {
               alt={step.alt}
               width={step.imageWidth}
               height={step.imageHeight}
-              className={cx(styles.img, step.isOrb && styles.imgOrb)}
+              className={styles.img}
             />
             <h3 className={styles.title}>{step.title}</h3>
             <p className={styles.text}>{step.text}</p>

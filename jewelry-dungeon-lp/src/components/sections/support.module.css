@@ -3,11 +3,12 @@
 }
 
 /* 見出し + オペレーター画像の横並び */
+/* 画像は左のテキストの高さに合わせる（stretch + contain） */
 .split {
   display: flex;
   flex-direction: row;
   gap: 14px;
-  align-items: center;
+  align-items: stretch;
   margin-bottom: 24px;
 }
 
@@ -19,6 +20,9 @@
 .splitImg {
   flex: 1;
   min-width: 0;
+  /* 画像を絶対配置にして行の高さに影響させない（高さは左のテキストが決める） */
+  position: relative;
+  align-self: stretch;
 }
 
 .label {
@@ -50,8 +54,10 @@
 }
 
 .operator {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   object-fit: contain;
 }

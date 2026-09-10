@@ -152,7 +152,6 @@ export interface HowToStartStep {
   imageWidth: number;
   imageHeight: number;
   alt: string;
-  isOrb?: boolean;
 }
 
 /** 08 HOW TO START */
@@ -183,7 +182,6 @@ export const howToStartSteps: HowToStartStep[] = [
     imageWidth: 758,
     imageHeight: 760,
     alt: "ゴールドオーブ",
-    isOrb: true,
   },
   {
     no: "04",
