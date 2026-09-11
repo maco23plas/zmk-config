@@ -50,7 +50,9 @@ const OPT = {
 };
 
 const CONFIG_DEFAULTS = [
-  ['INFLOW_SHEET_URL', '', '★アフィリエイターと共有している「エルメ_ログ同期」のURL。②の取り込みで使用'],
+  ['INFLOW_SHEET_URL',
+    'https://docs.google.com/spreadsheets/d/1kEr564c4rpfyKixif5ex7juaj2qbly3R3jGGBud4mEo/edit',
+    '★アフィリエイターと共有している「エルメ_ログ同期」のURL。②の取り込みで使用（設定済み）'],
   ['DISCORD_WEBHOOK_URL', '', '要対応リストの通知先（Discordのウェブフック）'],
   ['CHATWORK_API_TOKEN', '', 'Chatworkで受け取る場合のAPIトークン'],
   ['CHATWORK_ROOM_ID', '', 'Chatworkのルー厶ID'],
@@ -145,6 +147,15 @@ function setup() {
     .filter(t => t.getHandlerFunction() === 'dailyRoutine')
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dailyRoutine').timeBased().atHour(hour).everyDays(1).create();
+
+  // 新規スプレッドシートに最初からある空のシートは片付ける
+  ss.getSheets().forEach(x => {
+    const nm = x.getName();
+    const mine = Object.keys(SH).some(k => SH[k] === nm);
+    if (!mine && x.getLastRow() === 0 && ss.getSheets().length > 1) {
+      try { ss.deleteSheet(x); } catch (e) {}
+    }
+  });
 
   refreshDashboard();
   toast_('セットアップ完了。「設定」シートに流入シートのURLと通知先を入れて、②を実行してください。');
