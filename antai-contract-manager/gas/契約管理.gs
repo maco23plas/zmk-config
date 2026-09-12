@@ -124,8 +124,8 @@ function setup() {
   d.setFrozenRows(1);
   d.setFrozenColumns(3);
   applyValidations_(d, mst);
-  applyFormulas_(d);
-  applyFormats_(d);
+  applyFormulas_(d, d.getLastRow());   // 既に入っているデータ行まで数式を届かせる
+  applyFormats_(d, d.getLastRow());
 
   // 代理店報酬
   let r = ss.getSheetByName(SH.REWARD);
@@ -161,6 +161,25 @@ function setup() {
   toast_('セットアップ完了。「設定」シートに流入シートのURLと通知先を入れて、②を実行してください。');
 }
 
+/** 氏名(C列)が空の最初の行を返す。数式を敷いた範囲の中に追記するため。 */
+function firstEmptyRow_(d) {
+  const n = Math.max(d.getLastRow() - 1, 0);
+  if (n <= 0) return FIRST;
+  const names = d.getRange(FIRST, 3, n, 1).getValues();
+  for (let i = 0; i < names.length; i++) {
+    if (!String(names[i][0]).trim()) return FIRST + i;
+  }
+  return FIRST + names.length;
+}
+
+/** 指定行まで自動計算の数式が敷かれていることを保証する */
+function ensureFormulasThrough_(d, lastRow) {
+  if (lastRow < FIRST) return;
+  const have = d.getRange(FIRST, 21, Math.max(lastRow - 1, 1), 1).getFormulas();
+  const missing = have.some(r => !r[0]);
+  if (missing) applyFormulas_(d, lastRow);
+}
+
 function ensure_(ss, name) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
@@ -173,7 +192,10 @@ function applyValidations_(d, mst) {
   const n = LAST_ROW - 1;
   d.getRange(FIRST, 8, n, 1).setDataValidation(listRule_(OPT.契約方法));
   d.getRange(FIRST, 9, n, 1).setDataValidation(listRule_(OPT.クラウドサイン));
-  d.getRange(FIRST, 10, n, 1).setDataValidation(listRule_(OPT.プラン));
+  // プランはマスタA列を参照（マスタを書き換えれば選択肢も自動で変わる）
+  d.getRange(FIRST, 10, n, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInRange(mst.getRange('A2:A30'), true).setAllowInvalid(true).build());
   d.getRange(FIRST, 12, n, 1).setDataValidation(listRule_(OPT.決済方法));
   // 紹介者はマスタ範囲から
   d.getRange(FIRST, 5, n, 1).setDataValidation(
@@ -186,10 +208,11 @@ function applyValidations_(d, mst) {
  *  S入金累計 / T残額 / U進行状況 / V要対応
  * 進行状況と要対応は、この事業の実際の詰まり方に合わせて判定している。
  */
-function applyFormulas_(d) {
+function applyFormulas_(d, through) {
   const stale = Number(getConfig_().MEETING_STALE_DAYS) || 7;
+  const end = Math.max(Number(through) || 0, FIRST + (LAST_ROW - 1) - 1);
   const rows = [];
-  for (let r = FIRST; r < FIRST + (LAST_ROW - 1); r++) {
+  for (let r = FIRST; r <= end; r++) {
     rows.push([
       // 入金累計：入金日が入っている分だけ足す
       '=IF($C' + r + '="","",IF($O' + r + '<>"",N($M' + r + '),0)+IF($R' + r + '<>"",N($P' + r + '),0))',
@@ -215,8 +238,8 @@ function applyFormulas_(d) {
 }
 
 /** 見た目（金額の書式・列幅・自動計算列のグレー・要対応の色分け） */
-function applyFormats_(d) {
-  const n = LAST_ROW - 1;
+function applyFormats_(d, through) {
+  const n = Math.max(Number(through) || 0, LAST_ROW) - 1;
   [11, 13, 16, 19, 20].forEach(c => d.getRange(FIRST, c, n, 1).setNumberFormat('¥#,##0'));
   [6, 7, 14, 15, 17, 18, 24].forEach(c => d.getRange(FIRST, c, n, 1).setNumberFormat('yyyy-mm-dd'));
   d.getRange(FIRST, 19, n, 4).setBackground('#F1F3F4');   // 自動計算列
@@ -279,7 +302,7 @@ function pullFromInflow() {
   const d = ss.getSheetByName(SH.DEALS);
   const have = {};
   const haveName = {};
-  let last = 1;
+  let last = 0;
   if (d.getLastRow() > 1) {
     const cur = d.getRange(2, 1, d.getLastRow() - 1, 3).getValues();
     cur.forEach((v, i) => {
@@ -321,7 +344,9 @@ function pullFromInflow() {
   }
 
   if (add.length) {
-    const start = Math.max(d.getLastRow() + 1, FIRST);
+    // 数式を敷いた範囲の「空いている行」から書き込む（範囲外に落とすと自動計算が効かない）
+    const start = firstEmptyRow_(d);
+    ensureFormulasThrough_(d, start + add.length - 1);
     d.getRange(start, 1, add.length, 6).setValues(add);
   }
   refreshDashboard();
