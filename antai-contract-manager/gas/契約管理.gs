@@ -38,7 +38,7 @@ const COLS = [
   '進行状況', '要対応', '担当', 'CS移行日', 'メモ',
   // ここから先はバックオフィス用（列の並びは変えないこと）
   'メールアドレス', '契約書URL', '決済リンク', '決済ステータス',
-  'キャンセル日', '返金額', '返金日', '決済リンクID', '決済ID',
+  'キャンセル日', '返金額', '返金日', '決済リンクID', '決済ID', 'クラウドサイン書類ID',
 ];
 // 列番号（1始まり）
 const C = {
@@ -47,7 +47,7 @@ const C = {
   FIRST_PAID: 15, REST_AMT: 16, REST_DUE: 17, REST_PAID: 18, PAID: 19, LEFT: 20,
   STATUS: 21, ALERT: 22, OWNER: 23, CS: 24, MEMO: 25,
   EMAIL: 26, DOC: 27, PAYLINK: 28, PAYSTATUS: 29,
-  CANCEL: 30, REFUND_AMT: 31, REFUND_AT: 32, PAYLINK_ID: 33, PAY_ID: 34,
+  CANCEL: 30, REFUND_AMT: 31, REFUND_AT: 32, PAYLINK_ID: 33, PAY_ID: 34, DOC_ID: 35,
 };
 const LAST_ROW = 500;          // 数式を敷く行数
 const FIRST = 2;               // データ開始行
@@ -74,6 +74,9 @@ const CONFIG_DEFAULTS = [
   ['STRIPE_SECRET_KEY', '', '★Stripeのシークレットキー（sk_live_… / sk_test_…）。決済リンクの発行と入金確認に使用'],
   ['STRIPE_CURRENCY', 'jpy', '決済通貨'],
   ['REWARD_PAY_RULE', '翌月末', '紹介報酬の支払日ルール：「当月末」「翌月末」「翌々月末」から選ぶ'],
+  ['CLOUDSIGN_CLIENT_ID', '', '★クラウドサインのクライアントID（管理画面→Web API設定→「新しいクライアントIDを発行する」）'],
+  ['CLOUDSIGN_TEMPLATE_FILE_ID', '', '★契約書テンプレートPDFのGoogleドライブ ファイルID（URLの /d/ と /view の間）'],
+  ['CLOUDSIGN_SANDBOX', 'ON', 'テスト環境を使うなら ON。本番に切り替えるときは OFF'],
 ];
 
 // ────────────────────────────────────────────
@@ -92,6 +95,9 @@ function onOpen() {
     .addItem('⑥ 決済リンクを発行（Stripe）', 'createPaymentLinks')
     .addItem('⑦ 入金・返金を取り込む（Stripe）', 'syncPayments')
     .addItem('⑧ 選択中の行を返金する', 'refundSelected')
+    .addSeparator()
+    .addItem('⑨ 契約書を送付（クラウドサイン）', 'sendContracts')
+    .addItem('⑩ 締結状況を取り込む（クラウドサイン）', 'syncContracts')
     .addToUi();
 }
 
@@ -439,6 +445,7 @@ function readDeals_() {
       refundAmt: Number(g(v, C.REFUND_AMT)) || 0, refundAt: g(v, C.REFUND_AT),
       payLinkId: String(g(v, C.PAYLINK_ID) || '').trim(),
       payId: String(g(v, C.PAY_ID) || '').trim(),
+      docIdCs: String(g(v, C.DOC_ID) || '').trim(),
     });
   });
   return out;
@@ -619,6 +626,163 @@ function refundSelected() {
   } catch (err) {
     SpreadsheetApp.getUi().alert('返金に失敗しました\n\n' + err.message);
   }
+}
+
+
+// ════════════════════════════════════════════
+// クラウドサイン連携（スタンダードプラン以上。管理画面でWeb APIの利用申込みが必要）
+//   ベースURL: 本番 https://api.cloudsign.jp / テスト https://api-sandbox.cloudsign.jp
+//   アクセストークンの有効期限は1時間なので、取得したら使い回す
+// ════════════════════════════════════════════
+
+function csBase_() {
+  return /^on$/i.test(String(getConfig_().CLOUDSIGN_SANDBOX || 'ON').trim())
+    ? 'https://api-sandbox.cloudsign.jp' : 'https://api.cloudsign.jp';
+}
+
+/** アクセストークンを取得する（1時間有効なのでキャッシュする） */
+function csToken_() {
+  const cache = CacheService.getScriptCache();
+  const base = csBase_();
+  const hit = cache.get('cs_token_' + base);
+  if (hit) return hit;
+
+  const clientId = String(getConfig_().CLOUDSIGN_CLIENT_ID || '').trim();
+  if (!clientId) throw new Error('「設定」シートの CLOUDSIGN_CLIENT_ID が空です。');
+  const res = UrlFetchApp.fetch(base + '/token?client_id=' + encodeURIComponent(clientId), {
+    method: 'post', muteHttpExceptions: true,
+  });
+  const body = JSON.parse(res.getContentText() || '{}');
+  if (res.getResponseCode() >= 300 || !body.access_token) {
+    throw new Error('クラウドサイン認証に失敗: ' + res.getContentText().substring(0, 200));
+  }
+  cache.put('cs_token_' + base, body.access_token, Math.max((body.expires_in || 3600) - 120, 60));
+  return body.access_token;
+}
+
+/** クラウドサインAPIを叩く */
+function cs_(path, method, payload, isForm) {
+  const opt = {
+    method: method || 'get',
+    headers: { Authorization: 'Bearer ' + csToken_() },
+    muteHttpExceptions: true,
+  };
+  if (payload && !isForm) {
+    opt.contentType = 'application/json';
+    opt.payload = JSON.stringify(payload);
+  } else if (payload) {
+    opt.payload = payload;          // multipart（ファイル添付）
+  }
+  const res = UrlFetchApp.fetch(csBase_() + path, opt);
+  const text = res.getContentText();
+  if (res.getResponseCode() >= 300) {
+    throw new Error('クラウドサイン(' + res.getResponseCode() + '): ' + text.substring(0, 200));
+  }
+  return text ? JSON.parse(text) : {};
+}
+
+/**
+ * ⑨ 契約書を送付する。
+ * 契約日とメールアドレスが入っていて、まだ送っていない行が対象。
+ * 下書き作成 → テンプレートPDF添付 → 宛先追加 → 送信 の順で叩く。
+ */
+function sendContracts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const d = ss.getSheetByName(SH.DEALS);
+  const tplId = String(getConfig_().CLOUDSIGN_TEMPLATE_FILE_ID || '').trim();
+  if (!tplId) { toast_('「設定」シートに CLOUDSIGN_TEMPLATE_FILE_ID（契約書PDFのファイルID）を入れてください。'); return; }
+
+  let blob;
+  try {
+    blob = DriveApp.getFileById(tplId).getBlob();
+  } catch (err) {
+    toast_('契約書テンプレートを開けません。ファイルIDと共有設定を確認してください。');
+    return;
+  }
+
+  let sent = 0;
+  const problems = [];
+  readDeals_().forEach(x => {
+    if (x.cancel) return;
+    if (!x.signedAt) return;                                  // 契約日が入ってから送る
+    if (String(x.cloudsign).trim() === '送付済' || String(x.cloudsign).trim() === '締結済') return;
+    if (x.docIdCs) return;
+    if (!x.email) { problems.push(x.name + '（メール未入力）'); return; }
+
+    try {
+      // 1. 下書きを作る
+      const doc = cs_('/documents', 'post', {
+        title: 'アンタイ ' + (x.plan || 'サポート') + ' 契約書　' + x.name + ' 様',
+        note: '契約ID: ' + (x.id || '') + '／契約金額: ' + yen_(x.amount),
+      });
+      const docId = doc.id || doc.documentID;
+      if (!docId) throw new Error('書類IDが返りませんでした');
+
+      // 2. 契約書PDFを添付（フィールド名が環境で異なることがあるため2通り試す）
+      try {
+        cs_('/documents/' + docId + '/files', 'post', { uploadfile: blob }, true);
+      } catch (e1) {
+        cs_('/documents/' + docId + '/files', 'post', { file: blob }, true);
+      }
+
+      // 3. 宛先（署名者）を追加
+      cs_('/documents/' + docId + '/participants', 'post', {
+        email: x.email, name: x.name + ' 様',
+      });
+
+      // 4. 送信
+      cs_('/documents/' + docId, 'post', {});
+
+      d.getRange(x.row, C.DOC_ID).setValue(docId);
+      d.getRange(x.row, C.CLOUD).setValue('送付済');
+      sent++;
+    } catch (err) {
+      problems.push(x.name + '（' + err.message + '）');
+    }
+  });
+
+  refreshDashboard();
+  if (problems.length) {
+    showError_('契約書の送付： ' + sent + '件 成功\n\n送れなかったもの:\n・' + problems.slice(0, 8).join('\n・'));
+  } else {
+    toast_('契約書を ' + sent + '件 送付しました。');
+  }
+}
+
+/**
+ * ⑩ 締結状況を取り込む。
+ * 締結済みになっていれば、クラウドサイン欄と契約書URLを更新する。
+ */
+function syncContracts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const d = ss.getSheetByName(SH.DEALS);
+  let done = 0;
+  const seen = [];
+
+  readDeals_().forEach(x => {
+    if (!x.docIdCs) return;
+    if (String(x.cloudsign).trim() === '締結済') return;
+    try {
+      const doc = cs_('/documents/' + x.docIdCs, 'get');
+      const raw = doc.status;
+      seen.push(x.name + ':' + raw);
+      // 締結済みの表現がAPIの版によって数値/文字列で異なるため、どちらでも拾う
+      const signed = (raw === 2 || raw === '2' || /締結|completed|done/i.test(String(raw)));
+      if (signed) {
+        d.getRange(x.row, C.CLOUD).setValue('締結済');
+        if (!x.doc) {
+          d.getRange(x.row, C.DOC).setValue('https://app.cloudsign.jp/documents/' + x.docIdCs);
+        }
+        done++;
+      }
+    } catch (err) {
+      console.error('締結状況の取得に失敗 ' + x.name + ': ' + err);
+    }
+  });
+
+  refreshDashboard();
+  toast_('締結を ' + done + '件 確認しました' +
+    (seen.length ? '（状態: ' + seen.slice(0, 5).join('、') + '）' : ''));
 }
 
 // ────────────────────────────────────────────
@@ -853,6 +1017,9 @@ function dailyRoutine() {
   // Stripeキーが入っていれば入金・返金も毎朝取り込む
   if (String(getConfig_().STRIPE_SECRET_KEY || '').trim()) {
     try { syncPayments(); } catch (err) { console.error('Stripe同期失敗: ' + err); }
+  }
+  if (String(getConfig_().CLOUDSIGN_CLIENT_ID || '').trim()) {
+    try { syncContracts(); } catch (err) { console.error('クラウドサイン同期失敗: ' + err); }
   }
   refreshDashboard();
   sendAlerts();
