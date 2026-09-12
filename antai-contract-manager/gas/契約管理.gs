@@ -111,6 +111,13 @@ function setup() {
       ['（ここに代理店名と単価を追加）', 170000],
       ['', ''],
     ]);
+    // 流入元はチャネルの大分類。個人名は「紹介者・代理店」列に入れる
+    mst.getRange(1, 7, 8, 1).setValues([
+      ['流入元（チャネル）'], ['アフィリエイト'], ['代理店紹介'], ['セミナー'],
+      ['既存顧客紹介'], ['アライアンス'], ['広告'], ['その他'],
+    ]);
+    mst.getRange(1, 7).setFontWeight('bold').setBackground('#E3ECF5');
+    mst.setColumnWidth(7, 200);
     mst.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#E3ECF5');
     mst.getRange(1, 4, 1, 2).setFontWeight('bold').setBackground('#E3ECF5');
     mst.setColumnWidth(1, 200).setColumnWidth(4, 240);
@@ -192,6 +199,10 @@ function applyValidations_(d, mst) {
   const n = LAST_ROW - 1;
   d.getRange(FIRST, 8, n, 1).setDataValidation(listRule_(OPT.契約方法));
   d.getRange(FIRST, 9, n, 1).setDataValidation(listRule_(OPT.クラウドサイン));
+  // 流入元はマスタG列（チャネルの大分類）を参照
+  d.getRange(FIRST, 4, n, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInRange(mst.getRange('G2:G30'), true).setAllowInvalid(true).build());
   // プランはマスタA列を参照（マスタを書き換えれば選択肢も自動で変わる）
   d.getRange(FIRST, 10, n, 1).setDataValidation(
     SpreadsheetApp.newDataValidation()
@@ -314,20 +325,32 @@ function pullFromInflow() {
     });
   }
 
+  // マスタの流入元（チャネル）一覧。ここに無い値は個人名とみなす
+  const mst = ss.getSheetByName(SH.MASTER);
+  const channels = mst
+    ? mst.getRange(2, 7, 30, 1).getValues().flat().map(v => String(v).trim()).filter(Boolean)
+    : [];
+
   const add = [];
   let updated = 0;
+  let fixed = 0;
   for (const [lineId, name, qrId, qrName, regAt, metAt] of rows) {
     const id = String(lineId).trim();
     const nm = normalizeName_(name);
     const row = (id && have[id]) || (nm && haveName[nm]);
+    const via = String(qrName || qrId || '');
     if (row) {
       // 既にある行は、空欄の項目だけ埋める（手入力を壊さない）
-      const cur = d.getRange(row, 2, 1, 6).getValues()[0];
+      const cur = d.getRange(row, 2, 1, 5).getValues()[0];   // B〜F
+      let src = String(cur[2] || '').trim();                 // 流入元
+      let agent = String(cur[3] || '').trim();               // 紹介者
+      // 旧仕様で流入元にQR名が入っていた行を、紹介者側へ寄せる
+      if (src && channels.indexOf(src) < 0 && !agent) { agent = src; src = 'アフィリエイト'; fixed++; }
       const patch = [
         cur[0] || id,
         cur[1] || String(name || ''),
-        cur[2] || String(qrName || qrId || ''),
-        cur[3],
+        src || 'アフィリエイト',
+        agent || via,
         cur[4] || (metAt instanceof Date ? metAt : ''),
       ];
       d.getRange(row, 2, 1, 5).setValues([patch]);
@@ -338,7 +361,7 @@ function pullFromInflow() {
     last++;
     add.push([
       'C' + String(last).padStart(4, '0'), id, String(name || ''),
-      String(qrName || qrId || ''), '',
+      'アフィリエイト', via,
       metAt instanceof Date ? metAt : '',
     ]);
   }
@@ -350,7 +373,8 @@ function pullFromInflow() {
     d.getRange(start, 1, add.length, 6).setValues(add);
   }
   refreshDashboard();
-  toast_('取り込み完了： 新規 ' + add.length + '件／既存の補完 ' + updated + '件');
+  toast_('取り込み完了： 新規 ' + add.length + '件／既存の補完 ' + updated + '件' +
+    (fixed ? '／流入元を整理 ' + fixed + '件' : ''));
 }
 
 // ────────────────────────────────────────────
@@ -475,6 +499,37 @@ function refreshDashboard() {
   if (sRows.length) {
     sh.getRange(r, 1, sRows.length, sHead.length).setValues(sRows);
     sh.getRange(r, 6, sRows.length, 2).setNumberFormat('¥#,##0');
+  }
+
+  r += sRows.length + 2;
+
+  // 紹介者・代理店別（個人単位の比較。チャネル別だけだと誰が効いているか消えるため）
+  sh.getRange(r, 1).setValue('紹介者・代理店別').setFontWeight('bold');
+  r++;
+  const byAgent = {};
+  deals.forEach(x => {
+    const k = String(x.agent || '').trim();
+    if (!k) return;
+    const b = byAgent[k] || (byAgent[k] = { lead: 0, met: 0, signed: 0, amount: 0, paid: 0 });
+    b.lead++;
+    if (x.met instanceof Date) b.met++;
+    if (x.signedAt instanceof Date) { b.signed++; b.amount += x.amount; b.paid += x.paid; }
+  });
+  const aHead = ['紹介者・代理店', 'リード', '面談', '契約', '契約率', '契約金額', '入金済'];
+  sh.getRange(r, 1, 1, aHead.length).setValues([aHead])
+    .setFontWeight('bold').setBackground('#E3ECF5');
+  r++;
+  const aRows = Object.keys(byAgent)
+    .sort((a, b) => byAgent[b].signed - byAgent[a].signed || byAgent[b].lead - byAgent[a].lead)
+    .map(k => {
+      const b = byAgent[k];
+      return [k, b.lead, b.met, b.signed, pct(b.signed, b.met), b.amount, b.paid];
+    });
+  if (aRows.length) {
+    sh.getRange(r, 1, aRows.length, aHead.length).setValues(aRows);
+    sh.getRange(r, 6, aRows.length, 2).setNumberFormat('¥#,##0');
+  } else {
+    sh.getRange(r, 1).setValue('（紹介者が未設定です）').setFontColor('#6B7885');
   }
 
   sh.setColumnWidth(1, 190).setColumnWidth(2, 150).setColumnWidth(3, 160);
