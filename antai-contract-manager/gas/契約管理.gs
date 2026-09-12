@@ -36,7 +36,19 @@ const COLS = [
   '契約金額', '決済方法', '着手金額', '着手金 期限', '着手金 入金日',
   '残金額', '残金 期限', '残金 入金日', '入金累計', '残額',
   '進行状況', '要対応', '担当', 'CS移行日', 'メモ',
+  // ここから先はバックオフィス用（列の並びは変えないこと）
+  'メールアドレス', '契約書URL', '決済リンク', '決済ステータス',
+  'キャンセル日', '返金額', '返金日', '決済リンクID', '決済ID',
 ];
+// 列番号（1始まり）
+const C = {
+  ID: 1, LINE: 2, NAME: 3, SRC: 4, AGENT: 5, MET: 6, SIGNED: 7, SIGNWAY: 8,
+  CLOUD: 9, PLAN: 10, AMOUNT: 11, PAYWAY: 12, FIRST_AMT: 13, FIRST_DUE: 14,
+  FIRST_PAID: 15, REST_AMT: 16, REST_DUE: 17, REST_PAID: 18, PAID: 19, LEFT: 20,
+  STATUS: 21, ALERT: 22, OWNER: 23, CS: 24, MEMO: 25,
+  EMAIL: 26, DOC: 27, PAYLINK: 28, PAYSTATUS: 29,
+  CANCEL: 30, REFUND_AMT: 31, REFUND_AT: 32, PAYLINK_ID: 33, PAY_ID: 34,
+};
 const LAST_ROW = 500;          // 数式を敷く行数
 const FIRST = 2;               // データ開始行
 
@@ -59,6 +71,9 @@ const CONFIG_DEFAULTS = [
   ['ALERT_HOUR', 9, '毎朝の要対応通知を送る時刻（0〜23）'],
   ['DEFAULT_DUE_DAYS', 7, '契約日から着手金入金期限までの既定日数'],
   ['MEETING_STALE_DAYS', 7, '面談から何日契約がなければ「未契約」として警告するか'],
+  ['STRIPE_SECRET_KEY', '', '★Stripeのシークレットキー（sk_live_… / sk_test_…）。決済リンクの発行と入金確認に使用'],
+  ['STRIPE_CURRENCY', 'jpy', '決済通貨'],
+  ['REWARD_PAY_RULE', '翌月末', '紹介報酬の支払日ルール：「当月末」「翌月末」「翌々月末」から選ぶ'],
 ];
 
 // ────────────────────────────────────────────
@@ -73,6 +88,10 @@ function onOpen() {
     .addItem('④ 代理店報酬を起票（入金ベース）', 'buildRewards')
     .addSeparator()
     .addItem('⑤ 要対応リストを今すぐ通知', 'sendAlerts')
+    .addSeparator()
+    .addItem('⑥ 決済リンクを発行（Stripe）', 'createPaymentLinks')
+    .addItem('⑦ 入金・返金を取り込む（Stripe）', 'syncPayments')
+    .addItem('⑧ 選択中の行を返金する', 'refundSelected')
     .addToUi();
 }
 
@@ -155,6 +174,12 @@ function setup() {
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dailyRoutine').timeBased().atHour(hour).everyDays(1).create();
 
+  // 編集時トリガー（決済リンクの自動発行に使う。単純なonEditでは外部APIを叩けないため）
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'onSheetEdit')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('onSheetEdit').forSpreadsheet(ss).onEdit().create();
+
   // 新規スプレッドシートに最初からある空のシートは片付ける
   ss.getSheets().forEach(x => {
     const nm = x.getName();
@@ -231,18 +256,22 @@ function applyFormulas_(d, through) {
       '=IF($C' + r + '="","",IF($K' + r + '="","",N($K' + r + ')-N($S' + r + ')))',
       // 進行状況
       '=IF($C' + r + '="","",' +
+        'IF($AD' + r + '<>"",IF($AF' + r + '<>"","キャンセル(返金済)","キャンセル(返金未)"),' +
         'IF($G' + r + '="","未契約",' +
         'IF(AND($K' + r + '<>"",N($T' + r + ')<=0),"完了(全額入金)",' +
-        'IF($O' + r + '<>"","残金待ち","着手金待ち"))))',
+        'IF($O' + r + '<>"","残金待ち","着手金待ち")))))',
       // 要対応（上から優先順位が高い順に判定）
       '=IF($C' + r + '="","",' +
+        'IF(AND($AD' + r + '<>"",$AF' + r + '="",N($S' + r + ')>0),' +
+          '"返金対応 "&TEXT(N($S' + r + ')-N($AE' + r + '),"¥#,##0"),' +
+        'IF($AD' + r + '<>"","",' +
         'IF(AND($G' + r + '<>"",$I' + r + '<>"締結済"),"契約書 未締結",' +
         'IF(AND($G' + r + '<>"",$O' + r + '="",$N' + r + '<>"",TODAY()>$N' + r + '),' +
           '"着手金 遅延"&TEXT(TODAY()-$N' + r + ',"0")&"日",' +
         'IF(AND($O' + r + '<>"",$R' + r + '="",$Q' + r + '<>"",TODAY()>$Q' + r + '),' +
           '"残金 遅延"&TEXT(TODAY()-$Q' + r + ',"0")&"日",' +
         'IF(AND($G' + r + '="",$F' + r + '<>"",TODAY()-$F' + r + '>' + stale + '),' +
-          '"面談後' + stale + '日 未契約","")))))',
+          '"面談後' + stale + '日 未契約","")))))))',
     ]);
   }
   d.getRange(FIRST, 19, rows.length, 4).setFormulas(rows);
@@ -383,20 +412,33 @@ function pullFromInflow() {
 function readDeals_() {
   const d = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.DEALS);
   if (!d || d.getLastRow() < FIRST) return [];
-  const values = d.getRange(FIRST, 1, d.getLastRow() - 1, COLS.length).getValues();
+  const width = Math.min(COLS.length, Math.max(d.getLastColumn(), 25));
+  const values = d.getRange(FIRST, 1, d.getLastRow() - 1, width).getValues();
+  const g = (v, i) => (i - 1 < v.length ? v[i - 1] : '');
   const out = [];
   values.forEach((v, i) => {
-    if (!String(v[2]).trim()) return;                 // 氏名が無い行は未使用
+    if (!String(g(v, C.NAME)).trim()) return;          // 氏名が無い行は未使用
     out.push({
       row: i + FIRST,
-      id: v[0], lineId: v[1], name: v[2], source: v[3], agent: v[4],
-      met: v[5], signedAt: v[6], signWay: v[7], cloudsign: v[8], plan: v[9],
-      amount: Number(v[10]) || 0, payWay: v[11],
-      first: Number(v[12]) || 0, firstDue: v[13], firstPaid: v[14],
-      rest: Number(v[15]) || 0, restDue: v[16], restPaid: v[17],
-      paid: Number(v[18]) || 0, left: Number(v[19]) || 0,
-      status: String(v[20] || ''), alert: String(v[21] || ''),
-      owner: v[22], cs: v[23], memo: v[24],
+      id: String(g(v, C.ID) || '').trim(),
+      lineId: g(v, C.LINE), name: String(g(v, C.NAME)).trim(),
+      source: g(v, C.SRC), agent: String(g(v, C.AGENT) || '').trim(),
+      met: g(v, C.MET), signedAt: g(v, C.SIGNED), signWay: g(v, C.SIGNWAY),
+      cloudsign: g(v, C.CLOUD), plan: String(g(v, C.PLAN) || '').trim(),
+      amount: Number(g(v, C.AMOUNT)) || 0, payWay: g(v, C.PAYWAY),
+      first: Number(g(v, C.FIRST_AMT)) || 0, firstDue: g(v, C.FIRST_DUE), firstPaid: g(v, C.FIRST_PAID),
+      rest: Number(g(v, C.REST_AMT)) || 0, restDue: g(v, C.REST_DUE), restPaid: g(v, C.REST_PAID),
+      paid: Number(g(v, C.PAID)) || 0, left: Number(g(v, C.LEFT)) || 0,
+      status: String(g(v, C.STATUS) || ''), alert: String(g(v, C.ALERT) || ''),
+      owner: g(v, C.OWNER), cs: g(v, C.CS), memo: g(v, C.MEMO),
+      email: String(g(v, C.EMAIL) || '').trim(),
+      doc: g(v, C.DOC),
+      payLink: String(g(v, C.PAYLINK) || '').trim(),
+      payStatus: String(g(v, C.PAYSTATUS) || '').trim(),
+      cancel: g(v, C.CANCEL),
+      refundAmt: Number(g(v, C.REFUND_AMT)) || 0, refundAt: g(v, C.REFUND_AT),
+      payLinkId: String(g(v, C.PAYLINK_ID) || '').trim(),
+      payId: String(g(v, C.PAY_ID) || '').trim(),
     });
   });
   return out;
@@ -405,6 +447,179 @@ function readDeals_() {
 const ymd_ = d => (d instanceof Date) ? Utilities.formatDate(d, TZ, 'yyyy-MM-dd') : '';
 const ym_ = d => (d instanceof Date) ? Utilities.formatDate(d, TZ, 'yyyy-MM') : '';
 const yen_ = n => '¥' + Math.round(Number(n) || 0).toLocaleString('ja-JP');
+
+
+// ════════════════════════════════════════════
+// Stripe 連携
+//   ・プランと金額から決済リンクを自動発行
+//   ・入金と返金をStripe側から取得してシートに反映
+//   シークレットキーは「設定」シートに置く。このシートは共有しないこと。
+// ════════════════════════════════════════════
+
+/** StripeのREST APIを叩く。失敗したら理由付きで例外にする。 */
+function stripe_(path, method, params) {
+  const key = String(getConfig_().STRIPE_SECRET_KEY || '').trim();
+  if (!key) throw new Error('「設定」シートの STRIPE_SECRET_KEY が空です。');
+  const opt = {
+    method: method || 'get',
+    headers: { Authorization: 'Bearer ' + key },
+    muteHttpExceptions: true,
+  };
+  let url = 'https://api.stripe.com/v1/' + path;
+  if (params && (method === 'post' || method === 'delete')) {
+    opt.payload = params;
+  } else if (params) {
+    url += '?' + Object.keys(params)
+      .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
+  }
+  const res = UrlFetchApp.fetch(url, opt);
+  const body = JSON.parse(res.getContentText() || '{}');
+  if (res.getResponseCode() >= 300) {
+    throw new Error('Stripe: ' + ((body.error && body.error.message) || res.getContentText()).substring(0, 200));
+  }
+  return body;
+}
+
+/**
+ * ⑥ 決済リンクを発行する。
+ * プランと金額が入っていてリンクがまだ無い行だけが対象。
+ * 着手金額が入っていればその額、無ければ契約金額で作る。
+ */
+function createPaymentLinks() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const d = ss.getSheetByName(SH.DEALS);
+  const cur = String(getConfig_().STRIPE_CURRENCY || 'jpy').trim();
+  let made = 0;
+  const skipped = [];
+
+  readDeals_().forEach(x => {
+    if (x.payLink || x.cancel) return;
+    const amount = x.first || x.amount;
+    if (!amount) { if (x.signedAt) skipped.push(x.name + '（金額が未入力）'); return; }
+    try {
+      const price = stripe_('prices', 'post', {
+        'unit_amount': Math.round(amount),
+        'currency': cur,
+        'product_data[name]': 'アンタイ ' + (x.plan || 'サポート') + '　' + x.name + ' 様',
+      });
+      const link = stripe_('payment_links', 'post', {
+        'line_items[0][price]': price.id,
+        'line_items[0][quantity]': 1,
+        'metadata[contract_id]': x.id || '',
+        'metadata[name]': x.name,
+      });
+      d.getRange(x.row, C.PAYLINK).setValue(link.url);
+      d.getRange(x.row, C.PAYLINK_ID).setValue(link.id);
+      if (!x.payStatus) d.getRange(x.row, C.PAYSTATUS).setValue('未決済');
+      made++;
+    } catch (err) {
+      skipped.push(x.name + '（' + err.message + '）');
+    }
+  });
+  refreshDashboard();
+  toast_('決済リンクを ' + made + '件 発行しました' +
+    (skipped.length ? '／作れなかったもの: ' + skipped.slice(0, 3).join('、') : ''));
+}
+
+/**
+ * ⑦ Stripeから入金・返金を取り込む。
+ * 支払い済みなら着手金の入金日を自動で埋め、返金があれば返金額と返金日を入れる。
+ */
+function syncPayments() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const d = ss.getSheetByName(SH.DEALS);
+  let paidCount = 0;
+  let refundCount = 0;
+
+  readDeals_().forEach(x => {
+    if (!x.payLinkId) return;
+    let sessions;
+    try {
+      sessions = stripe_('checkout/sessions', 'get', { payment_link: x.payLinkId, limit: 5 });
+    } catch (err) {
+      console.error('sessions取得失敗 ' + x.name + ': ' + err);
+      return;
+    }
+    const paid = (sessions.data || []).filter(s => s.payment_status === 'paid')[0];
+    if (!paid) {
+      if (x.payStatus !== '未決済') d.getRange(x.row, C.PAYSTATUS).setValue('未決済');
+      return;
+    }
+    const pi = paid.payment_intent || '';
+    if (!x.payId && pi) d.getRange(x.row, C.PAY_ID).setValue(pi);
+
+    // 返金の有無を確認
+    let refunded = 0;
+    let refundedAt = null;
+    if (pi) {
+      try {
+        const rf = stripe_('refunds', 'get', { payment_intent: pi, limit: 10 });
+        (rf.data || []).forEach(r => {
+          if (r.status === 'succeeded') {
+            refunded += Number(r.amount) || 0;
+            const t = new Date(Number(r.created) * 1000);
+            if (!refundedAt || t > refundedAt) refundedAt = t;
+          }
+        });
+      } catch (err) { console.error('refunds取得失敗: ' + err); }
+    }
+
+    if (refunded > 0) {
+      if (!x.refundAmt) d.getRange(x.row, C.REFUND_AMT).setValue(refunded);
+      if (!x.refundAt && refundedAt) d.getRange(x.row, C.REFUND_AT).setValue(refundedAt);
+      d.getRange(x.row, C.PAYSTATUS).setValue(refunded >= (paid.amount_total || 0) ? '返金済' : '一部返金');
+      refundCount++;
+      return;
+    }
+
+    d.getRange(x.row, C.PAYSTATUS).setValue('支払済');
+    if (!x.firstPaid) {
+      d.getRange(x.row, C.FIRST_PAID).setValue(new Date(Number(paid.created) * 1000));
+      if (!x.first) d.getRange(x.row, C.FIRST_AMT).setValue(Number(paid.amount_total) || 0);
+      paidCount++;
+    }
+  });
+
+  refreshDashboard();
+  toast_('Stripe同期： 新しい入金 ' + paidCount + '件／返金 ' + refundCount + '件');
+}
+
+/**
+ * ⑧ 選択中の行を返金する。
+ * お金が動く操作なので、確認ダイアログで明示的に承認を取ってから実行する。
+ */
+function refundSelected() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const d = ss.getActiveSheet();
+  if (d.getName() !== SH.DEALS) { toast_('「契約管理」シートで、返金したい行を選んでから実行してください。'); return; }
+  const row = d.getActiveRange().getRow();
+  if (row < FIRST) { toast_('返金したい契約の行を選んでください。'); return; }
+
+  const x = readDeals_().filter(v => v.row === row)[0];
+  if (!x) { toast_('その行に契約データがありません。'); return; }
+  if (!x.payId) { toast_(x.name + ' さんはStripeでの入金が確認できていません（先に⑦を実行してください）。'); return; }
+  if (x.refundAt) { toast_(x.name + ' さんは既に返金済みです。'); return; }
+
+  const ui = SpreadsheetApp.getUi();
+  const amount = x.paid || x.first || 0;
+  const ans = ui.alert('返金の確認',
+    x.name + ' 様に ' + yen_(amount) + ' を返金します。\n' +
+    'Stripe上で実際に返金が実行され、取り消せません。実行しますか？',
+    ui.ButtonSet.YES_NO);
+  if (ans !== ui.Button.YES) { toast_('返金を中止しました。'); return; }
+
+  try {
+    const rf = stripe_('refunds', 'post', { payment_intent: x.payId });
+    d.getRange(row, C.REFUND_AMT).setValue(Number(rf.amount) || amount);
+    d.getRange(row, C.REFUND_AT).setValue(new Date());
+    d.getRange(row, C.PAYSTATUS).setValue('返金済');
+    if (!x.cancel) d.getRange(row, C.CANCEL).setValue(new Date());
+    refreshDashboard();
+    toast_(x.name + ' さんへ ' + yen_(Number(rf.amount) || amount) + ' を返金しました。');
+  } catch (err) {
+    SpreadsheetApp.getUi().alert('返金に失敗しました\n\n' + err.message);
+  }
+}
 
 // ────────────────────────────────────────────
 // ③ ダッシュボード
@@ -532,10 +747,61 @@ function refreshDashboard() {
     sh.getRange(r, 1).setValue('（紹介者が未設定です）').setFontColor('#6B7885');
   }
 
+  r += Math.max(aRows.length, 1) + 2;
+
+  // 紹介報酬の支払予定（いつ・誰に・いくら出すのかを一目で）
+  sh.getRange(r, 1).setValue('紹介報酬の支払予定').setFontWeight('bold');
+  r++;
+  const rs = ss.getSheetByName(SH.REWARD);
+  const buckets = { 期限切れ: [], 今月: [], 来月: [], それ以降: [], 未承認: [] };
+  if (rs && rs.getLastRow() > 1) {
+    const rw = rs.getRange(2, 1, rs.getLastRow() - 1, 9).getValues();
+    const thisM = Utilities.formatDate(now, TZ, 'yyyy-MM');
+    const nextM = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 1), TZ, 'yyyy-MM');
+    rw.forEach(v => {
+      const [, , cname, agent, amt, st, due, paidOn] = v;
+      if (!String(cname).trim()) return;
+      if (String(paidOn).trim()) return;                 // 支払済みは表示しない
+      const item = { agent: agent, amt: Number(amt) || 0, name: cname, due: due };
+      if (String(st).trim() === '承認待ち') { buckets.未承認.push(item); return; }
+      if (!(due instanceof Date)) { buckets.それ以降.push(item); return; }
+      const dm = ym_(due);
+      if (due < now && dm !== thisM) buckets.期限切れ.push(item);
+      else if (dm === thisM) buckets.今月.push(item);
+      else if (dm === nextM) buckets.来月.push(item);
+      else buckets.それ以降.push(item);
+    });
+  }
+  const bHead = ['区分', '件数', '金額', '内訳（紹介者）'];
+  sh.getRange(r, 1, 1, bHead.length).setValues([bHead])
+    .setFontWeight('bold').setBackground('#E3ECF5');
+  r++;
+  const order = ['期限切れ', '今月', '来月', 'それ以降', '未承認'];
+  const bRows = order.map(k => {
+    const arr = buckets[k];
+    const byA = {};
+    arr.forEach(i => { byA[i.agent] = (byA[i.agent] || 0) + i.amt; });
+    const detail = Object.keys(byA).map(a => a + ' ' + yen_(byA[a])).join('、');
+    return [k, arr.length, arr.reduce((sm, i) => sm + i.amt, 0), detail || '—'];
+  });
+  sh.getRange(r, 1, bRows.length, bHead.length).setValues(bRows);
+  sh.getRange(r, 3, bRows.length, 1).setNumberFormat('¥#,##0');
+  if (buckets.期限切れ.length) sh.getRange(r, 1, 1, bHead.length).setBackground('#F8D7D3');
+  if (buckets.今月.length) sh.getRange(r + 1, 1, 1, bHead.length).setBackground('#FBEFD9');
+  r += bRows.length;
+
   sh.setColumnWidth(1, 190).setColumnWidth(2, 150).setColumnWidth(3, 160);
   sh.setColumnWidth(4, 120).setColumnWidth(5, 130).setColumnWidth(6, 130);
   ss.setActiveSheet(sh);
   ss.moveActiveSheet(1);
+}
+
+
+/** 入金日から紹介報酬の支払期日を出す（設定のREWARD_PAY_RULEに従う） */
+function rewardDueDate_(paidAt) {
+  const rule = String(getConfig_().REWARD_PAY_RULE || '翌月末').trim();
+  const add = rule.indexOf('翌々月') >= 0 ? 3 : (rule.indexOf('翌月') >= 0 ? 2 : 1);
+  return new Date(paidAt.getFullYear(), paidAt.getMonth() + add, 0);   // その月の末日
 }
 
 // ────────────────────────────────────────────
@@ -567,7 +833,7 @@ function buildRewards() {
     if (!(x.firstPaid instanceof Date)) return;      // 入金を確認できた案件のみ起票
     const key = String(x.id).trim();
     if (!key || existing.has(key)) return;
-    const due = new Date(x.firstPaid.getFullYear(), x.firstPaid.getMonth() + 1, 0); // 入金月の月末
+    const due = rewardDueDate_(x.firstPaid);
     add.push([key, ymd_(x.signedAt), x.name, agent, rate[agent] || 0,
       '承認待ち', due, '', '入金確認済みのため起票']);
   });
@@ -584,6 +850,10 @@ function buildRewards() {
 // ⑤ 要対応の通知（毎朝の自動実行＋手動実行）
 // ────────────────────────────────────────────
 function dailyRoutine() {
+  // Stripeキーが入っていれば入金・返金も毎朝取り込む
+  if (String(getConfig_().STRIPE_SECRET_KEY || '').trim()) {
+    try { syncPayments(); } catch (err) { console.error('Stripe同期失敗: ' + err); }
+  }
   refreshDashboard();
   sendAlerts();
 }
@@ -671,5 +941,47 @@ function onEdit(e) {
     }
   } catch (err) {
     console.error('onEdit: ' + err);
+  }
+}
+
+/**
+ * 編集時に走る（インストール型）。
+ * 契約日・プラン・金額がそろっていて決済リンクがまだ無い行は、その場でリンクを発行する。
+ * 「プランを入れたら金額とリンクができて、あとは送るだけ」にするための処理。
+ */
+function onSheetEdit(e) {
+  try {
+    const sh = e.range.getSheet();
+    if (sh.getName() !== SH.DEALS) return;
+    const row = e.range.getRow();
+    if (row < FIRST) return;
+    const col = e.range.getColumn();
+    // 契約に関わる列を触ったときだけ判定する
+    if ([C.PLAN, C.AMOUNT, C.FIRST_AMT, C.SIGNED, C.EMAIL].indexOf(col) < 0) return;
+    if (!String(getConfig_().STRIPE_SECRET_KEY || '').trim()) return;
+
+    const x = readDeals_().filter(v => v.row === row)[0];
+    if (!x || x.payLink || x.cancel) return;
+    if (!x.signedAt || !(x.first || x.amount)) return;   // 契約日と金額がそろうまで待つ
+
+    const cur = String(getConfig_().STRIPE_CURRENCY || 'jpy').trim();
+    const amount = x.first || x.amount;
+    const price = stripe_('prices', 'post', {
+      'unit_amount': Math.round(amount),
+      'currency': cur,
+      'product_data[name]': 'アンタイ ' + (x.plan || 'サポート') + '　' + x.name + ' 様',
+    });
+    const link = stripe_('payment_links', 'post', {
+      'line_items[0][price]': price.id,
+      'line_items[0][quantity]': 1,
+      'metadata[contract_id]': x.id || '',
+      'metadata[name]': x.name,
+    });
+    sh.getRange(row, C.PAYLINK).setValue(link.url);
+    sh.getRange(row, C.PAYLINK_ID).setValue(link.id);
+    sh.getRange(row, C.PAYSTATUS).setValue('未決済');
+    toast_(x.name + ' さんの決済リンクを発行しました（' + yen_(amount) + '）');
+  } catch (err) {
+    console.error('onSheetEdit: ' + err);
   }
 }
