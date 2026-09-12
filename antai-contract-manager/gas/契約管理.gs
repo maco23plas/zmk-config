@@ -136,16 +136,19 @@ function setup() {
       ['（ここに代理店名と単価を追加）', 170000],
       ['', ''],
     ]);
-    // 流入元はチャネルの大分類。個人名は「紹介者・代理店」列に入れる
+    mst.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#E3ECF5');
+    mst.getRange(1, 4, 1, 2).setFontWeight('bold').setBackground('#E3ECF5');
+    mst.setColumnWidth(1, 200).setColumnWidth(4, 240);
+  }
+  // 流入元はチャネルの大分類。個人名は「紹介者・代理店」列に入れる。
+  // マスタを先に作ってしまったシートでも埋まるよう、作成時ではなく毎回見る。
+  if (!String(mst.getRange(1, 7).getValue()).trim()) {
     mst.getRange(1, 7, 8, 1).setValues([
       ['流入元（チャネル）'], ['アフィリエイト'], ['代理店紹介'], ['セミナー'],
       ['既存顧客紹介'], ['アライアンス'], ['広告'], ['その他'],
     ]);
     mst.getRange(1, 7).setFontWeight('bold').setBackground('#E3ECF5');
     mst.setColumnWidth(7, 200);
-    mst.getRange(1, 1, 1, 2).setFontWeight('bold').setBackground('#E3ECF5');
-    mst.getRange(1, 4, 1, 2).setFontWeight('bold').setBackground('#E3ECF5');
-    mst.setColumnWidth(1, 200).setColumnWidth(4, 240);
   }
 
   // 契約管理
@@ -156,6 +159,7 @@ function setup() {
   d.setFrozenRows(1);
   d.setFrozenColumns(3);
   applyValidations_(d, mst);
+  const moved = compactDeals_(d);      // 数式帯の外に積まれた行を帯の中へ引き上げる
   applyFormulas_(d, d.getLastRow());   // 既に入っているデータ行まで数式を届かせる
   applyFormats_(d, d.getLastRow());
 
@@ -196,7 +200,60 @@ function setup() {
   });
 
   refreshDashboard();
-  toast_('セットアップ完了。「設定」シートに流入シートのURLと通知先を入れて、②を実行してください。');
+  toast_('セットアップ完了。'
+    + (moved ? '契約管理の' + moved + '行を上詰めしました。' : '')
+    + '「設定」シートに流入シートのURLと通知先を入れて、②を実行してください。');
+}
+
+/**
+ * 契約管理のデータ行を先頭から詰め直す。
+ * 旧版の取り込みが数式帯（2〜LAST_ROW行）より下に追記していたため、
+ * 間に数百行の空白ができてしまう。並び順はそのまま保ち、隙間だけを潰す。
+ * 数式列（S〜V）は触らず、あとから applyFormulas_ で敷き直す。
+ * @return {number} 移動した場合はデータ行数、すでに詰まっていれば 0
+ */
+function compactDeals_(d) {
+  const last = d.getLastRow();
+  if (last < FIRST) return 0;
+  const width = COLS.length;
+  const all = d.getRange(FIRST, 1, last - FIRST + 1, width).getValues();
+  const filled = r => !!(String(r[0]).trim() || String(r[2]).trim());
+  const data = all.filter(filled);
+  if (!data.length) return 0;
+
+  // すでに先頭から隙間なく並んでいれば何もしない
+  let contiguous = true;
+  for (let i = 0; i < data.length; i++) {
+    if (!filled(all[i])) { contiguous = false; break; }
+  }
+  if (contiguous && data.length === all.length) return 0;
+  if (contiguous) {
+    // 下に残っているのは空行だけ。念のため末尾を掃除して終わり
+    const from = FIRST + data.length;
+    if (last >= from) clearDealRows_(d, from, last - from + 1);
+    return 0;
+  }
+
+  const left = data.map(r => r.slice(0, 18));         // A〜R
+  const right = data.map(r => r.slice(22, width));    // W〜
+  d.getRange(FIRST, 1, data.length, 18).setValues(left);
+  d.getRange(FIRST, 23, data.length, width - 22).setValues(right);
+
+  const from = FIRST + data.length;
+  if (last >= from) clearDealRows_(d, from, last - from + 1);
+  return data.length;
+}
+
+/** 契約管理の指定行を空にする。数式帯の中は数式を残し、帯の外は数式ごと消す。 */
+function clearDealRows_(d, from, rows) {
+  const width = COLS.length;
+  d.getRange(from, 1, rows, 18).clearContent();
+  d.getRange(from, 23, rows, width - 22).clearContent();
+  const end = from + rows - 1;
+  if (end > LAST_ROW) {
+    const s = Math.max(from, LAST_ROW + 1);
+    d.getRange(s, 19, end - s + 1, 4).clearContent();
+  }
 }
 
 /** 氏名(C列)が空の最初の行を返す。数式を敷いた範囲の中に追記するため。 */
