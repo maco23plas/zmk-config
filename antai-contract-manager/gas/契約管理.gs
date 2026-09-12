@@ -71,7 +71,11 @@ const CONFIG_DEFAULTS = [
   ['ALERT_HOUR', 9, '毎朝の要対応通知を送る時刻（0〜23）'],
   ['DEFAULT_DUE_DAYS', 7, '契約日から着手金入金期限までの既定日数'],
   ['MEETING_STALE_DAYS', 7, '面談から何日契約がなければ「未契約」として警告するか'],
-  ['STRIPE_SECRET_KEY', '', '★Stripeのシークレットキー（sk_live_… / sk_test_…）。決済リンクの発行と入金確認に使用'],
+  ['STRIPE_MODE', '本番',
+    '「本番」＝下の本番キーを使う／「テスト」＝テスト用キーを使う。動作確認が終わったら必ず「本番」に戻す'],
+  ['STRIPE_SECRET_KEY', '', '★Stripeのシークレットキー（sk_live_…）。決済リンクの発行と入金確認に使用'],
+  ['STRIPE_SECRET_KEY_TEST', '',
+    'Stripeのテスト用シークレットキー（sk_test_…）。STRIPE_MODEが「テスト」のときだけ使う'],
   ['STRIPE_CURRENCY', 'jpy', '決済通貨'],
   ['REWARD_PAY_RULE', '翌月末', '紹介報酬の支払日ルール：「当月末」「翌月末」「翌々月末」から選ぶ'],
   ['CLOUDSIGN_CLIENT_ID', '', '★クラウドサインのクライアントID（管理画面→Web API設定→「新しいクライアントIDを発行する」）'],
@@ -85,6 +89,8 @@ const CONFIG_DEFAULTS = [
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('📗 契約管理')
+    .addItem('🔍 動作チェック（何も書き換えません）', 'selfTest')
+    .addSeparator()
     .addItem('① 初期セットアップ／設定反映', 'setup')
     .addItem('② 流入シートから取り込み', 'pullFromInflow')
     .addItem('③ ダッシュボードを更新', 'refreshDashboard')
@@ -99,6 +105,151 @@ function onOpen() {
     .addItem('⑨ 契約書を送付（クラウドサイン）', 'sendContracts')
     .addItem('⑩ 締結状況を取り込む（クラウドサイン）', 'syncContracts')
     .addToUi();
+}
+
+// ────────────────────────────────────────────
+// 🔍 動作チェック
+//    読むだけ。シートもStripeもクラウドサインも書き換えない。
+// ────────────────────────────────────────────
+function selfTest() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = getConfig_();
+  const out = [];
+  let bad = 0;
+  const ok = m => out.push('✅ ' + m);
+  const wn = m => out.push('⚠️ ' + m);
+  const ng = m => { bad++; out.push('❌ ' + m); };
+
+  // ── 1. 流入シート（②の入力元） ──
+  out.push('■ 流入シート');
+  const url = String(cfg.INFLOW_SHEET_URL || '').trim();
+  if (!url) ng('URLが未設定。②の取り込みが使えません');
+  else {
+    try {
+      const book = SpreadsheetApp.openByUrl(url);
+      const src = book.getSheetByName('顧客');
+      if (!src) ng('「顧客」タブが見つかりません（流入側のシート構成を確認）');
+      else ok('「' + book.getName() + '」の顧客 ' + Math.max(src.getLastRow() - 1, 0) + '件を読めます');
+    } catch (err) {
+      ng('開けません。共有設定かURLを確認してください');
+    }
+  }
+
+  // ── 2. 契約管理の構造 ──
+  out.push('', '■ 契約管理');
+  const d = ss.getSheetByName(SH.DEALS);
+  if (!d) ng('タブがありません。①を実行してください');
+  else {
+    const head = d.getRange(1, 1, 1, COLS.length).getValues()[0];
+    const wrong = COLS.filter((c, i) => String(head[i]).trim() !== c);
+    if (wrong.length) ng('見出しがコードと違います（①を実行）: ' + wrong.slice(0, 3).join(' / '));
+    else ok('列は ' + COLS.length + '列そろっています');
+
+    const miss = d.getRange(FIRST, C.STATUS, LAST_ROW - 1, 1).getFormulas().filter(r => !r[0]).length;
+    if (miss) ng('自動計算の数式が ' + miss + '行ぶん抜けています（①を実行）');
+    else ok('自動計算（進行状況・要対応・残額）は ' + (LAST_ROW - 1) + '行ぶん準備済み');
+
+    const last = d.getLastRow();
+    if (last > LAST_ROW) ng((last - LAST_ROW) + '行が数式の範囲より下にあります（①を実行すると上に詰めます）');
+
+    const deals = readDeals_();
+    const signed = deals.filter(x => x.signedAt instanceof Date);
+    ok('データ ' + deals.length + '件（うち契約済 ' + signed.length + '件）');
+
+    // よくある入力漏れ
+    const noAmount = signed.filter(x => !x.amount).map(x => x.name);
+    if (noAmount.length) wn('契約日はあるのに契約金額が空: ' + noAmount.slice(0, 5).join('、'));
+    const noMail = signed.filter(x => !x.email).map(x => x.name);
+    if (noMail.length) wn('契約済なのにメールアドレスが空（決済リンクを送れません）: ' + noMail.slice(0, 5).join('、'));
+    const badMail = deals.filter(x => x.email && !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(x.email)).map(x => x.name);
+    if (badMail.length) wn('メールアドレスの形式が怪しい: ' + badMail.slice(0, 5).join('、'));
+    const noAgentRate = deals.filter(x => x.agent).map(x => x.agent);
+    const uniqAgents = noAgentRate.filter((v, i) => noAgentRate.indexOf(v) === i);
+    const mst = ss.getSheetByName(SH.MASTER);
+    const rates = {};
+    if (mst) {
+      mst.getRange(2, 4, 50, 2).getValues().forEach(r => {
+        const nm = String(r[0]).trim();
+        if (nm) rates[nm] = Number(r[1]) || 0;
+      });
+    }
+    const unpriced = uniqAgents.filter(a => !rates[a]);
+    if (unpriced.length) wn('マスタに報酬単価が無い紹介者（④で報酬が起票されません）: ' + unpriced.join('、'));
+  }
+
+  // ── 3. マスタ ──
+  out.push('', '■ マスタ');
+  const mst2 = ss.getSheetByName(SH.MASTER);
+  if (!mst2) ng('タブがありません。①を実行してください');
+  else {
+    const plans = mst2.getRange(2, 1, 50, 2).getValues().filter(r => String(r[0]).trim());
+    const badPlan = plans.filter(r => !(Number(r[1]) > 0)).map(r => r[0]);
+    plans.length ? ok('プラン ' + plans.length + '件') : ng('プランが1件も登録されていません');
+    if (badPlan.length) ng('標準金額が入っていないプラン: ' + badPlan.join('、'));
+    const ch = mst2.getRange(2, 7, 50, 1).getValues().flat().filter(v => String(v).trim());
+    ch.length ? ok('流入元チャネル ' + ch.length + '件') : ng('流入元チャネルが空（①を実行）');
+  }
+
+  // ── 4. 自動で動く部分 ──
+  out.push('', '■ 自動処理');
+  const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+  handlers.indexOf('dailyRoutine') >= 0
+    ? ok('毎朝の通知・同期トリガー 登録済み（' + (Number(cfg.ALERT_HOUR) || 9) + '時台）')
+    : ng('毎朝のトリガーがありません（①を実行）');
+  handlers.indexOf('onSheetEdit') >= 0
+    ? ok('編集時トリガー 登録済み（プラン入力→金額・決済リンクの自動発行）')
+    : ng('編集時トリガーがありません（①を実行）');
+  if (String(cfg.DISCORD_WEBHOOK_URL || '').trim()
+    || (String(cfg.CHATWORK_API_TOKEN || '').trim() && String(cfg.CHATWORK_ROOM_ID || '').trim())) {
+    ok('要対応の通知先 設定済み');
+  } else {
+    wn('通知先が未設定。⑤の要対応通知はどこにも届きません');
+  }
+
+  // ── 5. Stripe ──
+  out.push('', '■ Stripe');
+  const mode = stripeMode_();
+  const key = stripeKey_(true);
+  if (!key) {
+    ng('キーが未設定（STRIPE_MODE は「' + mode + '」）。⑥⑦⑧が使えません');
+  } else {
+    try {
+      const bal = stripe_('balance');
+      ok('接続OK（STRIPE_MODE=' + mode + ' / 実際のキーは' + (bal.livemode ? '本番' : 'テスト') + '用）');
+      if (mode === '本番' && !bal.livemode) {
+        ng('本番モードなのにテスト用キーが入っています。本物の請求が1件も作れません');
+      }
+      if (mode === 'テスト' && bal.livemode) {
+        ng('テストのつもりで本番キーが入っています。実際に請求できるリンクが作られます');
+      }
+      if (mode === 'テスト') wn('いまはテストモードです。確認が済んだら STRIPE_MODE を「本番」に戻してください');
+    } catch (err) {
+      ng('繋がりません: ' + String(err.message || err).substring(0, 120));
+    }
+  }
+
+  // ── 6. クラウドサイン ──
+  out.push('', '■ クラウドサイン');
+  if (!String(cfg.CLOUDSIGN_CLIENT_ID || '').trim()) {
+    wn('未接続。⑨⑩は使えません（契約書の送付・締結確認は手作業のまま）');
+  } else {
+    try {
+      csToken_();
+      ok('接続OK（' + (String(cfg.CLOUDSIGN_SANDBOX || 'ON').trim().toUpperCase() === 'OFF'
+        ? '本番環境' : 'テスト環境') + '）');
+      if (!String(cfg.CLOUDSIGN_TEMPLATE_FILE_ID || '').trim()) {
+        ng('契約書テンプレートPDFのファイルIDが未設定。⑨で送る中身がありません');
+      }
+    } catch (err) {
+      ng('繋がりません: ' + String(err.message || err).substring(0, 120));
+    }
+  }
+
+  const head = bad === 0
+    ? '問題は見つかりませんでした。'
+    : '要対応が ' + bad + '件あります。';
+  SpreadsheetApp.getUi().alert('動作チェック', head + '\n\n' + out.join('\n'),
+    SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 // ────────────────────────────────────────────
@@ -119,6 +270,13 @@ function setup() {
     ? conf.getRange(2, 1, conf.getLastRow() - 1, 1).getValues().flat().map(v => String(v).trim())
     : []);
   CONFIG_DEFAULTS.forEach(r => { if (!known.has(r[0])) conf.appendRow(r); });
+  // STRIPE_MODE は打ち間違えると本番決済になるのでプルダウンにする
+  const keys = conf.getRange(2, 1, Math.max(conf.getLastRow() - 1, 1), 1).getValues().flat()
+    .map(v => String(v).trim());
+  const modeRow = keys.indexOf('STRIPE_MODE');
+  if (modeRow >= 0) {
+    conf.getRange(modeRow + 2, 2).setDataValidation(listRule_(['本番', 'テスト']));
+  }
 
   // マスタ（プラン単価・代理店報酬単価）
   let mst = ss.getSheetByName(SH.MASTER);
@@ -521,9 +679,26 @@ const yen_ = n => '¥' + Math.round(Number(n) || 0).toLocaleString('ja-JP');
 // ════════════════════════════════════════════
 
 /** StripeのREST APIを叩く。失敗したら理由付きで例外にする。 */
+/** 「テスト」か「本番」か。設定シートの STRIPE_MODE で切り替える。 */
+function stripeMode_() {
+  return String(getConfig_().STRIPE_MODE || '本番').trim() === 'テスト' ? 'テスト' : '本番';
+}
+
+/** いま使うStripeキーを返す。quiet のときは空文字を返すだけで落とさない。 */
+function stripeKey_(quiet) {
+  const cfg = getConfig_();
+  const test = stripeMode_() === 'テスト';
+  const key = String((test ? cfg.STRIPE_SECRET_KEY_TEST : cfg.STRIPE_SECRET_KEY) || '').trim();
+  if (!key && !quiet) {
+    throw new Error(test
+      ? '「設定」シートの STRIPE_SECRET_KEY_TEST が空です。STRIPE_MODE が「テスト」のため、sk_test_… のキーが要ります。'
+      : '「設定」シートの STRIPE_SECRET_KEY が空です。');
+  }
+  return key;
+}
+
 function stripe_(path, method, params) {
-  const key = String(getConfig_().STRIPE_SECRET_KEY || '').trim();
-  if (!key) throw new Error('「設定」シートの STRIPE_SECRET_KEY が空です。');
+  const key = stripeKey_();
   const opt = {
     method: method || 'get',
     headers: { Authorization: 'Bearer ' + key },
@@ -553,6 +728,7 @@ function createPaymentLinks() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const d = ss.getSheetByName(SH.DEALS);
   const cur = String(getConfig_().STRIPE_CURRENCY || 'jpy').trim();
+  const test = stripeMode_() === 'テスト';
   let made = 0;
   const skipped = [];
 
@@ -564,7 +740,8 @@ function createPaymentLinks() {
       const price = stripe_('prices', 'post', {
         'unit_amount': Math.round(amount),
         'currency': cur,
-        'product_data[name]': 'アンタイ ' + (x.plan || 'サポート') + '　' + x.name + ' 様',
+        'product_data[name]': (test ? '【テスト】' : '')
+          + 'アンタイ ' + (x.plan || 'サポート') + '　' + x.name + ' 様',
       });
       const link = stripe_('payment_links', 'post', {
         'line_items[0][price]': price.id,
@@ -574,14 +751,14 @@ function createPaymentLinks() {
       });
       d.getRange(x.row, C.PAYLINK).setValue(link.url);
       d.getRange(x.row, C.PAYLINK_ID).setValue(link.id);
-      if (!x.payStatus) d.getRange(x.row, C.PAYSTATUS).setValue('未決済');
+      if (!x.payStatus) d.getRange(x.row, C.PAYSTATUS).setValue(test ? '未決済(テスト)' : '未決済');
       made++;
     } catch (err) {
       skipped.push(x.name + '（' + err.message + '）');
     }
   });
   refreshDashboard();
-  toast_('決済リンクを ' + made + '件 発行しました' +
+  toast_((test ? '【テストモード】' : '') + '決済リンクを ' + made + '件 発行しました' +
     (skipped.length ? '／作れなかったもの: ' + skipped.slice(0, 3).join('、') : ''));
 }
 
@@ -874,6 +1051,12 @@ function refreshDashboard() {
     .setFontSize(14).setFontWeight('bold');
   sh.getRange(r, 6).setValue('更新: ' + Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm'))
     .setFontColor('#6B7885');
+  if (stripeMode_() === 'テスト') {
+    // 戻し忘れると本番の請求が一切作られなくなるので、いちばん目立つ場所に出す
+    sh.getRange(r + 1, 1, 1, 6).merge()
+      .setValue('⚠ Stripeはテストモードです。動作確認が終わったら「設定」の STRIPE_MODE を「本番」に戻してください')
+      .setBackground('#F8D7D3').setFontWeight('bold').setHorizontalAlignment('left');
+  }
   r += 2;
 
   const kpi = [
