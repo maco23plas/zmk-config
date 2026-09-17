@@ -1792,6 +1792,8 @@ const PAGE_CSS =
   '.bval{font-size:9px;color:#6B7A72;height:12px;font-variant-numeric:tabular-nums}' +
   '.blab{font-size:8px;color:#98A69E;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
   '.blab2{font-size:9px;color:#98A69E;height:14px;margin-top:2px}' +
+  '.blab2.hr{font-size:8px}' +
+  '@media(max-width:430px){.blab2.hr.odd{visibility:hidden}}' +
   '.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}' +
   '.legend span{font-size:11px;color:#6B7A72;white-space:nowrap}' +
   '.dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:4px}' +
@@ -1973,8 +1975,9 @@ function renderStatsPage_(key, period) {
   const hourBars = hourCounts.map((n, h) => {
     const hh = Math.round((n / maxHour) * 100);
     return '<div class="bcol" title="' + h + '時台：' + n + '件">' +
+      '<div class="bval">' + (n || '') + '</div>' +
       '<div class="bar alt" style="height:' + Math.max(hh, n ? 4 : 0) + '%"></div>' +
-      '<div class="blab2">' + (h % 3 === 0 ? h : '') + '</div></div>';
+      '<div class="blab2 hr' + (h % 2 ? ' odd' : '') + '">' + h + '</div></div>';
   }).join('');
   const wdLabels = ['月', '火', '水', '木', '金', '土', '日'];
   const maxWd = Math.max(1, ...wdCounts);
@@ -2198,8 +2201,9 @@ function renderAdminPage_() {
   const hourBars = hourAll.map((n, h) => {
     const hh = Math.round((n / maxHour) * 100);
     return '<div class="bcol" title="' + h + '時台：' + n + '件">' +
+      '<div class="bval">' + (n || '') + '</div>' +
       '<div class="bar alt" style="height:' + Math.max(hh, n ? 4 : 0) + '%"></div>' +
-      '<div class="blab2">' + (h % 3 === 0 ? h : '') + '</div></div>';
+      '<div class="blab2 hr' + (h % 2 ? ' odd' : '') + '">' + h + '</div></div>';
   }).join('');
   const wdLabels = ['月', '火', '水', '木', '金', '土', '日'];
   const maxWd = Math.max(1, ...wdAll);
