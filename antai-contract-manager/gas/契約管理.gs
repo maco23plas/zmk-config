@@ -443,6 +443,18 @@ function clearDealRows_(d, from, rows) {
   }
 }
 
+/** 次の契約ID（C0001形式）。いま使われている最大の番号の次を返す。 */
+function nextContractId_(d) {
+  let last = 0;
+  if (d.getLastRow() >= FIRST) {
+    d.getRange(FIRST, C.ID, d.getLastRow() - 1, 1).getValues().forEach(([v]) => {
+      const n = Number(String(v).replace(/\D/g, '')) || 0;
+      if (n > last) last = n;
+    });
+  }
+  return 'C' + String(last + 1).padStart(4, '0');
+}
+
 /** 氏名(C列)が空の最初の行を返す。数式を敷いた範囲の中に追記するため。 */
 function firstEmptyRow_(d) {
   const n = Math.max(d.getLastRow() - 1, 0);
@@ -1405,6 +1417,13 @@ function onEdit(e) {
     const col = e.range.getColumn();
     const row = e.range.getRow();
     if (row < FIRST) return;
+
+    // 氏名を入れたら契約IDを採番する（②を通さず手で足した人にもIDが要る。
+    // IDが無いと紹介報酬の起票対象から漏れるため）
+    if (col === C.NAME && String(e.range.getValue()).trim()) {
+      const idCell = sh.getRange(row, C.ID);
+      if (!String(idCell.getValue()).trim()) idCell.setValue(nextContractId_(sh));
+    }
 
     // 契約日(7列目)を入れたら、着手金の期限(14列目)が空なら既定日数後を入れる
     if (col === 7 && e.range.getValue() instanceof Date) {
