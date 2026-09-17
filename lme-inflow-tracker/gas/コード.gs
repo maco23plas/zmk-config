@@ -80,6 +80,8 @@ function onOpen() {
     .createMenu('📊 エルメ流入ツール')
     .addItem('① 初期セットアップ／設定反映', 'setup')
     .addItem('➕ アフィリエイターを追加', 'addAffiliate')
+    .addItem('✏️ 表示名を変更（過去ログもそろえる）', 'renameAffiliate')
+    .addItem('🧹 表示名を全タブでそろえる', 'syncQrNames')
     .addItem('② エルメ登録用URL一覧を生成', 'generateUrls')
     .addItem('③ テスト配信（今すぐレポート送信）', 'dailyReport')
     .addItem('④ ダッシュボード＆個人タブを更新', 'buildDashboards')
@@ -143,14 +145,13 @@ function setup() {
   const qrSh = ss.getSheetByName(SHEETS.QR);
   if (!qrSh) {
     const sh = ss.insertSheet(SHEETS.QR);
-    sh.getRange(1, 1, 7, 3).setValues([
-      ['QR ID（英数字・自由）', '表示名', 'エルメ友だち追加URL（方式B用・任意）'],
-      ['affi_01', 'TTM様 アフィ_01', ''],
-      ['affi_02', 'TTM様 アフィ_02', ''],
-      ['affi_03', 'TTM様 アフィ_03', ''],
-      ['affi_04', 'TTM様 アフィ_04', ''],
-      ['affi_05', 'TTM様 アフィ_05', ''],
-      ['affi_06', 'TTM様 アフィ_06', ''],
+    // 表示名はアフィリエイター本人にも見えるので、
+    // 社内の呼び名や取引先名を既定値にしない
+    sh.getRange(1, 1, 4, 3).setValues([
+      ['QR ID（英数字・自由）', '表示名（※本人に見えます）', 'エルメ友だち追加URL（方式B用・任意）'],
+      ['affi_01', '01_サンプルさん', ''],
+      ['affi_02', '02_サンプルさん', ''],
+      ['affi_03', '03_サンプルさん', ''],
     ]);
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 170).setColumnWidth(2, 220).setColumnWidth(3, 380);
@@ -244,6 +245,84 @@ function setup() {
 // ② エルメに貼るURLの一覧を自動生成
 //    （先に「デプロイ → ウェブアプリ」を済ませておくこと）
 // ────────────────────────────────────────────
+/**
+ * 過去ログに残っている表示名を、いまのQR設定の表示名に合わせ直す。
+ * 登録ログなどはQR名を「その時点の文字列」で持っているため、
+ * QR設定の名前を直しただけでは古い名前が共有シートに残り続ける。
+ */
+function syncQrNames() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const qrs = getQrMap_();
+  if (!Object.keys(qrs).length) { toast_('QR設定シートが空です。'); return; }
+
+  // [シート名, QR IDの列, QR名の列]
+  const targets = [
+    [SHEETS.REGS, 2, 3],
+    [SHEETS.CLICKS, 2, 3],
+    [SHEETS.DAILY, 2, 3],
+    [SHEETS.CUSTOMERS, 3, 4],
+  ];
+  let fixed = 0;
+  const where = [];
+  targets.forEach(function (t) {
+    const sh = ss.getSheetByName(t[0]);
+    if (!sh || sh.getLastRow() < 2) return;
+    const n = sh.getLastRow() - 1;
+    const ids = sh.getRange(2, t[1], n, 1).getValues();
+    const names = sh.getRange(2, t[2], n, 1).getValues();
+    let changed = 0;
+    for (let i = 0; i < n; i++) {
+      const qr = qrs[String(ids[i][0]).trim()];
+      if (!qr) continue;
+      if (String(names[i][0]).trim() !== qr.name) { names[i][0] = qr.name; changed++; }
+    }
+    if (changed) {
+      sh.getRange(2, t[2], n, 1).setValues(names);
+      fixed += changed;
+      where.push(t[0] + ' ' + changed + '件');
+    }
+  });
+
+  buildDashboards();
+  toast_(fixed
+    ? '表示名をそろえました（' + where.join('／') + '）。'
+    : '古い表示名は残っていませんでした。');
+}
+
+/** 表示名を変更する。過去ログの表示も一緒に直す。 */
+function renameAffiliate() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEETS.QR);
+  if (!sh || sh.getLastRow() < 2) { toast_('QR設定シートが空です。'); return; }
+
+  const qrs = getQrMap_();
+  const list = Object.keys(qrs).map(function (id) { return id + ' … ' + qrs[id].name; }).join('\n');
+  const a = ui.prompt('表示名を変更',
+    '変更したいQR IDを入れてください。\n\n' + list, ui.ButtonSet.OK_CANCEL);
+  if (a.getSelectedButton() !== ui.Button.OK) return;
+  const id = String(a.getResponseText() || '').trim();
+  if (!qrs[id]) { ui.alert('QR ID「' + id + '」が見つかりません。'); return; }
+
+  const b = ui.prompt('表示名を変更',
+    '「' + qrs[id].name + '」の新しい表示名を入れてください。\n\n'
+    + '※この名前は本人の成果ページに大きく表示されます。\n'
+    + '　社内の呼び名や取引先名（◯◯様 など）は入れないでください。',
+    ui.ButtonSet.OK_CANCEL);
+  if (b.getSelectedButton() !== ui.Button.OK) return;
+  const name = String(b.getResponseText() || '').trim();
+  if (!name) { toast_('表示名が空のため中止しました。'); return; }
+
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === id) { sh.getRange(i + 2, 2).setValue(name); break; }
+  }
+  syncQrNames();
+  generateUrls();
+  ui.alert('「' + name + '」に変更しました。\n'
+    + '過去ログの表示名もそろえ、ダッシュボードとURL一覧を作り直しました。');
+}
+
 /** 成約ログのQR IDプルダウンを、いまのQR設定に合わせ直す */
 function refreshDealValidation_(dealSh) {
   const sh = dealSh || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DEALS);
@@ -269,8 +348,9 @@ function addAffiliate() {
   if (!sh) { toast_('QR設定シートがありません。先に①を実行してください。'); return; }
 
   const res = ui.prompt('アフィリエイターを追加',
-    '表示名を入れてください（例：06_あかりさん）。\n'
-    + 'この名前がダッシュボードと契約管理シートの「紹介者」に出ます。\n'
+    '表示名を入れてください（例：10_わいさん）。\n\n'
+    + '※この名前は本人の成果ページに大きく表示されます。\n'
+    + '　社内の呼び名や取引先名（◯◯様 など）は入れないでください。\n\n'
     + 'QR IDと閲覧キーはこちらで自動採番します。',
     ui.ButtonSet.OK_CANCEL);
   if (res.getSelectedButton() !== ui.Button.OK) return;
