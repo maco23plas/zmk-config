@@ -79,6 +79,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('📊 エルメ流入ツール')
     .addItem('① 初期セットアップ／設定反映', 'setup')
+    .addItem('➕ アフィリエイターを追加', 'addAffiliate')
     .addItem('② エルメ登録用URL一覧を生成', 'generateUrls')
     .addItem('③ テスト配信（今すぐレポート送信）', 'dailyReport')
     .addItem('④ ダッシュボード＆個人タブを更新', 'buildDashboards')
@@ -166,14 +167,7 @@ function setup() {
   // 成約ログ（成約が出たら1行追加するだけ：日付・QR ID・メモ）
   const dealSh = ensureSheet_(ss, SHEETS.DEALS,
     ['日付（例 2026-08-15）', 'QR ID（ドロップダウンで選択）', 'メモ（任意）']);
-  const idList = Object.keys(getQrMap_());
-  if (idList.length) {
-    dealSh.getRange(2, 2, 999, 1).setDataValidation(
-      SpreadsheetApp.newDataValidation()
-        .requireValueInList(idList, true)
-        .setAllowInvalid(true)
-        .build());
-  }
+  refreshDealValidation_(dealSh);
 
   // 顧客シート（1人1行。面談予約日時とステータスをここで管理する）
   const cus = ensureSheet_(ss, SHEETS.CUSTOMERS, CUSTOMER_HEADERS);
@@ -250,25 +244,134 @@ function setup() {
 // ② エルメに貼るURLの一覧を自動生成
 //    （先に「デプロイ → ウェブアプリ」を済ませておくこと）
 // ────────────────────────────────────────────
-function generateUrls() {
-  // 設定シートのWEB_APP_URLを最優先で使う。
-  // （ScriptApp.getService().getUrl() はデプロイを作り直すと古いURLを
-  //   返すことがあるため、手貼りのURLを正とする）
+/** 成約ログのQR IDプルダウンを、いまのQR設定に合わせ直す */
+function refreshDealValidation_(dealSh) {
+  const sh = dealSh || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DEALS);
+  if (!sh) return;
+  const idList = Object.keys(getQrMap_());
+  if (!idList.length) return;
+  sh.getRange(2, 2, 999, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation()
+      .requireValueInList(idList, true)
+      .setAllowInvalid(true)
+      .build());
+}
+
+/**
+ * アフィリエイターを1人追加する。
+ * 表示名を聞いて、QR ID・閲覧キーの採番、URL一覧の再生成、
+ * 成約ログのプルダウン更新までまとめてやり、渡すURLを画面に出す。
+ */
+function addAffiliate() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEETS.QR);
+  if (!sh) { toast_('QR設定シートがありません。先に①を実行してください。'); return; }
+
+  const res = ui.prompt('アフィリエイターを追加',
+    '表示名を入れてください（例：06_あかりさん）。\n'
+    + 'この名前がダッシュボードと契約管理シートの「紹介者」に出ます。\n'
+    + 'QR IDと閲覧キーはこちらで自動採番します。',
+    ui.ButtonSet.OK_CANCEL);
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+  const name = String(res.getResponseText() || '').trim();
+  if (!name) { toast_('表示名が空のため中止しました。'); return; }
+
+  const rows = sh.getLastRow() >= 2
+    ? sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues() : [];
+  const dup = rows.filter(r => String(r[1]).trim() === name)[0];
+  if (dup) {
+    ui.alert('「' + name + '」は既に登録されています（QR ID: ' + String(dup[0]).trim() + '）。');
+    return;
+  }
+
+  // 使われていない affi_NN を採番する
+  const used = {};
+  let max = 0;
+  rows.forEach(r => {
+    const id = String(r[0]).trim();
+    if (!id) return;
+    used[id] = true;
+    const m = id.match(/(\d+)\s*$/);
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  let id = '';
+  for (let n = max + 1; n <= max + 200; n++) {
+    const cand = 'affi_' + String(n).padStart(2, '0');
+    if (!used[cand]) { id = cand; break; }
+  }
+  if (!id) { toast_('QR IDを採番できませんでした。QR設定シートを確認してください。'); return; }
+
+  sh.appendRow([id, name, '']);
+  ensureQrKeys_();
+  refreshDealValidation_();
+  generateUrls();
+
+  const key = (getQrMap_()[id] || {}).key || '';
+  const base = webAppBase_();
+  showAffiliateUrls_(id, name, key, base);
+}
+
+/** 追加したアフィリエイターに渡すURLを、コピーしやすい形で出す */
+function showAffiliateUrls_(id, name, key, base) {
+  const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const reg = base ? base + '?ev=reg&id=' + id : '（WEB_APP_URLが未設定です）';
+  const stats = base && key ? base + '?stats=' + key : '（WEB_APP_URLが未設定です）';
+  const click = base ? base + '?id=' + id : '（WEB_APP_URLが未設定です）';
+
+  const item = (title, note, url) =>
+    '<div class="b"><div class="t">' + esc(title) + '</div>'
+    + '<div class="n">' + esc(note) + '</div>'
+    + '<textarea readonly onclick="this.select()">' + esc(url) + '</textarea></div>';
+
+  const html = '<style>'
+    + 'body{font-family:-apple-system,"Hiragino Sans",sans-serif;margin:0;padding:16px;color:#1F2A24}'
+    + 'h2{margin:0 0 4px;font-size:16px}'
+    + '.s{color:#6B7885;font-size:12px;margin-bottom:14px}'
+    + '.b{margin-bottom:14px}'
+    + '.t{font-weight:700;font-size:13px}'
+    + '.n{color:#6B7885;font-size:11px;margin:2px 0 4px}'
+    + 'textarea{width:100%;height:46px;font-size:11px;padding:6px;border:1px solid #D7DEE3;'
+    + 'border-radius:6px;box-sizing:border-box;resize:none;background:#F7F9FA}'
+    + '</style>'
+    + '<h2>' + esc(name) + ' を追加しました</h2>'
+    + '<div class="s">QR ID: ' + esc(id) + '　／　クリックすると全選択されます</div>'
+    + item('① エルメに貼るURL', 'QRコードアクション → 外部連携タブ（パラメーターエクスポート）に設定', reg)
+    + item('② 本人に渡す成果ページ', 'この人にだけ送る。他の人の数字は見えません', stats)
+    + item('③ 本人が配布するリンク', 'プロフィールやSNSに貼ってもらう。QR画像はURL一覧シートのF列', click);
+
+  SpreadsheetApp.getUi()
+    .showModalDialog(HtmlService.createHtmlOutput(html).setWidth(520).setHeight(520),
+      'アフィリエイターを追加しました');
+}
+
+/**
+ * ウェブアプリのURL。設定シートのWEB_APP_URLを最優先で使う。
+ * （ScriptApp.getService().getUrl() はデプロイを作り直すと古いURLを
+ *   返すことがあるため、手貼りのURLを正とする）
+ * @return {string} 取れなければ空文字（理由はトーストで出す）
+ */
+function webAppBase_() {
   let base = String(getConfig_().WEB_APP_URL || '').trim();
   if (base) {
     const m = base.match(/^https:\/\/script\.google\.com\/macros\/s\/[^\/?#]+\/exec/);
     if (!m) {
       toast_('「設定」シートのWEB_APP_URLの形式が違います。https://script.google.com/macros/s/…/exec の形（デプロイ完了画面の「ウェブアプリ」欄のURL）を貼ってください。');
-      return;
+      return '';
     }
-    base = m[0];
-  } else {
-    base = ScriptApp.getService().getUrl();
+    return m[0];
   }
+  base = ScriptApp.getService().getUrl();
   if (!base) {
     toast_('先に「デプロイ」→「新しいデプロイ」→ ウェブアプリ（実行:自分／アクセス:全員）を行い、発行されたURLを「設定」シートのWEB_APP_URLに貼ってください。');
-    return;
+    return '';
   }
+  return base;
+}
+
+function generateUrls() {
+  const base = webAppBase_();
+  if (!base) return;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEETS.URLS);
   if (sh) sh.clear(); else sh = ss.insertSheet(SHEETS.URLS);
