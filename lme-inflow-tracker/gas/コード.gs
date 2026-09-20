@@ -38,6 +38,7 @@ const SHEETS = {
   CUSTOMERS: '顧客',
   IMPORT: '取込',
   MEETINGS: '面談ログ',
+  GROUPS: 'まとめページ',
 };
 
 // 面談ログの「結果」欄の選択肢
@@ -159,6 +160,8 @@ function setup() {
 
   // アフィリエイター専用ページ用の閲覧キーをD列に自動生成
   ensureQrKeys_();
+  // QR設定G列のまとめページ名を拾って台帳を作る
+  ensureGroups_();
 
   // ログ系シート
   ensureSheet_(ss, SHEETS.REGS, ['日時', 'QR ID', 'QR名', '補足(生データ)']);
@@ -323,6 +326,111 @@ function renameAffiliate() {
     + '過去ログの表示名もそろえ、ダッシュボードとURL一覧を作り直しました。');
 }
 
+/**
+ * QR設定のG列に書かれたまとめページ名を拾って、「まとめページ」シートを整える。
+ * 閲覧キーは自動生成。人が入力するのはQR設定のG列だけでいい。
+ */
+function ensureGroups_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEETS.GROUPS);
+  if (!sh) {
+    sh = ss.insertSheet(SHEETS.GROUPS);
+    sh.setFrozenRows(1);
+  }
+  sh.getRange(1, 1, 1, 4).setValues([[
+    'まとめページ名', '閲覧キー（自動生成・編集しない）', '含まれるQR', 'メモ',
+  ]]).setFontWeight('bold').setBackground('#E3ECF5');
+  sh.setColumnWidth(1, 200).setColumnWidth(2, 220).setColumnWidth(3, 360).setColumnWidth(4, 240);
+
+  const qrs = getQrMap_();
+  const members = {};
+  Object.keys(qrs).forEach(function (id) {
+    const g = String(qrs[id].group || '').trim();
+    if (!g) return;
+    (members[g] || (members[g] = [])).push(qrs[id].name);
+  });
+
+  const have = {};
+  if (sh.getLastRow() > 1) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r, i) {
+      const nm = String(r[0]).trim();
+      if (nm) have[nm] = { row: i + 2, key: String(r[1]).trim() };
+    });
+  }
+
+  Object.keys(members).forEach(function (nm) {
+    const list = members[nm].join('、');
+    if (have[nm]) {
+      if (!have[nm].key) sh.getRange(have[nm].row, 2).setValue(newKey_());
+      sh.getRange(have[nm].row, 3).setValue(list);
+    } else {
+      sh.appendRow([nm, newKey_(), list, '']);
+    }
+  });
+  // QR設定から消えたまとめページは残しておく（キーを配ったあとかもしれないため）
+}
+
+/** 閲覧キーを1つ作る */
+function newKey_() {
+  return Utilities.getUuid().replace(/-/g, '').substring(0, 20);
+}
+
+/** まとめページ名 → { key, memberIds } */
+function getGroupMap_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEETS.GROUPS);
+  const out = {};
+  if (!sh || sh.getLastRow() < 2) return out;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+    const nm = String(r[0]).trim();
+    const key = String(r[1]).trim();
+    if (nm && key) out[nm] = { key: key, memberIds: [] };
+  });
+  const qrs = getQrMap_();
+  Object.keys(qrs).forEach(function (id) {
+    const g = String(qrs[id].group || '').trim();
+    if (g && out[g]) out[g].memberIds.push(id);
+  });
+  return out;
+}
+
+/**
+ * 閲覧キーから、個別QRかまとめページかを判定する。
+ * @return {?{name:string,key:string,group:boolean,members:Array}}
+ */
+function resolveStatsKey_(key) {
+  const qrs = getQrMap_();
+  for (const id of Object.keys(qrs)) {
+    const qr = qrs[id];
+    if (qr.key && qr.key === key) {
+      return {
+        name: qr.name, key: key, group: false, groupName: String(qr.group || '').trim(),
+        members: [{ id: id, name: qr.name, key: qr.key, rate: qr.rate, goal: qr.goal }],
+      };
+    }
+  }
+  const groups = getGroupMap_();
+  for (const nm of Object.keys(groups)) {
+    if (groups[nm].key !== key) continue;
+    const members = groups[nm].memberIds.map(function (id) {
+      return { id: id, name: qrs[id].name, key: qrs[id].key, rate: qrs[id].rate, goal: qrs[id].goal };
+    });
+    if (!members.length) return null;
+    return { name: nm, key: key, group: true, groupName: '', members: members };
+  }
+  return null;
+}
+
+/** 「11_わいさん_Instagram」から「Instagram」だけ取り出す */
+function channelLabel_(name, group) {
+  let s = String(name || '').replace(/^\s*\d+[_\-\s]*/, '');
+  if (group) s = s.split(String(group)).join('');
+  s = s.replace(/^[_\-\s]+/, '').replace(/[_\-\s]+$/, '').replace(/[_\-]+/g, ' ').trim();
+  if (s) return s;
+  // 名前がまとめページ名そのもの＝チャネル指定なしのQR
+  return group ? 'その他' : String(name || '');
+}
+
 /** 成約ログのQR IDプルダウンを、いまのQR設定に合わせ直す */
 function refreshDealValidation_(dealSh) {
   const sh = dealSh || SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.DEALS);
@@ -382,18 +490,29 @@ function addAffiliate() {
   }
   if (!id) { toast_('QR IDを採番できませんでした。QR設定シートを確認してください。'); return; }
 
-  sh.appendRow([id, name, '']);
+  const g = ui.prompt('まとめページ名（任意）',
+    '同じ人が複数チャネル（Instagram / TikTok / YouTube など）を持つ場合、\n'
+    + 'ここに同じ名前を入れると1ページにまとまって、チャネル別に見比べられます。\n\n'
+    + '例：わいさん\n\n'
+    + '1チャネルだけなら空のままでOKです。',
+    ui.ButtonSet.OK_CANCEL);
+  const group = g.getSelectedButton() === ui.Button.OK
+    ? String(g.getResponseText() || '').trim() : '';
+
+  sh.appendRow([id, name, '', '', '', '', group]);
   ensureQrKeys_();
+  ensureGroups_();
   refreshDealValidation_();
   generateUrls();
 
   const key = (getQrMap_()[id] || {}).key || '';
   const base = webAppBase_();
-  showAffiliateUrls_(id, name, key, base);
+  const gKey = group ? ((getGroupMap_()[group] || {}).key || '') : '';
+  showAffiliateUrls_(id, name, key, base, group, gKey);
 }
 
 /** 追加したアフィリエイターに渡すURLを、コピーしやすい形で出す */
-function showAffiliateUrls_(id, name, key, base) {
+function showAffiliateUrls_(id, name, key, base, group, gKey) {
   const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const reg = base ? base + '?ev=reg&id=' + id : '（WEB_APP_URLが未設定です）';
   const stats = base && key ? base + '?stats=' + key : '（WEB_APP_URLが未設定です）';
@@ -418,7 +537,12 @@ function showAffiliateUrls_(id, name, key, base) {
     + '<div class="s">QR ID: ' + esc(id) + '　／　クリックすると全選択されます</div>'
     + item('① エルメに貼るURL', 'QRコードアクション → 外部連携タブ（パラメーターエクスポート）に設定', reg)
     + item('② 本人に渡す成果ページ', 'この人にだけ送る。他の人の数字は見えません', stats)
-    + item('③ 本人が配布するリンク', 'プロフィールやSNSに貼ってもらう。QR画像はURL一覧シートのF列', click);
+    + item('③ 本人が配布するリンク', 'エルメ友だち追加URLをQR設定のC列に入れると使えます（任意）', click)
+    + (group && gKey
+      ? item('④ ' + group + ' のまとめページ',
+        'この人の全チャネルを1ページで。チャネル別の内訳つき。本人にはこちらを渡すと便利です',
+        base + '?stats=' + gKey)
+      : '');
 
   SpreadsheetApp.getUi()
     .showModalDialog(HtmlService.createHtmlOutput(html).setWidth(520).setHeight(520),
@@ -479,6 +603,21 @@ function generateUrls() {
       qrImg,
     ]);
   }
+  // まとめページ（同じ人の複数チャネルを1ページで見せる）
+  ensureGroups_();
+  const groups = getGroupMap_();
+  const gNames = Object.keys(groups);
+  if (gNames.length) {
+    rows.push(['', '', '', '', '', '', '']);
+    gNames.forEach(function (nm) {
+      rows.push([
+        '(まとめ)', nm, '',
+        base + '?stats=' + groups[nm].key,
+        '', '', '',
+      ]);
+    });
+  }
+
   const ak = String(getConfig_().ADMIN_KEY || '').trim();
   rows.push(['', '', '', '', '', '', '']);
   rows.push(['(管理者)', '全体ダッシュボード ※自分専用・共有禁止', '',
@@ -508,7 +647,7 @@ function getQrMap_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
   const out = {};
   if (!sh || sh.getLastRow() < 2) return out;
-  for (const [id, name, url, key, rate, goal] of sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()) {
+  for (const [id, name, url, key, rate, goal, group] of sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues()) {
     const k = String(id).trim();
     if (k) {
       out[k] = {
@@ -517,6 +656,7 @@ function getQrMap_() {
         key: String(key).trim(),
         rate: Number(rate) || 0,
         goal: Number(goal) || 0,
+        group: String(group).trim(),
       };
     }
   }
@@ -527,11 +667,13 @@ function getQrMap_() {
 function ensureQrKeys_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.QR);
   if (!sh) return;
-  sh.getRange(1, 4, 1, 3).setValues([[
+  sh.getRange(1, 4, 1, 4).setValues([[
     '閲覧キー（自動生成・編集しない）',
     '報酬単価（円・任意）',
     '月間目標（件・任意）',
+    'まとめページ名（同じ名前のQRが1ページにまとまります）',
   ]]);
+  sh.setColumnWidth(7, 280);
   if (sh.getLastRow() < 2) return;
   const range = sh.getRange(2, 1, sh.getLastRow() - 1, 4);
   const values = range.getValues();
@@ -1809,6 +1951,17 @@ const PAGE_CSS =
   '.num{text-align:right;font-weight:700}' +
   'tr.thead td,tr.thead th{color:#8A968E;border-top:none;font-size:11px;font-weight:700}' +
   'a.open{color:#00A63E;font-weight:700;text-decoration:none;font-size:12px}' +
+  '.crumb{margin-bottom:10px}' +
+  '.crumb a{color:#6B7A72;font-size:12px;text-decoration:none;font-weight:700}' +
+  '.sub{color:#6B7A72;font-size:12px;margin:-4px 0 10px}' +
+  '.chrow{display:flex;align-items:center;gap:10px;margin:7px 0}' +
+  '.chname{width:92px;flex:none;font-size:12px;font-weight:700;color:#1F2A24;' +
+  'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+  '.chbar{flex:1;height:10px;border-radius:99px;background:#EEF3EF;overflow:hidden}' +
+  '.chfill{height:100%;border-radius:99px;background:linear-gradient(90deg,#8FCB9B,#00A63E)}' +
+  '.chnum{width:34px;flex:none;text-align:right;font-size:12px;font-weight:700;' +
+  'font-variant-numeric:tabular-nums}' +
+  '@media(max-width:430px){.chname{width:70px;font-size:11px}}' +
   '.foot{color:#98A69E;font-size:11px;text-align:center;margin-top:20px}';
 
 function pageHead_(title) {
@@ -1825,15 +1978,13 @@ function pageHead_(title) {
 function renderStatsPage_(key, period) {
   if (!key) return invalidPage_();
 
-  const qrs = getQrMap_();
-  let found = null;
-  for (const [id, qr] of Object.entries(qrs)) {
-    if (qr.key && qr.key === key) {
-      found = { id: id, name: qr.name, rate: qr.rate, goal: qr.goal, key: key };
-      break;
-    }
-  }
+  const found = resolveStatsKey_(key);
   if (!found) return invalidPage_();
+  // まとめページなら複数QR、個別ページなら1つだけを合算する
+  const mine = {};
+  found.members.forEach(function (m) { mine[m.id] = m; });
+  found.goal = found.members.reduce(function (a, m) { return a + (m.goal || 0); }, 0);
+  const hasRate = found.members.some(function (m) { return (m.rate || 0) > 0; });
   const p = [7, 30, 90].indexOf(period) >= 0 ? period : 30;
 
   const now = new Date();
@@ -1841,16 +1992,37 @@ function renderStatsPage_(key, period) {
 
   // 集計（本人の日別/時間帯/曜日）
   const dc = {};
+  const dcBy = {};
+  found.members.forEach(function (m) { dcBy[m.id] = {}; });
   const hourCounts = new Array(24).fill(0);
   const wdCounts = new Array(7).fill(0);
   let total = 0;
   for (const r of collectRegRows_()) {
-    if (r.id !== found.id) continue;
+    if (!mine[r.id]) continue;
     dc[r.day] = (dc[r.day] || 0) + 1;
+    dcBy[r.id][r.day] = (dcBy[r.id][r.day] || 0) + 1;
     hourCounts[r.hour]++;
     wdCounts[r.wd]++;
     total++;
   }
+
+  // QRごとの月別。見込み報酬は単価がQRごとに違いうるので個別に掛ける
+  const monthBy = {};
+  const totalBy = {};
+  found.members.forEach(function (m) {
+    monthBy[m.id] = {};
+    totalBy[m.id] = 0;
+    for (const d of Object.keys(dcBy[m.id])) {
+      const mm = d.substring(0, 7);
+      monthBy[m.id][mm] = (monthBy[m.id][mm] || 0) + dcBy[m.id][d];
+      totalBy[m.id] += dcBy[m.id][d];
+    }
+  });
+  const rewardOf = function (mm) {
+    return found.members.reduce(function (a, m) {
+      return a + (monthBy[m.id][mm] || 0) * (m.rate || 0);
+    }, 0);
+  };
 
   const days = [];
   for (let i = p - 1; i >= 0; i--) days.push(gDay_(i));
@@ -1901,7 +2073,7 @@ function renderStatsPage_(key, period) {
   const cdc = {};
   let clickTotal = 0;
   for (const r of collectLogRows_(SHEETS.CLICKS)) {
-    if (r.id !== found.id) continue;
+    if (!mine[r.id]) continue;
     cdc[r.day] = (cdc[r.day] || 0) + 1;
     clickTotal++;
   }
@@ -1918,10 +2090,16 @@ function renderStatsPage_(key, period) {
 
   // 見込み報酬（単価設定時のみ）
   let rewardHtml = '';
-  if (found.rate > 0) {
+  if (hasRate) {
+    const rewardMonth = rewardOf(thisMonth);
+    const rewardTotal = found.members.reduce(function (a, m) {
+      return a + totalBy[m.id] * (m.rate || 0);
+    }, 0);
+    const oneRate = found.members.length === 1 ? found.members[0].rate : 0;
     rewardHtml = '<div class="panel"><div class="ph">見込み報酬</div><div class="reward">' +
-      '<div><div class="rv">' + yen(found.rate * monthCount) + '</div><div class="rl">今月 ・ ' + monthCount + '件 × ' + yen(found.rate) + '</div></div>' +
-      '<div><div class="rv dim">' + yen(found.rate * total) + '</div><div class="rl">累計</div></div>' +
+      '<div><div class="rv">' + yen(rewardMonth) + '</div><div class="rl">今月 ・ ' + monthCount + '件' +
+      (oneRate ? ' × ' + yen(oneRate) : '') + '</div></div>' +
+      '<div><div class="rv dim">' + yen(rewardTotal) + '</div><div class="rl">累計</div></div>' +
       '</div><div class="note">確定額はお支払い時のご案内が正となります</div></div>';
   }
 
@@ -1939,8 +2117,13 @@ function renderStatsPage_(key, period) {
   // 面談・成約（設定でOFFにすれば本人には見せない）
   let funnelHtml = '';
   if (!/^off$/i.test(String(getConfig_().SHOW_FUNNEL_TO_AFFILIATE || 'ON').trim())) {
-    const f = (funnelByQr_().byId || {})[found.id];
-    if (f && (f.meeting || f.won)) {
+    const byId = funnelByQr_().byId || {};
+    const f = found.members.reduce(function (a, m) {
+      const x = byId[m.id];
+      if (x) { a.people += x.people || 0; a.meeting += x.meeting || 0; a.won += x.won || 0; }
+      return a;
+    }, { people: 0, meeting: 0, won: 0 });
+    if (f.meeting || f.won) {
       const mrate = f.people > 0 ? Math.round((f.meeting / f.people) * 100) : 0;
       const wrate = f.meeting > 0 ? Math.round((f.won / f.meeting) * 100) : 0;
       funnelHtml = '<div class="panel"><div class="ph">紹介した方のその後</div><div class="recs">' +
@@ -1949,6 +2132,55 @@ function renderStatsPage_(key, period) {
         '<div><div class="rv2">' + f.won + '<span class="unit">件</span></div><div class="sl">成約</div></div>' +
         '<div><div class="rv2">' + wrate + '<span class="unit">%</span></div><div class="sl">面談→成約</div></div>' +
         '</div><div class="note">面談・成約は確定した分のみ集計しています</div></div>';
+    }
+  }
+
+  // チャネル別の内訳（まとめページのときだけ）
+  let breakdownHtml = '';
+  let crumbHtml = '';
+  if (found.group) {
+    const rows = found.members.map(function (m) {
+      return {
+        m: m,
+        label: channelLabel_(m.name, found.name),
+        month: monthBy[m.id][thisMonth] || 0,
+        week: sumOffsets_(dcBy[m.id], 0, 6),
+        all: totalBy[m.id],
+      };
+    }).sort(function (a, b) { return b.month - a.month || b.all - a.all; });
+    const maxM = Math.max(1, ...rows.map(function (r) { return r.month; }));
+
+    const bars = rows.map(function (r) {
+      return '<div class="chrow">' +
+        '<div class="chname">' + esc(r.label) + '</div>' +
+        '<div class="chbar"><div class="chfill" style="width:' +
+          Math.max(Math.round((r.month / maxM) * 100), r.month ? 3 : 0) + '%"></div></div>' +
+        '<div class="chnum">' + r.month + '</div></div>';
+    }).join('');
+
+    const table = '<div class="tbox"><table><tr class="thead">' +
+      '<td>チャネル</td><td class="num">今月</td><td class="num">直近7日</td><td class="num">累計</td>' +
+      (hasRate ? '<td class="num">今月の報酬</td>' : '') + '<td></td></tr>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(r.label) + '</td>' +
+          '<td class="num">' + r.month + '</td>' +
+          '<td class="num">' + r.week + '</td>' +
+          '<td class="num">' + r.all + '</td>' +
+          (hasRate ? '<td class="num">' + yen((r.m.rate || 0) * r.month) + '</td>' : '') +
+          '<td>' + (r.m.key
+            ? '<a class="open" target="_top" href="' + esc(base + '?stats=' + r.m.key) + '">詳しく</a>'
+            : '') + '</td></tr>';
+      }).join('') + '</table></div>';
+
+    breakdownHtml = '<div class="panel"><div class="ph">チャネル別 — 今月</div>' +
+      bars + table +
+      '<div class="note">「詳しく」を開くと、そのチャネルだけの時間帯・曜日まで見られます</div></div>';
+  } else if (found.groupName) {
+    // 個別ページから、まとめページへ戻れるようにする
+    const g = getGroupMap_()[found.groupName];
+    if (g && g.key) {
+      crumbHtml = '<div class="crumb"><a target="_top" href="' +
+        esc(base + '?stats=' + g.key) + '">← ' + esc(found.groupName) + ' 全体を見る</a></div>';
     }
   }
 
@@ -1995,23 +2227,31 @@ function renderStatsPage_(key, period) {
   ).join('');
   const monthRows = Object.keys(monthCounts).sort().reverse().slice(0, 12).map(m =>
     '<tr><td>' + esc(m.replace('-', '.')) + '</td><td class="num">' + monthCounts[m] +
-    (found.rate > 0 ? '</td><td class="num">' + yen(found.rate * monthCounts[m]) : '') + '</td></tr>'
+    (hasRate ? '</td><td class="num">' + yen(rewardOf(m)) : '') + '</td></tr>'
   ).join('');
 
+  const sub = found.group
+    ? '<div class="sub">' + found.members.length + 'チャネル合計 ・ ' +
+      esc(found.members.map(function (m) { return channelLabel_(m.name, found.name); }).join(' / ')) +
+      '</div>'
+    : '';
+
   const html = pageHead_(found.name + ' 成果レポート') +
+    crumbHtml +
     '<div class="eyebrow">AFFILIATE REPORT</div>' +
     '<h1>' + esc(found.name) + '</h1>' +
+    sub +
     '<div class="upd">' + Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm') + ' 更新</div>' +
     '<div class="hero"><div class="hv">' + monthCount + '</div><div class="hl">今月の登録件数</div></div>' +
     pills +
     '<div class="stats">' + stats + '</div>' +
-    clickHtml + funnelHtml + goalHtml + rewardHtml + recordHtml +
+    breakdownHtml + clickHtml + funnelHtml + goalHtml + rewardHtml + recordHtml +
     '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日</div><div class="chart">' + bars + '</div></div>' +
     '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
     '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
     '<div class="panel"><div class="ph">曜日別の傾向</div><div class="chart small">' + wdBars + '</div></div>' +
     '<div class="panel"><div class="ph">月別実績</div><div class="tbox"><table><tr class="thead"><td>月</td><td class="num">件数</td>' +
-    (found.rate > 0 ? '<td class="num">見込み報酬</td>' : '') + '</tr>' +
+    (hasRate ? '<td class="num">見込み報酬</td>' : '') + '</tr>' +
     (monthRows || '<tr><td colspan="3" style="color:#98A69E">まだデータがありません</td></tr>') + '</table></div></div>' +
     '<div class="panel"><div class="ph">日別一覧 — 直近' + p + '日</div><div class="tbox"><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
     tableRows + '</table></div></div>' +
