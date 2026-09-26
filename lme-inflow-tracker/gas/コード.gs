@@ -922,12 +922,22 @@ function upsertCustomer_(fields) {
 function headerKind_(cell) {
   const s = String(cell || '').trim().replace(/\s+/g, '');
   if (!s) return '';
+  // 決済や保険組合の欄を、状態や氏名と取り違えないようにする
+  if (/決済|支払|振込|保険組合/.test(s)) return '';
   if (/ユーザーID|LINEID|lineId|userId/i.test(s)) return 'lineId';
   if (/表示名|LINE名|ニックネーム|お名前|氏名|^名前$/i.test(s)) return 'name';
   if (/友だち追加日|登録日|追加日時/.test(s)) return 'registeredAt';
   if (/流入経路|経路|流入元/.test(s)) return 'route';
   if (/対応マーク|対応ステータス|ステータス|対応状況|商談状況/.test(s)) return 'status';
-  if (/予約日|予約日時|面談日|面談日時|開始日時|来店日/.test(s)) return 'meetingAt';
+  // エルメの予約シートは「予約（来店）日」のように括弧が挟まる。
+  // 「退職予定日」「最終出勤日」などを面談日と取り違えないよう、除外語を先に見る。
+  if (/予定日|退職|入社|出勤|生年|終了/.test(s)) {
+    // 面談の日付ではない
+  } else if (/(予約|来店|面談|商談).*(日|日時)/.test(s) || /開始日時/.test(s)) {
+    return 'meetingAt';
+  } else if (/(予約|面談|商談).*開始.*(時間|時刻)/.test(s) || /^開始時(間|刻)$/.test(s)) {
+    return 'meetingTime';
+  }
   if (/メモ|備考/.test(s)) return 'memo';
   return '';
 }
@@ -971,12 +981,30 @@ function existingRegKeys_() {
 /** 値を日付に変換（Dateならそのまま、文字列なら緩めにパース） */
 function toDate_(v) {
   if (v instanceof Date) return v;
-  const s = String(v || '').trim();
+  let s = String(v || '').trim();
   if (!s) return null;
-  const m = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (!m) return null;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
-    Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+  // エルメの予約シートは「2026.09.09（水）」「2026.09.08（火）17:57」の形で書き出す。
+  // 曜日の括弧を落としてから読む。
+  s = s.replace(/[（(][^）)]*[）)]/g, ' ');
+  const d = s.match(/(\d{4})\s*[-\/.年]\s*(\d{1,2})\s*[-\/.月]\s*(\d{1,2})/);
+  if (!d) return null;                       // 「2016年4月」のように日が無いものは日付にしない
+  const t = s.slice(d.index + d[0].length).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return new Date(Number(d[1]), Number(d[2]) - 1, Number(d[3]),
+    t ? Number(t[1]) : 0, t ? Number(t[2]) : 0, (t && t[3]) ? Number(t[3]) : 0);
+}
+
+/** 「16:00」やスプレッドシートの時刻セルを、日付に合成する */
+function applyTime_(date, cell) {
+  if (!date || cell === undefined || cell === null || cell === '') return date;
+  let h = null;
+  let mi = 0;
+  if (cell instanceof Date) { h = cell.getHours(); mi = cell.getMinutes(); }
+  else {
+    const m = String(cell).match(/(\d{1,2}):(\d{2})/);
+    if (m) { h = Number(m[1]); mi = Number(m[2]); }
+  }
+  if (h === null) return date;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, mi, 0);
 }
 
 // ────────────────────────────────────────────
@@ -1166,13 +1194,18 @@ function syncReservations() {
   const now = new Date();
   let matched = 0;
   let unmatched = 0;
+  let cancelled = 0;
 
   for (let i = hi + 1; i < all.length; i++) {
     const row = all[i];
     const f = {};
     kinds.forEach((k, c) => { if (k && f[k] === undefined) f[k] = row[c]; });
-    const metAt = toDate_(f.meetingAt) || firstDateInRow_(row);
+    // ステータスが「キャンセル」の予約は面談として扱わない
+    if (/キャンセル|取消|不成立/.test(String(f.status || ''))) { cancelled++; continue; }
+
+    let metAt = toDate_(f.meetingAt) || firstDateInRow_(row, all[hi]);
     if (!metAt) continue;
+    metAt = applyTime_(metAt, f.meetingTime);     // 「予約開始時間」を合成する
 
     const lineId = String(f.lineId || '').trim();
     let idx = lineId ? cs.byId[lineId] : undefined;
@@ -1193,6 +1226,7 @@ function syncReservations() {
     cs.sheet.getRange(2, 1, cs.rows.length, CUSTOMER_HEADERS.length).setValues(cs.rows);
   }
   toast_('予約取り込み： ' + matched + '件を顧客シートに反映' +
+    (cancelled ? '／キャンセル ' + cancelled + '件は除外' : '') +
     (unmatched ? '／照合できない予約 ' + unmatched + '件（顧客シートに同名の友だちが居るか確認）' : ''));
   return matched;
 }
@@ -1216,13 +1250,21 @@ function matchByName_(nameIndex, text) {
   return undefined;
 }
 
-/** 行の中の最初の日付セルを拾う（列名が想定外でも予約日時を拾えるように） */
-function firstDateInRow_(row) {
-  for (const c of row) {
-    if (c instanceof Date) return c;
+/**
+ * 行の中の最初の日付セルを拾う（列名が想定外でも予約日時を拾えるように）。
+ * 退職予定日・最終出勤日などを面談日と取り違えないよう、その列は見ない。
+ */
+function firstDateInRow_(row, headers) {
+  const skip = c => {
+    const h = String((headers || [])[c] || '');
+    return /予定日|退職|入社|出勤|生年|終了|タイムスタンプ/.test(h);
+  };
+  for (let c = 0; c < row.length; c++) {
+    if (!skip(c) && row[c] instanceof Date) return row[c];
   }
-  for (const c of row) {
-    const d = toDate_(c);
+  for (let c = 0; c < row.length; c++) {
+    if (skip(c)) continue;
+    const d = toDate_(row[c]);
     if (d) return d;
   }
   return null;
