@@ -1328,6 +1328,61 @@ function normalizeName_(s) {
  * 「顧客」シート（1人1行の台帳）と「面談ログ」（手入力の記録）の両方を見て、
  * 同じ人が二重に数えられないよう人単位でまとめる。
  */
+/**
+ * 面談の申し込み一覧。顧客シートの「面談予約日時」と面談ログを1本にまとめる。
+ * 同じ人の同じ日は1件にし、結果が入っている面談ログ側を優先する。
+ * @return {Array<{at:Date,name:string,qrId:string,qrName:string,status:string,memo:string}>} 新しい順
+ */
+function meetingLog_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const qrs = getQrMap_();
+  const out = [];
+  const seen = {};
+  const nameToQr = {};
+  const dayKey = d => Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+  const label = id => (qrs[id] || {}).name || id || '—';
+
+  const cus = ss.getSheetByName(SHEETS.CUSTOMERS);
+  if (cus && cus.getLastRow() > 1) {
+    cus.getRange(2, 1, cus.getLastRow() - 1, CUSTOMER_HEADERS.length).getValues().forEach(function (v) {
+      const nm = String(v[1] || '').trim();
+      const qrId = String(v[2]).trim();
+      const norm = normalizeName_(nm);
+      if (norm && qrId && !nameToQr[norm]) nameToQr[norm] = qrId;
+      const at = v[5];
+      if (!(at instanceof Date)) return;
+      const who = norm || String(v[0]).trim();
+      const rec = {
+        at: at, name: nm || '(名前なし)', qrId: qrId, qrName: label(qrId),
+        status: String(v[6] || '').trim(), memo: String(v[7] || '').trim(),
+      };
+      if (who) seen[who + '|' + dayKey(at)] = out.length;
+      out.push(rec);
+    });
+  }
+
+  const msh = ss.getSheetByName(SHEETS.MEETINGS);
+  if (msh && msh.getLastRow() > 1) {
+    msh.getRange(2, 1, msh.getLastRow() - 1, MEETING_HEADERS.length).getValues().forEach(function (r) {
+      const at = r[0];
+      if (!(at instanceof Date)) return;
+      const nm = String(r[1] || '').trim();
+      const norm = normalizeName_(nm);
+      const qrId = String(r[2]).trim() || nameToQr[norm] || '';
+      const rec = {
+        at: at, name: nm || '(名前なし)', qrId: qrId, qrName: label(qrId),
+        status: String(r[3] || '').trim(), memo: String(r[4] || '').trim(),
+      };
+      const k = norm ? norm + '|' + dayKey(at) : '';
+      if (k && seen[k] !== undefined) out[seen[k]] = rec;   // 結果が分かる面談ログを優先
+      else { if (k) seen[k] = out.length; out.push(rec); }
+    });
+  }
+
+  out.sort(function (a, b) { return b.at - a.at; });
+  return out;
+}
+
 function funnelByQr_() {
   const out = { any: false, byId: {} };
   const bucket = id => out.byId[id] ||
@@ -1951,6 +2006,8 @@ const PAGE_CSS =
   '.num{text-align:right;font-weight:700}' +
   'tr.thead td,tr.thead th{color:#8A968E;border-top:none;font-size:11px;font-weight:700}' +
   'a.open{color:#00A63E;font-weight:700;text-decoration:none;font-size:12px}' +
+  '.tag{display:inline-block;padding:1px 6px;border-radius:99px;background:#E4F0E7;' +
+  'color:#1F7A3C;font-size:10px;font-weight:700;vertical-align:middle}' +
   '.crumb{margin-bottom:10px}' +
   '.crumb a{color:#6B7A72;font-size:12px;text-decoration:none;font-weight:700}' +
   '.sub{color:#6B7A72;font-size:12px;margin:-4px 0 10px}' +
@@ -2422,6 +2479,31 @@ function renderAdminPage_(period) {
   const legend = '<div class="legend">' + list.map(x =>
     '<span><span class="dot" style="background:' + colorOf[x.id] + '"></span>' + esc(x.name) + '</span>').join('') + '</div>';
 
+  // 面談申し込みの一覧
+  const meets = meetingLog_();
+  const nowMs = now.getTime();
+  const meetMonth = meets.filter(function (m) {
+    return Utilities.formatDate(m.at, TZ, 'yyyy-MM') === thisMonth;
+  }).length;
+  const meetAhead = meets.filter(function (m) { return m.at.getTime() > nowMs; }).length;
+  const meetRows = meets.slice(0, 60).map(function (m) {
+    const future = m.at.getTime() > nowMs;
+    return '<tr><td style="white-space:nowrap">' +
+        esc(Utilities.formatDate(m.at, TZ, 'MM/dd HH:mm')) +
+        (future ? ' <span class="tag">予定</span>' : '') + '</td>' +
+      '<td>' + esc(m.name) + '</td>' +
+      '<td>' + esc(m.qrName) + '</td>' +
+      '<td>' + esc(m.status || (future ? '予約済' : '—')) + '</td>' +
+      '<td>' + esc(m.memo) + '</td></tr>';
+  }).join('');
+  const meetHtml = '<div class="panel"><div class="ph">面談申し込み（今月 ' + meetMonth +
+    '件 ／ これから ' + meetAhead + '件 ／ 全 ' + meets.length + '件）</div>' +
+    '<div class="tbox"><table><tr class="thead">' +
+    '<td>日時</td><td>お名前</td><td>流入元</td><td>結果</td><td>メモ</td></tr>' +
+    (meetRows || '<tr><td colspan="5" style="color:#98A69E">まだ面談の申し込みがありません</td></tr>') +
+    '</table></div>' +
+    (meets.length > 60 ? '<div class="note">新しい60件を表示しています</div>' : '') + '</div>';
+
   // 期間タブ（GASのiframe内なので target="_top" が要る）
   const akey = String(getConfig_().ADMIN_KEY || '').trim();
   const pills = '<div class="pills">' + [7, 30, 90].map(function (n) {
@@ -2519,6 +2601,7 @@ function renderAdminPage_(period) {
     pills +
     '<div class="stats">' + stats + '</div>' +
     funnelHtml +
+    meetHtml +
     '<div class="panel"><div class="ph">アフィリエイター別（今月順）</div><div class="tbox"><table>' +
     '<tr class="thead"><td>#</td><td>名前</td><td class="num">今日</td><td class="num">7日</td><td>前週比</td>' +
     '<td class="num">今月</td><td class="num">シェア</td><td class="num">先月</td><td class="num">累計</td>' +
