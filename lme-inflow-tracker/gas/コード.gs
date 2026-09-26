@@ -91,6 +91,7 @@ function onOpen() {
     .addItem('⑥ 取込シートを反映（CSV貼り付け後に実行）', 'importPastedData')
     .addItem('⑦ 顧客シートを登録ログから補完', 'syncCustomersFromRegs')
     .addItem('⑧ 面談予約を取り込む（予約シート）', 'syncReservations')
+    .addItem('📝 面談ログを予約から起こす', 'logBookingsMenu')
     .addItem('⑨ 面談予約を取り込む（カレンダー・予備）', 'syncCalendar')
     .addToUi();
 }
@@ -1294,6 +1295,61 @@ function syncCalendar() {
 }
 
 /** 1時間おきの自動実行用（未設定・エラーでも静かに終わる） */
+/**
+ * 顧客シートの「面談予約日時」を見て、面談ログにまだ無いものを1行足す。
+ * 予約が入った時点で行ができるので、面談後は結果欄を選ぶだけで済む。
+ * 何度実行しても、同じ人の同じ日は二重に入らない。
+ * @return {number} 追加した件数
+ */
+function logBookings_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cus = ss.getSheetByName(SHEETS.CUSTOMERS);
+  if (!cus || cus.getLastRow() < 2) return 0;
+  const msh = ensureSheet_(ss, SHEETS.MEETINGS, MEETING_HEADERS);
+  const dayKey = d => Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+
+  const have = {};
+  if (msh.getLastRow() > 1) {
+    msh.getRange(2, 1, msh.getLastRow() - 1, MEETING_HEADERS.length).getValues()
+      .forEach(function (r) {
+        if (!(r[0] instanceof Date)) return;
+        const nm = normalizeName_(r[1]);
+        if (nm) have[nm + '|' + dayKey(r[0])] = true;
+      });
+  }
+
+  const add = [];
+  cus.getRange(2, 1, cus.getLastRow() - 1, CUSTOMER_HEADERS.length).getValues()
+    .forEach(function (v) {
+      const at = v[5];
+      if (!(at instanceof Date)) return;
+      const nm = String(v[1] || '').trim();
+      const norm = normalizeName_(nm);
+      if (!norm) return;                       // 名前が無いと面談後に突き合わせられない
+      const k = norm + '|' + dayKey(at);
+      if (have[k]) return;
+      have[k] = true;
+      add.push([at, nm, String(v[2]).trim(), '予約済', '予約が入ったため自動で記録']);
+    });
+
+  if (add.length) {
+    msh.getRange(msh.getLastRow() + 1, 1, add.length, MEETING_HEADERS.length).setValues(add);
+    // 足した行にも結果欄のプルダウンを効かせる
+    msh.getRange(2, 4, Math.max(msh.getLastRow() - 1, 1), 1).setDataValidation(
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList(MEETING_RESULTS, true).setAllowInvalid(true).build());
+    msh.getRange(2, 1, msh.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  }
+  return add.length;
+}
+
+/** メニューから面談ログを予約で埋める（過去ぶんの取りこぼしもここで拾える） */
+function logBookingsMenu() {
+  const n = logBookings_();
+  toast_(n ? '面談ログに ' + n + '件を追加しました（結果欄を選べば集計に反映されます）'
+           : '面談ログに追加するものはありませんでした。');
+}
+
 function syncBookingsQuiet() {
   const conf = getConfig_();
   let n = 0;
@@ -1311,6 +1367,12 @@ function syncBookingsQuiet() {
       // カレンダーの権限が未承認でも、他の集計は止めない
       console.error('カレンダー同期失敗: ' + err);
     }
+  }
+  // 予約が取れた人を面談ログにも起こしておく
+  try {
+    logBookings_();
+  } catch (err) {
+    console.error('面談ログの自動記録に失敗: ' + err);
   }
   return n;
 }
