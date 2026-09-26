@@ -763,7 +763,7 @@ function doGet(e) {
   // ③ 管理者ダッシュボード（?admin=管理キー）
   if (p.admin) {
     const ak = String(getConfig_().ADMIN_KEY || '').trim();
-    if (ak && String(p.admin).trim() === ak) return renderAdminPage_();
+    if (ak && String(p.admin).trim() === ak) return renderAdminPage_(Number(p.p));
     return invalidPage_();
   }
 
@@ -2265,9 +2265,10 @@ function renderStatsPage_(key, period) {
 // 管理者ダッシュボード（?admin=管理キー）
 //   全アフィリエイターの数字・比較・各専用ページへのリンク
 // ────────────────────────────────────────────
-function renderAdminPage_() {
+function renderAdminPage_(period) {
   const qrs = getQrMap_();
   const ids = Object.keys(qrs);
+  const p = [7, 30, 90].indexOf(period) >= 0 ? period : 30;
   const now = new Date();
   const thisMonth = Utilities.formatDate(now, TZ, 'yyyy-MM');
   const lastMonthKey = Utilities.formatDate(
@@ -2281,6 +2282,8 @@ function renderAdminPage_() {
   const totals = {};
   const monthCur = {};
   const monthPrev = {};
+  const monthBy = {};       // QR ID → 月 → 件数
+  const monthsSeen = {};
   let totalAll = 0;
   for (const r of collectRegRows_()) {
     (perDay[r.id] = perDay[r.id] || {})[r.day] = ((perDay[r.id] || {})[r.day] || 0) + 1;
@@ -2292,12 +2295,14 @@ function renderAdminPage_() {
     const m = r.day.substring(0, 7);
     if (m === thisMonth) monthCur[r.id] = (monthCur[r.id] || 0) + 1;
     if (m === lastMonthKey) monthPrev[r.id] = (monthPrev[r.id] || 0) + 1;
+    (monthBy[r.id] = monthBy[r.id] || {})[m] = ((monthBy[r.id] || {})[m] || 0) + 1;
+    monthsSeen[m] = true;
   }
 
   const esc = escapeHtmlAttr_;
   const base = webAppBase_();
   const days = [];
-  for (let i = 29; i >= 0; i--) days.push(gDay_(i));
+  for (let i = p - 1; i >= 0; i--) days.push(gDay_(i));
 
   // クリックログ（方式B併用時のみ列が出る）
   const perDayC = {};
@@ -2417,6 +2422,57 @@ function renderAdminPage_() {
   const legend = '<div class="legend">' + list.map(x =>
     '<span><span class="dot" style="background:' + colorOf[x.id] + '"></span>' + esc(x.name) + '</span>').join('') + '</div>';
 
+  // 期間タブ（GASのiframe内なので target="_top" が要る）
+  const akey = String(getConfig_().ADMIN_KEY || '').trim();
+  const pills = '<div class="pills">' + [7, 30, 90].map(function (n) {
+    return '<a class="pill' + (n === p ? ' on' : '') + '" target="_top" href="' +
+      esc(base + '?admin=' + akey + '&p=' + n) + '">直近' + n + '日</a>';
+  }).join('') + '</div>';
+
+  // 月別実績（アフィリエイター別）。直近12か月、新しい月が上
+  const monthList = Object.keys(monthsSeen).sort().reverse().slice(0, 12);
+  const monthCols = list.filter(function (x) { return x.total > 0; });
+  const monthTable = '<div class="panel"><div class="ph">月別実績（アフィリエイター別）</div>' +
+    '<div class="tbox"><table>' +
+    '<tr class="thead"><td>月</td><td class="num">合計</td>' +
+    monthCols.map(function (x) { return '<td class="num">' + esc(x.name) + '</td>'; }).join('') +
+    '</tr>' +
+    (monthList.length
+      ? monthList.map(function (m) {
+        const tot = monthCols.reduce(function (a, x) { return a + ((monthBy[x.id] || {})[m] || 0); }, 0);
+        return '<tr><td>' + esc(m.replace('-', '.')) + '</td>' +
+          '<td class="num"><b>' + tot + '</b></td>' +
+          monthCols.map(function (x) {
+            const n = (monthBy[x.id] || {})[m] || 0;
+            return '<td class="num"' + (n ? '' : ' style="color:#C6CFC8"') + '>' + (n || '0') + '</td>';
+          }).join('') + '</tr>';
+      }).join('')
+      : '<tr><td colspan="2" style="color:#98A69E">まだデータがありません</td></tr>') +
+    '</table></div>' +
+    '<div class="note">横にスクロールすると全員ぶん見られます</div></div>';
+
+  // 日別実績（アフィリエイター別）。期間内に1件でもある人だけ列に出す
+  const dayCols = list.filter(function (x) {
+    return days.some(function (d) { return ((perDay[x.id] || {})[d] || 0) > 0; });
+  });
+  const dayRows = days.slice().reverse();
+  const dayTable = '<div class="panel"><div class="ph">日別実績 — 直近' + p + '日（アフィリエイター別）</div>' +
+    '<div class="tbox"><table>' +
+    '<tr class="thead"><td>日付</td><td class="num">合計</td>' +
+    dayCols.map(function (x) { return '<td class="num">' + esc(x.name) + '</td>'; }).join('') +
+    '</tr>' +
+    dayRows.map(function (d) {
+      const tot = ids.reduce(function (a, id) { return a + ((perDay[id] || {})[d] || 0); }, 0);
+      return '<tr><td>' + esc(d.replace(/-/g, '.')) + '</td>' +
+        '<td class="num"' + (tot ? '><b>' + tot + '</b>' : ' style="color:#C6CFC8">0') + '</td>' +
+        dayCols.map(function (x) {
+          const n = (perDay[x.id] || {})[d] || 0;
+          return '<td class="num"' + (n ? '' : ' style="color:#C6CFC8"') + '>' + (n || '0') + '</td>';
+        }).join('') + '</tr>';
+    }).join('') +
+    '</table></div>' +
+    '<div class="note">0件の日も飛ばさずに並べています</div></div>';
+
   // 全体ファネル（顧客シートにデータがあるときだけ表示）
   let funnelHtml = '';
   if (useFunnel) {
@@ -2460,6 +2516,7 @@ function renderAdminPage_() {
     '<h1>全体ダッシュボード</h1>' +
     '<div class="upd">' + Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm') + ' 更新</div>' +
     '<div class="hero"><div class="hv">' + monthAll + '</div><div class="hl">今月の登録件数（全体）</div></div>' +
+    pills +
     '<div class="stats">' + stats + '</div>' +
     funnelHtml +
     '<div class="panel"><div class="ph">アフィリエイター別（今月順）</div><div class="tbox"><table>' +
@@ -2471,7 +2528,9 @@ function renderAdminPage_() {
     '<td></td></tr>' +
     (tableRows || '<tr><td colspan="18" style="color:#98A69E">QR設定シートが空です</td></tr>') +
     '</table></div></div>' +
-    '<div class="panel"><div class="ph">日別登録数 — 直近30日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
+    '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
+    monthTable +
+    dayTable +
     '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
     '<div class="panel"><div class="ph">曜日別の傾向（全体）</div><div class="chart small">' + wdBars + '</div></div>' +
     '<div class="foot">管理者専用ページです。URLは共有しないでください。</div>' +
