@@ -85,6 +85,7 @@ function onOpen() {
     .addItem('✏️ 表示名を変更（過去ログもそろえる）', 'renameAffiliate')
     .addSeparator()
     .addItem('⚙ はじめの設定／設定を反映', 'setup')
+    .addItem('🔗 自分用のURLを開く', 'showMyUrls')
     .addItem('🔍 自動化の状態を確認', 'healthCheck')
     .addSubMenu(ui.createMenu('個別に実行（ふだんは不要）')
       .addItem('エルメ登録用URL一覧を生成', 'generateUrls')
@@ -1593,6 +1594,58 @@ function funnelByQr_() {
 // ────────────────────────────────────────────
 // ③ 毎日レポート（トリガーから自動実行。メニューから手動実行も可）
 // ────────────────────────────────────────────
+/**
+ * 自分用のURLを、クリックできる形で出す。
+ * URLは打ち間違いのもとなので、画面から直接開けるようにする。
+ */
+function showMyUrls() {
+  const base = webAppBase_();
+  if (!base) return;
+  const conf = getConfig_();
+  const esc = escapeHtmlAttr_;
+  const qrs = getQrMap_();
+  const groups = getGroupMap_();
+
+  const row = function (label, note, url) {
+    return '<div class="b"><div class="t">' + esc(label) + '</div>'
+      + (note ? '<div class="n">' + esc(note) + '</div>' : '')
+      + '<a href="' + esc(url) + '" target="_blank">' + esc(url) + '</a></div>';
+  };
+
+  let html = '<style>'
+    + 'body{font-family:-apple-system,"Hiragino Sans",sans-serif;margin:0;padding:16px;color:#16211A}'
+    + 'h2{margin:0 0 12px;font-size:15px}'
+    + '.b{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #E4EAE5}'
+    + '.t{font-weight:700;font-size:13px}'
+    + '.n{color:#7C8A82;font-size:11px;margin:2px 0 4px}'
+    + 'a{font-size:11px;color:#00762F;word-break:break-all;line-height:1.5}'
+    + '.e{color:#A8341F;font-size:12px}'
+    + '</style><h2>クリックで開けます（打ち込まないでください）</h2>';
+
+  const ak = String(conf.ADMIN_KEY || '').trim();
+  html += ak
+    ? row('管理ダッシュボード', '自分専用。共有しないでください', base + '?admin=' + ak)
+    : '<div class="e">ADMIN_KEY が未設定です。「⚙ はじめの設定」を実行してください。</div>';
+
+  Object.keys(groups).forEach(function (nm) {
+    html += row(nm + '（まとめページ）', 'この人の全チャネルを1ページで',
+      base + '?stats=' + groups[nm].key);
+  });
+
+  const ids = Object.keys(qrs).filter(function (id) { return qrs[id].key; });
+  if (ids.length) {
+    ids.forEach(function (id) {
+      html += row(qrs[id].name, '本人にだけ渡す成果ページ', base + '?stats=' + qrs[id].key);
+    });
+  } else {
+    html += '<div class="e">アフィリエイターがまだ1人も登録されていません。'
+      + '「➕ アフィリエイターを追加」から登録してください。</div>';
+  }
+
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(html).setWidth(560).setHeight(560), '自分用のURL');
+}
+
 /**
  * 自動化がちゃんと動いているかを、書き換えずに点検して表示する。
  */
