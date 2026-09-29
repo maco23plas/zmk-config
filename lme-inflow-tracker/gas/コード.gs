@@ -116,7 +116,10 @@ const CONFIG_DEFAULTS = [
   ['RESERVATION_SHEET_URL', '', '★エルメの予約機能が自動生成した「予約用スプレッドシート」のURL（サロン・面談予約 →スプレッドシート連携）。ここを埋めると面談予約が1時間おきに自動で顧客シートへ入る'],
   ['CALENDAR_ID', '', '面談予約が入るGoogleカレンダーのID。空ならメインカレンダー'],
   ['CALENDAR_FILTER', 'クロージング', 'この文字が予定タイトルに含まれる予定だけ面談として取り込む。空にすると全ての予定が対象になるので注意'],
-  ['CALENDAR_SYNC', 'ON', 'カレンダーから面談予約を自動取得する（ON/OFF）。1時間おきに実行'],
+  ['CALENDAR_SYNC', 'OFF',
+    'カレンダーから面談予約を自動取得する（ON/OFF）。1時間おきに実行。'
+    + 'CALENDAR_ID が空のままONにすると自分のメインカレンダーを読むので、'
+    + '案件ごとにシートを分けている場合は必ず CALENDAR_ID を指定すること'],
 ];
 
 function setup() {
@@ -153,11 +156,9 @@ function setup() {
     const sh = ss.insertSheet(SHEETS.QR);
     // 表示名はアフィリエイター本人にも見えるので、
     // 社内の呼び名や取引先名を既定値にしない
-    sh.getRange(1, 1, 4, 3).setValues([
+    // 見出しだけ用意する。中身は「➕ アフィリエイターを追加」で入れる
+    sh.getRange(1, 1, 1, 3).setValues([
       ['QR ID（英数字・自由）', '表示名（※本人に見えます）', 'エルメ友だち追加URL（方式B用・任意）'],
-      ['affi_01', '01_サンプルさん', ''],
-      ['affi_02', '02_サンプルさん', ''],
-      ['affi_03', '03_サンプルさん', ''],
     ]);
     sh.setFrozenRows(1);
     sh.setColumnWidth(1, 170).setColumnWidth(2, 220).setColumnWidth(3, 380);
@@ -233,6 +234,16 @@ function setup() {
                  t.getHandlerFunction() === 'syncBookingsQuiet')
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('syncBookingsQuiet').timeBased().everyHours(1).create();
+
+  // 新しいスプレッドシートに最初からある空のタブだけを片付ける。
+  // 人が作ったタブを消さないよう、既定の名前で空のものに限る。
+  ss.getSheets().forEach(function (x) {
+    const nm = x.getName();
+    if (!/^(シート1|Sheet1)$/.test(nm)) return;
+    if (x.getLastRow() === 0 && ss.getSheets().length > 1) {
+      try { ss.deleteSheet(x); } catch (e) {}
+    }
+  });
 
   // 入力していくタブの見た目をそろえる
   dressInputSheet_(ss.getSheetByName(SHEETS.QR), [110, 200, 300, 190, 120, 120, 260]);
