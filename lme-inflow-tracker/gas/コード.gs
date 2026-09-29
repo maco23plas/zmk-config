@@ -1593,23 +1593,39 @@ function healthCheck() {
     ? ok('面談予約の取り込み（1時間ごと）')
     : ng('1時間ごとのトリガーがありません。「⚙ はじめの設定」を実行してください');
 
+  out.push('', '■ ウェブアプリ');
+  const base = String(conf.WEB_APP_URL || '').trim();
+  if (!base) {
+    ng('WEB_APP_URL が未設定です。「デプロイ」→「新しいデプロイ」→ ウェブアプリ'
+      + '（実行:自分／アクセス:全員）で発行したURLを「設定」シートに貼ってください');
+  } else if (!/^https:\/\/script\.google\.com\/macros\/s\/[^\/?#]+\/exec/.test(base)) {
+    ng('WEB_APP_URL の形が違います。…/exec で終わるウェブアプリのURLを貼ってください');
+  } else {
+    ok('成果ページと管理ダッシュボードのURLを発行できます');
+  }
+
   out.push('', '■ エルメからの流入');
   const qrs = getQrMap_();
   const regs = collectRegRows_();
-  ok('QR ' + Object.keys(qrs).length + ' 本 ／ 登録ログ ' + regs.length + ' 件');
-  let latest = null;
-  regs.forEach(function (r) { if (!latest || r.day > latest) latest = r.day; });
-  if (latest) {
-    const days = Math.floor((new Date() - new Date(latest.replace(/-/g, '/'))) / 86400000);
-    days <= 3 ? ok('最後の登録は ' + latest + '（' + days + '日前）')
-              : wn('最後の登録が ' + latest + '（' + days + '日前）。止まっていないか確認');
+  const qrCount = Object.keys(qrs).length;
+  if (!qrCount) {
+    ng('QR設定シートが空です。「➕ アフィリエイターを追加」から登録してください');
   } else {
-    ng('登録ログが空です。エルメの「外部連携」にURLを貼れているか確認してください');
-  }
-  const silent = silentQrs_();
-  if (silent.length) {
-    wn('まだ1件も登録が無いQR ' + silent.length + ' 本： ' + silent.slice(0, 6).join('、')
-      + '（エルメ側の設定漏れの疑い）');
+    ok('QR ' + qrCount + ' 本 ／ 登録ログ ' + regs.length + ' 件');
+    let latest = null;
+    regs.forEach(function (r) { if (!latest || r.day > latest) latest = r.day; });
+    if (latest) {
+      const days = Math.floor((new Date() - new Date(latest.replace(/-/g, '/'))) / 86400000);
+      days <= 3 ? ok('最後の登録は ' + latest + '（' + days + '日前）')
+                : wn('最後の登録が ' + latest + '（' + days + '日前）。止まっていないか確認');
+    } else {
+      wn('まだ登録が1件もありません。エルメの「外部連携」にURLを貼れているか確認してください');
+    }
+    const silent = silentQrs_();
+    if (silent.length && regs.length) {
+      wn('まだ1件も登録が無いQR ' + silent.length + ' 本： ' + silent.slice(0, 6).join('、')
+        + '（エルメ側の設定漏れの疑い）');
+    }
   }
 
   out.push('', '■ 面談');
