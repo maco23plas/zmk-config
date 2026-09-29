@@ -1597,6 +1597,7 @@ function funnelByQr_() {
  * 自動化がちゃんと動いているかを、書き換えずに点検して表示する。
  */
 function healthCheck() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const out = [];
   let bad = 0;
   const ok = m => out.push('✅ ' + m);
@@ -1615,13 +1616,40 @@ function healthCheck() {
 
   out.push('', '■ ウェブアプリ');
   const base = String(conf.WEB_APP_URL || '').trim();
+  const depId = function (u) {
+    const m = String(u || '').match(/\/macros\/s\/([^\/?#]+)\//);
+    return m ? m[1] : '';
+  };
+  let live = '';
+  try { live = ScriptApp.getService().getUrl() || ''; } catch (e) {}
+  let enabled = null;
+  try { enabled = ScriptApp.getService().isEnabled(); } catch (e) {}
+
+  if (enabled === false) {
+    ng('ウェブアプリが公開されていません。「デプロイ」→「新しいデプロイ」→ ウェブアプリ'
+      + '（実行:自分／アクセス:全員）を作ってください');
+  }
   if (!base) {
-    ng('WEB_APP_URL が未設定です。「デプロイ」→「新しいデプロイ」→ ウェブアプリ'
-      + '（実行:自分／アクセス:全員）で発行したURLを「設定」シートに貼ってください');
+    ng('WEB_APP_URL が未設定です。デプロイ完了画面の …/exec のURLを「設定」シートに貼ってください');
   } else if (!/^https:\/\/script\.google\.com\/macros\/s\/[^\/?#]+\/exec/.test(base)) {
-    ng('WEB_APP_URL の形が違います。…/exec で終わるウェブアプリのURLを貼ってください');
+    ng('WEB_APP_URL の形が違います。…/exec で終わるURLを貼ってください'
+      + '（/dev や /macros/library/… は使えません）');
+  } else if (live && depId(live) && depId(base) && depId(live) !== depId(base)) {
+    ng('WEB_APP_URL のデプロイIDが、いま動いているデプロイと違います。'
+      + '配ったURLが開けない状態です。「デプロイを管理」のURLを貼り直してから、'
+      + '「エルメ登録用URL一覧を生成」を実行してください');
   } else {
     ok('成果ページと管理ダッシュボードのURLを発行できます');
+  }
+
+  // URL一覧が、いまの WEB_APP_URL で作り直されているか
+  const ush = ss.getSheetByName(SHEETS.URLS);
+  if (base && ush && ush.getLastRow() > 1) {
+    const sample = String(ush.getRange(2, 4).getValue() || '');
+    if (sample && depId(sample) && depId(sample) !== depId(base)) {
+      ng('URL一覧が古いままです（配っているURLと設定のURLが別物）。'
+        + '「エルメ登録用URL一覧を生成」を実行してください');
+    }
   }
 
   out.push('', '■ エルメからの流入');
