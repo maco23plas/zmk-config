@@ -234,6 +234,16 @@ function setup() {
     .forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('syncBookingsQuiet').timeBased().everyHours(1).create();
 
+  // 入力していくタブの見た目をそろえる
+  dressInputSheet_(ss.getSheetByName(SHEETS.QR), [110, 200, 300, 190, 120, 120, 260]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.CUSTOMERS), [250, 170, 90, 180, 150, 150, 110, 240, 150]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.MEETINGS), [150, 200, 200, 110, 340]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.DEALS), [180, 210, 300]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.GROUPS), [200, 220, 360, 240]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.CONFIG), [220, 360, 460]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.REGS), [170, 110, 220, 200]);
+  dressInputSheet_(ss.getSheetByName(SHEETS.DAILY), [110, 110, 220, 90, 100]);
+
   // ここまでで土台が揃うので、続けて顧客シートの構築と面談予約の取り込みまで自動で行う
   let extra = '';
   try {
@@ -631,8 +641,7 @@ function generateUrls(quiet) {
     ak ? base + '?admin=' + ak : '(①を実行するとキーが生成されます)', '', '', '']);
   sh.getRange(1, 1, rows.length, 7).setValues(rows);
   sh.setFrozenRows(1);
-  sh.setColumnWidth(1, 110).setColumnWidth(2, 200).setColumnWidth(3, 440)
-    .setColumnWidth(4, 440).setColumnWidth(5, 440).setColumnWidth(6, 140).setColumnWidth(7, 440);
+  dressInputSheet_(sh, [110, 200, 440, 440, 440, 140, 440]);
   if (rows.length > 2) sh.setRowHeights(2, rows.length - 2, 130);
   if (!quiet) toast_('URL一覧を生成しました。C列→エルメ／D列→本人の成果ページ／E列とF列→配布用リンク・QR。');
 }
@@ -1954,111 +1963,306 @@ function resetSheet_(ss, name) {
 }
 
 /** 全体ダッシュボード：全員のサマリー表＋日別推移（積み上げ）＋累計比較グラフ */
+// ────────────────────────────────────────────
+// シートの見た目（配色とヘルパー）
+// ────────────────────────────────────────────
+const SH_STYLE = {
+  ink: '#16211A', ink2: '#5C6B62', ink3: '#93A099',
+  brand: '#00762F', brandSoft: '#E8F4EC', band: '#F6F9F7',
+  line: '#DCE5DF', font: 'Arial',
+};
+
+/** シート全体の下地を整える（グリッド線を消して、文字と行高をそろえる） */
+function dressSheet_(sh) {
+  sh.setHiddenGridlines(true);
+  const rows = Math.max(sh.getMaxRows(), 1);
+  const cols = Math.max(sh.getMaxColumns(), 1);
+  sh.getRange(1, 1, rows, cols)
+    .setFontFamily(SH_STYLE.font).setFontColor(SH_STYLE.ink)
+    .setVerticalAlignment('middle');
+  sh.setRowHeights(1, rows, 24);
+}
+
+/**
+ * 入力していくタブ（QR設定・顧客・面談ログなど）の体裁をそろえる。
+ * 見出しを固定し、1行おきに薄く塗り、グリッド線を消す。
+ */
+function dressInputSheet_(sh, widths) {
+  if (!sh) return;
+  dressSheet_(sh);
+  const cols = Math.max(sh.getLastColumn(), 1);
+  sh.getRange(1, 1, 1, cols)
+    .setFontWeight('bold').setFontSize(10).setFontColor(SH_STYLE.ink2)
+    .setBackground(SH_STYLE.brandSoft).setWrap(true).setVerticalAlignment('middle')
+    .setBorder(null, null, true, null, null, null, SH_STYLE.line,
+      SpreadsheetApp.BorderStyle.SOLID);
+  sh.setRowHeight(1, 34);
+  sh.setFrozenRows(1);
+
+  const rows = sh.getLastRow() - 1;
+  if (rows > 0) {
+    const bg = [];
+    for (let i = 0; i < rows; i++) bg.push(new Array(cols).fill(i % 2 ? SH_STYLE.band : '#FFFFFF'));
+    sh.getRange(2, 1, rows, cols).setBackgrounds(bg);
+  }
+  (widths || []).forEach(function (w, i) { if (w) sh.setColumnWidth(i + 1, w); });
+}
+
+/** ページ見出し。1行目に置く帯 */
+function sheetTitle_(sh, text, sub, width) {
+  sh.getRange(1, 1, 1, width).merge()
+    .setValue(text).setFontSize(15).setFontWeight('bold')
+    .setFontColor(SH_STYLE.ink).setVerticalAlignment('middle');
+  sh.setRowHeight(1, 40);
+  if (sub) {
+    sh.getRange(2, 1, 1, width).merge()
+      .setValue(sub).setFontSize(10).setFontColor(SH_STYLE.ink3);
+    sh.setRowHeight(2, 20);
+  }
+}
+
+/** 表の見出し行 */
+function headerRow_(sh, row, col, values) {
+  sh.getRange(row, col, 1, values.length).setValues([values])
+    .setFontWeight('bold').setFontSize(10).setFontColor(SH_STYLE.ink2)
+    .setBackground(SH_STYLE.brandSoft)
+    .setBorder(null, null, true, null, null, null, SH_STYLE.line,
+      SpreadsheetApp.BorderStyle.SOLID);
+  sh.setRowHeight(row, 28);
+}
+
+/** 1行おきに薄く塗って、横に目で追えるようにする */
+function bandRows_(sh, top, rows, cols) {
+  if (rows <= 0) return;
+  const bg = [];
+  for (let i = 0; i < rows; i++) {
+    bg.push(new Array(cols).fill(i % 2 ? SH_STYLE.band : '#FFFFFF'));
+  }
+  sh.getRange(top, 1, rows, cols).setBackgrounds(bg);
+}
+
+/** 見出し行と同じ列数ぶんの数値列を右寄せ＋桁区切りにする */
+function numberCols_(sh, top, rows, fromCol, cols) {
+  if (rows <= 0 || cols <= 0) return;
+  sh.getRange(top, fromCol, rows, cols)
+    .setNumberFormat('#,##0').setHorizontalAlignment('right');
+}
+
 function buildOverviewSheet_(ss, qrs, counts, days, funnel) {
   const sh = resetSheet_(ss, SHEETS.DASH);
   const ids = Object.keys(qrs);
   const yesterday = days.length >= 2 ? days[days.length - 2] : null;
   const today = days[days.length - 1];
+  const thisMonth = today.substring(0, 7);
+  const W = 10;                                   // 使う列数
 
-  // サマリー表
-  sh.getRange(1, 1).setValue('📊 流入ダッシュボード（自動更新: ' +
-    Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + '）')
-    .setFontWeight('bold').setFontSize(12);
-  const sumHeader = ['アフィリエイター', '累計', '今日', '昨日', '直近7日', '直近30日', '面談', '成約'];
-  const sumRows = ids.map(id => {
+  // 下地はいちばん先に敷く。あとから設定する行高や配置を消さないため。
+  dressSheet_(sh);
+
+  // ── 見出し ──
+  sheetTitle_(sh, '流入ダッシュボード',
+    '自動更新: ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm')
+    + '　／　数字はすべて重複を除いた実登録', W);
+
+  // ── KPI帯 ──
+  const sumAll = function (fn) {
+    return ids.reduce(function (a, id) { return a + fn(counts[id] || {}); }, 0);
+  };
+  const monthOf = function (dc) {
+    return Object.keys(dc).reduce(function (a, d) {
+      return a + (d.substring(0, 7) === thisMonth ? dc[d] : 0);
+    }, 0);
+  };
+  const kpi = [
+    ['今月', sumAll(monthOf)],
+    ['今日', sumAll(function (dc) { return dc[today] || 0; })],
+    ['直近7日', sumAll(function (dc) { return sumLastNDays_(dc, days, 7); })],
+    ['累計', sumAll(function (dc) { return Object.values(dc).reduce(function (a, b) { return a + b; }, 0); })],
+  ];
+  kpi.forEach(function (x, i) {
+    const c = 1 + i * 2;
+    sh.getRange(4, c, 1, 2).merge().setValue(x[1])
+      .setFontSize(22).setFontWeight('bold').setFontColor(SH_STYLE.brand)
+      .setHorizontalAlignment('center').setNumberFormat('#,##0');
+    sh.getRange(5, c, 1, 2).merge().setValue(x[0])
+      .setFontSize(10).setFontColor(SH_STYLE.ink3).setHorizontalAlignment('center');
+    sh.getRange(4, c, 2, 2).setBackground('#FFFFFF')
+      .setBorder(true, true, true, true, false, false, SH_STYLE.line,
+        SpreadsheetApp.BorderStyle.SOLID);
+  });
+  sh.setRowHeight(4, 42);
+  sh.setRowHeight(5, 20);
+
+  // ── アフィリエイター別 ──
+  const top = 7;
+  sh.getRange(top, 1).setValue('アフィリエイター別').setFontWeight('bold').setFontSize(11);
+  const head = ['アフィリエイター', '累計', '今日', '昨日', '直近7日', '直近30日', '面談', '成約', '推移(30日)'];
+  headerRow_(sh, top + 1, 1, head);
+
+  const rows = ids.map(function (id) {
     const dc = counts[id] || {};
-    const total = Object.values(dc).reduce((a, b) => a + b, 0);
+    const total = Object.values(dc).reduce(function (a, b) { return a + b; }, 0);
     const f = (funnel && funnel.byId[id]) || {};
     return [qrs[id].name, total, dc[today] || 0, yesterday ? (dc[yesterday] || 0) : 0,
       sumLastNDays_(dc, days, 7), sumLastNDays_(dc, days, 30), f.meeting || 0, f.won || 0];
-  });
-  sh.getRange(3, 1, 1, 8).setValues([sumHeader]).setFontWeight('bold').setBackground('#E4F5EA');
-  if (sumRows.length) sh.getRange(4, 1, sumRows.length, 8).setValues(sumRows);
-  sh.setColumnWidth(1, 220);
+  }).sort(function (a, b) { return b[5] - a[5] || b[1] - a[1]; });
 
-  // 日別マトリクス（日付 × アフィリエイター）
-  const matTop = 4 + sumRows.length + 2;
-  sh.getRange(matTop, 1).setValue('日別推移').setFontWeight('bold');
-  const matHeader = ['日付'].concat(ids.map(id => qrs[id].name), ['合計']);
-  const matRows = days.map(day => {
-    const per = ids.map(id => (counts[id] || {})[day] || 0);
-    return [day].concat(per, [per.reduce((a, b) => a + b, 0)]);
-  });
-  sh.getRange(matTop + 1, 1, 1, matHeader.length).setValues([matHeader])
-    .setFontWeight('bold').setBackground('#E4F5EA');
-  sh.getRange(matTop + 2, 1, matRows.length, matHeader.length).setValues(matRows);
+  if (rows.length) {
+    sh.getRange(top + 2, 1, rows.length, 8).setValues(rows);
+    bandRows_(sh, top + 2, rows.length, head.length);
+    numberCols_(sh, top + 2, rows.length, 2, 7);
+    sh.getRange(top + 2, 1, rows.length, 1).setFontWeight('bold');
+    // 直近30日を棒の濃さで表す
+    sh.setConditionalFormatRules(sh.getConditionalFormatRules().concat([
+      SpreadsheetApp.newConditionalFormatRule()
+        .setGradientMaxpointWithValue('#7FC9A0', SpreadsheetApp.InterpolationType.PERCENTILE, '90')
+        .setGradientMinpointWithValue('#FFFFFF', SpreadsheetApp.InterpolationType.NUMBER, '0')
+        .setRanges([sh.getRange(top + 2, 6, rows.length, 1)])
+        .build(),
+    ]));
+  }
 
-  // グラフ1: 日別推移（アフィリエイター別・積み上げ棒）
-  sh.insertChart(sh.newChart()
-    .setChartType(Charts.ChartType.COLUMN)
-    .addRange(sh.getRange(matTop + 1, 1, matRows.length + 1, matHeader.length - 1))
-    .setPosition(3, 8, 0, 0)
-    .setOption('title', '日別登録数（アフィリエイター別）')
-    .setOption('isStacked', true)
-    .setOption('width', 640).setOption('height', 320)
-    .build());
+  // ── 日別推移（日付 × アフィリエイター） ──
+  const matTop = top + 2 + rows.length + 2;
+  sh.getRange(matTop, 1).setValue('日別推移').setFontWeight('bold').setFontSize(11);
+  const sortedIds = rows.map(function (r) {
+    return ids.filter(function (id) { return qrs[id].name === r[0]; })[0];
+  }).filter(Boolean);
+  const matHead = ['日付'].concat(sortedIds.map(function (id) { return qrs[id].name; }), ['合計']);
+  const matRows = days.map(function (day) {
+    const per = sortedIds.map(function (id) { return (counts[id] || {})[day] || 0; });
+    return [day].concat(per, [per.reduce(function (a, b) { return a + b; }, 0)]);
+  }).reverse();                                   // 新しい日が上
+  headerRow_(sh, matTop + 1, 1, matHead);
+  if (matRows.length) {
+    sh.getRange(matTop + 2, 1, matRows.length, matHead.length).setValues(matRows);
+    numberCols_(sh, matTop + 2, matRows.length, 2, matHead.length - 1);
+    sh.getRange(matTop + 2, matHead.length, matRows.length, 1).setFontWeight('bold');
+    sh.setConditionalFormatRules(sh.getConditionalFormatRules().concat([
+      SpreadsheetApp.newConditionalFormatRule()
+        .setGradientMaxpointWithValue('#63BE7B', SpreadsheetApp.InterpolationType.PERCENTILE, '90')
+        .setGradientMinpointWithValue('#FFFFFF', SpreadsheetApp.InterpolationType.NUMBER, '0')
+        .setRanges([sh.getRange(matTop + 2, 2, matRows.length, matHead.length - 1)])
+        .build(),
+    ]));
+  }
 
-  // グラフ2: 累計の比較（横棒）
-  sh.insertChart(sh.newChart()
-    .setChartType(Charts.ChartType.BAR)
-    .addRange(sh.getRange(3, 1, sumRows.length + 1, 2))
-    .setPosition(20, 8, 0, 20)
-    .setOption('title', '累計登録数の比較')
-    .setOption('legend', { position: 'none' })
-    .setOption('width', 640).setOption('height', 320)
-    .build());
+  // ── 行ごとのスパークライン（直近30日の形） ──
+  if (rows.length && matRows.length) {
+    const win = Math.min(30, matRows.length);
+    const spark = rows.map(function (r, i) {
+      const col = columnLetter_(2 + i);
+      return ['=IFERROR(SPARKLINE(' + col + (matTop + 2) + ':' + col + (matTop + 1 + win) +
+        ',{"charttype","column";"color","#00762F";"empty","zero"}),"")'];
+    });
+    sh.getRange(top + 2, 9, spark.length, 1).setFormulas(spark);
+    sh.setColumnWidth(9, 130);
+  }
 
-  // ダッシュボードを先頭タブへ
+  // ── 体裁 ──
+  sh.setFrozenRows(3);
+  sh.setFrozenColumns(1);
+  sh.setColumnWidth(1, 210);
+  for (let c = 2; c <= 8; c++) sh.setColumnWidth(c, 74);
+  sh.setColumnWidth(10, 40);
+  sh.getRange(matTop + 2, 1, Math.max(matRows.length, 1), 1)
+    .setHorizontalAlignment('left').setFontColor(SH_STYLE.ink2);
+
   ss.setActiveSheet(sh);
   ss.moveActiveSheet(1);
 }
 
-/** アフィリエイター別タブ：サマリー＋日別表＋棒グラフ */
+/** 列番号を A, B, … AA に変える（スパークラインの数式用） */
+function columnLetter_(n) {
+  let s = '';
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 function buildAffiSheet_(ss, sheetName, dispName, dayCounts, days, fn) {
   const sh = resetSheet_(ss, sheetName.substring(0, 90));
-  const total = Object.values(dayCounts).reduce((a, b) => a + b, 0);
+  const total = Object.values(dayCounts).reduce(function (a, b) { return a + b; }, 0);
   const today = days[days.length - 1];
   const yesterday = days.length >= 2 ? days[days.length - 2] : null;
-
-  sh.getRange(1, 1).setValue('📈 ' + dispName + ' の流入状況（自動更新）')
-    .setFontWeight('bold').setFontSize(12);
   const f = fn || {};
-  sh.getRange(2, 1, 1, 7).setValues([['累計', '今日', '昨日', '直近7日', '直近30日', '面談', '成約']])
-    .setFontWeight('bold').setBackground('#E4F5EA');
-  sh.getRange(3, 1, 1, 7).setValues([[
-    total, dayCounts[today] || 0, yesterday ? (dayCounts[yesterday] || 0) : 0,
-    sumLastNDays_(dayCounts, days, 7), sumLastNDays_(dayCounts, days, 30),
-    f.meeting || 0, f.won || 0,
-  ]]).setFontSize(12);
+  const W = 7;
 
-  // 日別表（累計つき）
-  sh.getRange(5, 1, 1, 3).setValues([['日付', '登録数', '累計']])
-    .setFontWeight('bold').setBackground('#E4F5EA');
+  dressSheet_(sh);
+
+  sheetTitle_(sh, dispName,
+    '自動更新: ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'), W);
+
+  // KPI帯
+  const kpi = [
+    ['累計', total],
+    ['今日', dayCounts[today] || 0],
+    ['昨日', yesterday ? (dayCounts[yesterday] || 0) : 0],
+    ['直近7日', sumLastNDays_(dayCounts, days, 7)],
+    ['直近30日', sumLastNDays_(dayCounts, days, 30)],
+    ['面談', f.meeting || 0],
+    ['成約', f.won || 0],
+  ];
+  sh.getRange(4, 1, 1, W).setValues([kpi.map(function (x) { return x[1]; })])
+    .setFontSize(18).setFontWeight('bold').setFontColor(SH_STYLE.brand)
+    .setHorizontalAlignment('center').setNumberFormat('#,##0');
+  sh.getRange(5, 1, 1, W).setValues([kpi.map(function (x) { return x[0]; })])
+    .setFontSize(10).setFontColor(SH_STYLE.ink3).setHorizontalAlignment('center');
+  sh.getRange(4, 1, 2, W).setBackground('#FFFFFF')
+    .setBorder(true, true, true, true, true, false, SH_STYLE.line,
+      SpreadsheetApp.BorderStyle.SOLID);
+  sh.setRowHeight(4, 38);
+  sh.setRowHeight(5, 20);
+
+  // 日別（新しい日が上）
+  const topRow = 7;
+  sh.getRange(topRow, 1).setValue('日別').setFontWeight('bold').setFontSize(11);
+  headerRow_(sh, topRow + 1, 1, ['日付', '登録数', '累計']);
   let running = 0;
-  const rows = days.map(day => {
+  const asc = days.map(function (day) {
     const n = dayCounts[day] || 0;
     running += n;
     return [day, n, running];
   });
-  sh.getRange(6, 1, rows.length, 3).setValues(rows);
-  sh.setFrozenRows(5);
+  const rows = asc.slice().reverse();
+  if (rows.length) {
+    sh.getRange(topRow + 2, 1, rows.length, 3).setValues(rows);
+    bandRows_(sh, topRow + 2, rows.length, 3);
+    numberCols_(sh, topRow + 2, rows.length, 2, 2);
+    sh.getRange(topRow + 2, 1, rows.length, 1)
+      .setHorizontalAlignment('left').setFontColor(SH_STYLE.ink2);
+    sh.setConditionalFormatRules(sh.getConditionalFormatRules().concat([
+      SpreadsheetApp.newConditionalFormatRule()
+        .setGradientMaxpointWithValue('#63BE7B', SpreadsheetApp.InterpolationType.PERCENTILE, '90')
+        .setGradientMinpointWithValue('#FFFFFF', SpreadsheetApp.InterpolationType.NUMBER, '0')
+        .setRanges([sh.getRange(topRow + 2, 2, rows.length, 1)])
+        .build(),
+    ]));
+  }
 
-  // グラフ: 日別登録数
-  sh.insertChart(sh.newChart()
-    .setChartType(Charts.ChartType.COLUMN)
-    .addRange(sh.getRange(5, 1, rows.length + 1, 2))
-    .setPosition(2, 5, 0, 0)
-    .setOption('title', dispName + '：日別登録数')
-    .setOption('legend', { position: 'none' })
-    .setOption('width', 600).setOption('height', 300)
-    .build());
+  // 直近30日の形をひと目で
+  if (rows.length) {
+    const win = Math.min(30, rows.length);
+    sh.getRange(topRow, 5).setValue('直近' + win + '日')
+      .setFontSize(10).setFontColor(SH_STYLE.ink3);
+    sh.getRange(topRow + 1, 5, 1, 3).merge()
+      .setFormula('=IFERROR(SPARKLINE(B' + (topRow + 2) + ':B' + (topRow + 1 + win) +
+        ',{"charttype","column";"color","#00762F";"empty","zero"}),"")');
+    sh.setRowHeight(topRow + 1, 46);
+  }
+
+  sh.setFrozenRows(topRow + 1);
+  sh.setFrozenColumns(1);
+  sh.setColumnWidth(1, 120);
+  sh.setColumnWidth(2, 90);
+  sh.setColumnWidth(3, 90);
+  sh.setColumnWidth(4, 24);
+  for (let c = 5; c <= 7; c++) sh.setColumnWidth(c, 90);
 }
 
-// ────────────────────────────────────────────
-// ⑤ 最新版に更新（GitHubから取得 → 保存 → 新バージョン → 本番デプロイ更新）
-//    ※初回のみ https://script.google.com/home/usersettings で
-//      「Google Apps Script API」をONにしておくこと
-// ────────────────────────────────────────────
 function selfUpdate() {
   const token = ScriptApp.getOAuthToken();
   const api = 'https://script.googleapis.com/v1/projects/' + ScriptApp.getScriptId();
@@ -2258,90 +2462,143 @@ function webAppBase_() {
 
 // 白ベースの共通スタイル（クリエイター/管理者ページ共用）
 const PAGE_CSS =
-  'body{margin:0;background:#F7F9F7;color:#17211B;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;line-height:1.7;-webkit-font-smoothing:antialiased}' +
-  '.wrap{max-width:680px;margin:0 auto;padding:26px 16px 56px}' +
-  '.eyebrow{font-size:10px;letter-spacing:.24em;color:#00A63E;font-weight:700}' +
-  'h1{font-size:22px;margin:4px 0 2px;letter-spacing:.01em}' +
-  '.upd{color:#98A69E;font-size:11px;font-variant-numeric:tabular-nums;margin-bottom:4px}' +
-  '.hero{margin:14px 0 12px;padding:20px;border-radius:18px;border:1px solid rgba(0,166,62,.22);' +
-  'background:radial-gradient(120% 160% at 0% 0%,rgba(0,166,62,.10),rgba(0,166,62,.02) 60%),#fff;' +
-  'box-shadow:0 1px 3px rgba(16,40,26,.05)}' +
-  '.hv{font-size:52px;font-weight:800;color:#00A63E;line-height:1.15;font-variant-numeric:tabular-nums}' +
-  '.hl{font-size:12px;color:#6B7A72;letter-spacing:.08em}' +
-  '.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;margin-bottom:12px}' +
-  '.stat{background:#fff;border:1px solid #E6ECE7;border-radius:14px;padding:10px 4px;text-align:center;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
-  '.sv{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}' +
-  '.sl{font-size:10px;color:#8A968E}' +
-  '.chip{display:inline-block;font-size:10px;font-weight:800;border-radius:99px;padding:0 7px;line-height:1.6;vertical-align:middle}' +
-  '.chip.up{background:#E3F6EA;color:#00842F}' +
-  '.chip.dn{background:#FBE9E5;color:#B23A28}' +
-  '.chip.nt{background:#EFF2EF;color:#8A968E}' +
-  '.pills{display:flex;gap:6px;margin:4px 0 12px}' +
-  '.pill{padding:4px 14px;border-radius:99px;border:1px solid #E6ECE7;background:#fff;color:#6B7A72;font-size:12px;text-decoration:none;font-weight:700}' +
-  '.pill.on{background:#00A63E;color:#fff;border-color:#00A63E}' +
-  '.panel{background:#fff;border:1px solid #E6ECE7;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,40,26,.04)}' +
-  '.ph{font-size:11px;letter-spacing:.18em;color:#8A968E;font-weight:700;margin-bottom:10px}' +
-  '.note{font-size:11px;color:#98A69E;margin-top:8px}' +
+  // 色は役割で持つ。ダークモードはこの1ブロックの差し替えだけで効く
+  ':root{color-scheme:light;' +
+  '--bg:#F4F7F4;--panel:#FFFFFF;--line:#E4EAE5;--line-soft:#EFF3F0;' +
+  '--ink:#16211A;--ink-2:#5C6B62;--ink-3:#8D9A92;' +
+  '--brand:#00913A;--brand-ink:#00762F;--brand-soft:#E8F4EC;' +
+  '--up-bg:#E3F6EA;--up:#00762F;--dn-bg:#FBE9E5;--dn:#A8341F;--nt-bg:#EFF2EF;' +
+  '--gold:#8A6D12;--shadow:0 1px 2px rgba(16,40,26,.05),0 8px 24px -16px rgba(16,40,26,.18)}' +
+  '@media(prefers-color-scheme:dark){:root{color-scheme:dark;' +
+  '--bg:#0F1311;--panel:#171D19;--line:#273029;--line-soft:#1F2721;' +
+  '--ink:#E9EFEA;--ink-2:#A6B3AB;--ink-3:#7C8A82;' +
+  '--brand:#3ED47A;--brand-ink:#6FE29C;--brand-soft:#16281E;' +
+  '--up-bg:#12301F;--up:#6FE29C;--dn-bg:#33201B;--dn:#F29A86;--nt-bg:#1E2620;' +
+  '--gold:#E0B84A;--shadow:0 1px 2px rgba(0,0,0,.4)}}' +
+
+  'body{margin:0;background:var(--bg);color:var(--ink);' +
+  'font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,system-ui,sans-serif;' +
+  'line-height:1.7;-webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1}' +
+  '.wrap{max-width:720px;margin:0 auto;padding:28px 18px 64px}' +
+  '.eyebrow{font-size:10px;letter-spacing:.26em;color:var(--brand-ink);font-weight:800}' +
+  'h1{font-size:23px;margin:5px 0 2px;letter-spacing:.01em;line-height:1.35}' +
+  '.upd{color:var(--ink-3);font-size:11px;font-variant-numeric:tabular-nums;margin-bottom:4px}' +
+  '.sub{color:var(--ink-2);font-size:12px;margin:-2px 0 12px}' +
+  '.crumb{margin-bottom:10px}' +
+  '.crumb a{color:var(--ink-2);font-size:12px;text-decoration:none;font-weight:700}' +
+  '.crumb a:hover{color:var(--brand-ink)}' +
+
+  // ヒーロー：ページで一番大きい数字を1つだけ置く
+  '.hero{margin:16px 0 14px;padding:22px 22px 20px;border-radius:20px;' +
+  'border:1px solid var(--line);background:' +
+  'radial-gradient(130% 170% at 0% 0%,var(--brand-soft),transparent 62%),var(--panel);' +
+  'box-shadow:var(--shadow)}' +
+  '.hv{font-size:54px;font-weight:800;color:var(--brand-ink);line-height:1.08;' +
+  'font-variant-numeric:tabular-nums;letter-spacing:-.02em}' +
+  '.hl{font-size:12px;color:var(--ink-2);letter-spacing:.08em;margin-top:2px}' +
+
+  '.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:8px;margin-bottom:14px}' +
+  '.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;' +
+  'padding:12px 6px;text-align:center;box-shadow:var(--shadow)}' +
+  '.sv{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em}' +
+  '.sl{font-size:10px;color:var(--ink-3);margin-top:1px}' +
+  '.chip{display:inline-block;font-size:10px;font-weight:800;border-radius:99px;' +
+  'padding:0 7px;line-height:1.7;vertical-align:middle;margin-top:4px}' +
+  '.chip.up{background:var(--up-bg);color:var(--up)}' +
+  '.chip.dn{background:var(--dn-bg);color:var(--dn)}' +
+  '.chip.nt{background:var(--nt-bg);color:var(--ink-3)}' +
+  '.tag{display:inline-block;padding:1px 6px;border-radius:99px;background:var(--brand-soft);' +
+  'color:var(--brand-ink);font-size:10px;font-weight:800;vertical-align:middle}' +
+
+  '.pills{display:flex;gap:6px;margin:6px 0 14px;flex-wrap:wrap}' +
+  '.pill{padding:5px 15px;border-radius:99px;border:1px solid var(--line);background:var(--panel);' +
+  'color:var(--ink-2);font-size:12px;text-decoration:none;font-weight:700}' +
+  '.pill.on{background:var(--brand);color:#fff;border-color:var(--brand)}' +
+  '@media(prefers-color-scheme:dark){.pill.on{color:#08150E}}' +
+
+  '.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;' +
+  'padding:18px;margin-bottom:12px;box-shadow:var(--shadow)}' +
+  '.ph{font-size:11px;letter-spacing:.16em;color:var(--ink-3);font-weight:800;margin-bottom:12px}' +
+  '.note{font-size:11px;color:var(--ink-3);margin-top:10px;line-height:1.6}' +
+
   '.reward{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}' +
-  '.rv{font-size:28px;font-weight:800;color:#B08A1E;font-variant-numeric:tabular-nums}' +
-  '.rv.dim{font-size:20px;color:#6B7A72}' +
-  '.rl{font-size:11px;color:#8A968E}' +
-  '.goalrow{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}' +
-  '.gnum{font-size:30px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
-  '.gden{color:#8A968E;font-size:14px}' +
-  '.gpct{margin-left:auto;font-weight:700;color:#00A63E;font-size:14px}' +
-  '.pbar{height:10px;background:#EAF1EB;border-radius:99px;overflow:hidden}' +
-  '.pfill{height:100%;background:linear-gradient(90deg,#00A63E,#3ED47A);border-radius:99px}' +
-  '.rankrow{display:flex;align-items:baseline;gap:4px}' +
-  '.rankbig{font-size:40px;font-weight:800;color:#00A63E;font-variant-numeric:tabular-nums}' +
-  '.rankunit{font-size:16px;font-weight:700}' +
-  '.rankden{color:#8A968E;margin-left:4px}' +
+  '.rv{font-size:28px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums}' +
+  '.rv.dim{font-size:20px;color:var(--ink-2)}' +
+  '.rl{font-size:11px;color:var(--ink-3)}' +
+  '.goalrow{display:flex;align-items:baseline;gap:6px;margin-bottom:9px}' +
+  '.gnum{font-size:30px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums}' +
+  '.gden{color:var(--ink-3);font-size:14px}' +
+  '.gpct{margin-left:auto;font-weight:800;color:var(--brand-ink);font-size:14px}' +
+  '.pbar{height:10px;background:var(--line-soft);border-radius:99px;overflow:hidden}' +
+  '.pfill{height:100%;background:var(--brand);border-radius:99px}' +
   '.recs{display:flex;gap:14px;text-align:center}' +
   '.recs>div{flex:1}' +
-  '.rv2{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
-  '.unit{font-size:12px;font-weight:600;color:#8A968E;margin-left:1px}' +
-  '.chart{display:flex;align-items:flex-end;gap:2px;height:150px;overflow-x:auto;padding-bottom:2px}' +
-  '.chart.small{height:96px}' +
-  '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}' +
-  '.bar{width:100%;background:linear-gradient(180deg,#3ED47A,#00A63E);border-radius:3px 3px 1px 1px;min-height:0}' +
-  '.bar.alt{background:linear-gradient(180deg,#7FD9AC,#2FA168)}' +
+  '.rv2{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}' +
+  '.unit{font-size:12px;font-weight:600;color:var(--ink-3);margin-left:1px}' +
+
+  // グラフ：棒は細く、角はデータ側だけ丸め、基線に揃える
+  '.chart{display:flex;align-items:flex-end;gap:3px;height:158px;overflow-x:auto;' +
+  'padding-bottom:2px;border-bottom:1px solid var(--line);margin-bottom:2px}' +
+  '.chart.small{height:104px}' +
+  '.bcol{flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;' +
+  'justify-content:flex-end;height:100%}' +
+  '.bar{width:100%;background:var(--brand);border-radius:4px 4px 0 0;min-height:0}' +
+  '.bar.alt{background:color-mix(in srgb,var(--brand) 62%,var(--panel))}' +
   '.stack{width:100%;height:100%;display:flex;flex-direction:column;justify-content:flex-end}' +
-  '.seg{width:100%}' +
-  '.stack .seg:first-child{border-radius:3px 3px 0 0}' +
-  '.bval{font-size:9px;color:#6B7A72;height:12px;font-variant-numeric:tabular-nums}' +
-  '.blab{font-size:8px;color:#98A69E;height:12px;white-space:nowrap;transform:rotate(-45deg);margin-top:6px}' +
-  '.blab2{font-size:9px;color:#98A69E;height:14px;margin-top:2px}' +
+  '.seg{width:100%;margin-bottom:2px}' +            // 面と面の間に2pxの隙間
+  '.seg:last-child{margin-bottom:0}' +
+  '.stack .seg:first-child{border-radius:4px 4px 0 0}' +
+  '.bcol:hover .bar,.bcol:hover .seg{filter:brightness(1.08)}' +
+  '.bval{font-size:9px;color:var(--ink-2);height:13px;font-variant-numeric:tabular-nums}' +
+  '.blab{font-size:8px;color:var(--ink-3);height:12px;white-space:nowrap;' +
+  'transform:rotate(-45deg);margin-top:6px}' +
+  '.blab2{font-size:9px;color:var(--ink-3);height:14px;margin-top:2px}' +
   '.blab2.hr{font-size:8px}' +
   '@media(max-width:430px){.blab2.hr.odd{visibility:hidden}}' +
-  '.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}' +
-  '.legend span{font-size:11px;color:#6B7A72;white-space:nowrap}' +
-  '.dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:4px}' +
-  '.fstep{position:relative;margin-bottom:6px;border-radius:10px;overflow:hidden;background:#F2F6F3}' +
-  '.fbar{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,166,62,.22),rgba(62,212,122,.30));border-radius:10px}' +
-  '.frow{position:relative;display:flex;align-items:baseline;gap:10px;padding:8px 12px}' +
-  '.flabel{font-size:12px;font-weight:700;min-width:64px}' +
-  '.fnum{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}' +
-  '.fpct{margin-left:auto;font-size:12px;font-weight:700;color:#00842F}' +
-  '.tbox{overflow-x:auto}' +
-  'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
-  'td,th{padding:7px 8px;border-top:1px solid #EEF2EF;text-align:left;white-space:nowrap}' +
-  '.num{text-align:right;font-weight:700}' +
-  'tr.thead td,tr.thead th{color:#8A968E;border-top:none;font-size:11px;font-weight:700}' +
-  'a.open{color:#00A63E;font-weight:700;text-decoration:none;font-size:12px}' +
-  '.tag{display:inline-block;padding:1px 6px;border-radius:99px;background:#E4F0E7;' +
-  'color:#1F7A3C;font-size:10px;font-weight:700;vertical-align:middle}' +
-  '.crumb{margin-bottom:10px}' +
-  '.crumb a{color:#6B7A72;font-size:12px;text-decoration:none;font-weight:700}' +
-  '.sub{color:#6B7A72;font-size:12px;margin:-4px 0 10px}' +
-  '.chrow{display:flex;align-items:center;gap:10px;margin:7px 0}' +
-  '.chname{width:92px;flex:none;font-size:12px;font-weight:700;color:#1F2A24;' +
+  '.legend{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:12px}' +
+  '.legend span{font-size:11px;color:var(--ink-2);white-space:nowrap}' +
+  '.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;' +
+  'vertical-align:-1px}' +
+
+  // チャネル別
+  '.chrow{display:flex;align-items:center;gap:10px;margin:8px 0}' +
+  '.chname{width:96px;flex:none;font-size:12px;font-weight:700;color:var(--ink);' +
   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-  '.chbar{flex:1;height:10px;border-radius:99px;background:#EEF3EF;overflow:hidden}' +
-  '.chfill{height:100%;border-radius:99px;background:linear-gradient(90deg,#8FCB9B,#00A63E)}' +
-  '.chnum{width:34px;flex:none;text-align:right;font-size:12px;font-weight:700;' +
+  '.chbar{flex:1;height:10px;border-radius:99px;background:var(--line-soft);overflow:hidden}' +
+  '.chfill{height:100%;border-radius:99px;background:var(--brand)}' +
+  '.chnum{width:36px;flex:none;text-align:right;font-size:12px;font-weight:800;' +
   'font-variant-numeric:tabular-nums}' +
-  '@media(max-width:430px){.chname{width:70px;font-size:11px}}' +
-  '.foot{color:#98A69E;font-size:11px;text-align:center;margin-top:20px}';
+  '@media(max-width:430px){.chname{width:72px;font-size:11px}}' +
+
+  // ファネル
+  '.fstep{position:relative;margin-bottom:7px;border-radius:12px;overflow:hidden;' +
+  'background:var(--line-soft)}' +
+  '.fbar{position:absolute;left:0;top:0;bottom:0;background:var(--brand-soft);border-radius:12px}' +
+  '.frow{position:relative;display:flex;align-items:baseline;gap:10px;padding:9px 13px}' +
+  '.flabel{font-size:12px;font-weight:800;min-width:64px}' +
+  '.fnum{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}' +
+  '.fpct{margin-left:auto;font-size:12px;font-weight:800;color:var(--brand-ink)}' +
+
+  'details.fold{margin-top:2px}' +
+  'details.fold>summary{list-style:none;cursor:pointer;font-size:12px;font-weight:700;' +
+  'color:var(--ink-2);padding:7px 12px;border:1px solid var(--line);border-radius:99px;' +
+  'display:inline-flex;align-items:center;gap:6px;user-select:none}' +
+  'details.fold>summary::-webkit-details-marker{display:none}' +
+  'details.fold>summary::after{content:"▾";font-size:10px;color:var(--ink-3)}' +
+  'details.fold[open]>summary::after{content:"▴"}' +
+  'details.fold>summary:hover{border-color:var(--brand);color:var(--brand-ink)}' +
+  'details.fold>.tbox{margin-top:10px}' +
+  '.tbox{overflow-x:auto;margin:0 -4px}' +
+  'table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}' +
+  'td,th{padding:8px 9px;border-top:1px solid var(--line-soft);text-align:left;white-space:nowrap}' +
+  'tbody tr:hover td,tr:hover td{background:var(--line-soft)}' +
+  '.num{text-align:right;font-weight:700}' +
+  'tr.thead td,tr.thead th{color:var(--ink-3);border-top:none;font-size:11px;' +
+  'font-weight:800;letter-spacing:.04em}' +
+  'tr.thead:hover td{background:transparent}' +
+  '.foot{color:var(--ink-3);font-size:11px;margin-top:18px;text-align:center;line-height:1.7}' +
+  'a.open{color:var(--brand-ink);font-weight:700;text-decoration:none;font-size:12px}' +
+  'a.open:hover{text-decoration:underline}';
 
 function pageHead_(title) {
   return '<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">' +
@@ -2626,14 +2883,18 @@ function renderStatsPage_(key, period) {
     '<div class="stats">' + stats + '</div>' +
     breakdownHtml + clickHtml + funnelHtml + goalHtml + rewardHtml + recordHtml +
     '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日</div><div class="chart">' + bars + '</div></div>' +
-    '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
-    '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
-    '<div class="panel"><div class="ph">曜日別の傾向</div><div class="chart small">' + wdBars + '</div></div>' +
+    (total > 0
+      ? '<div class="panel"><div class="ph">登録されやすい時間帯</div><div class="chart small">' + hourBars + '</div>' +
+        '<div class="note">投稿する時間帯の参考に（全期間の合計）</div></div>' +
+        '<div class="panel"><div class="ph">曜日別の傾向</div><div class="chart small">' + wdBars + '</div></div>'
+      : '') +
     '<div class="panel"><div class="ph">月別実績</div><div class="tbox"><table><tr class="thead"><td>月</td><td class="num">件数</td>' +
     (hasRate ? '<td class="num">見込み報酬</td>' : '') + '</tr>' +
-    (monthRows || '<tr><td colspan="3" style="color:#98A69E">まだデータがありません</td></tr>') + '</table></div></div>' +
-    '<div class="panel"><div class="ph">日別一覧 — 直近' + p + '日</div><div class="tbox"><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
-    tableRows + '</table></div></div>' +
+    (monthRows || '<tr><td colspan="3" style="color:var(--ink-3)">まだデータがありません</td></tr>') + '</table></div></div>' +
+    '<div class="panel"><div class="ph">日別一覧</div>' +
+    '<details class="fold"><summary>直近' + p + '日の内訳を開く</summary>' +
+    '<div class="tbox"><table><tr class="thead"><td>日付</td><td class="num">登録数</td></tr>' +
+    tableRows + '</table></div></details></div>' +
     '<div class="foot">このページはあなた専用のリンクです。URLの共有はご遠慮ください。</div>' +
     '</div></body></html>';
 
@@ -2731,11 +2992,6 @@ function renderAdminPage_(period) {
         deltaChip_(dealMonthAll, dealMonthPrevAll) + '</div>'
       : '');
 
-  // アフィリエイター別テーブル（今月順）
-  const palette = ['#00A63E', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#EC4899', '#84CC16'];
-  const colorOf = {};
-  ids.forEach((id, i) => colorOf[id] = palette[i % palette.length]);
-
   const list = ids.map(id => {
     const d = perDay[id] || {};
     return {
@@ -2753,6 +3009,19 @@ function renderAdminPage_(period) {
       fWon: (funnel.byId[id] || {}).won || 0,
     };
   }).sort((a, b) => b.month - a.month || b.total - a.total);
+
+  // 色は今月の多い順に6人まで。人数ぶん色を作ると見分けがつかなくなるので、
+  // 7人目から先は「その他」1色にまとめる。
+  const CAT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
+  const OTHER = '#9AA79F';
+  const TOP = 6;
+  const colorOf = {};
+  const topIds = [];
+  list.forEach(function (x, i) {
+    if (i < TOP && x.total > 0) { colorOf[x.id] = CAT[i]; topIds.push(x.id); }
+    else colorOf[x.id] = OTHER;
+  });
+  const otherIds = ids.filter(function (id) { return topIds.indexOf(id) < 0; });
 
   const tableRows = list.map((x, i) => {
     const share = monthAll > 0 ? Math.round((x.month / monthAll) * 100) : 0;
@@ -2788,18 +3057,29 @@ function renderAdminPage_(period) {
   const dayTotals = days.map(d => ids.reduce((s, id) => s + ((perDay[id] || {})[d] || 0), 0));
   const maxT = Math.max(1, ...dayTotals);
   const bars = days.map((d, di) => {
-    const segs = ids.map(id => {
-      const n = (perDay[id] || {})[d] || 0;
-      if (!n) return '';
-      return '<div class="seg" style="height:' + ((n / maxT) * 100).toFixed(1) + '%;background:' + colorOf[id] + '"></div>';
+    const parts = topIds.map(function (id) {
+      return { n: (perDay[id] || {})[d] || 0, color: colorOf[id] };
+    });
+    const otherN = otherIds.reduce(function (a, id) { return a + ((perDay[id] || {})[d] || 0); }, 0);
+    if (otherN) parts.push({ n: otherN, color: OTHER });
+    const segs = parts.filter(function (x) { return x.n > 0; }).map(function (x) {
+      return '<div class="seg" style="height:' + ((x.n / maxT) * 100).toFixed(1) +
+        '%;background:' + x.color + '"></div>';
     }).join('');
     return '<div class="bcol" title="' + esc(d) + '：' + dayTotals[di] + '件">' +
       '<div class="bval">' + (dayTotals[di] || '') + '</div>' +
       '<div class="stack">' + segs + '</div>' +
       '<div class="blab">' + esc(d.substring(5).replace('-', '/')) + '</div></div>';
   }).join('');
-  const legend = '<div class="legend">' + list.map(x =>
-    '<span><span class="dot" style="background:' + colorOf[x.id] + '"></span>' + esc(x.name) + '</span>').join('') + '</div>';
+  const legend = '<div class="legend">' +
+    topIds.map(function (id) {
+      return '<span><span class="dot" style="background:' + colorOf[id] + '"></span>' +
+        esc(qrs[id].name) + '</span>';
+    }).join('') +
+    (otherIds.length
+      ? '<span><span class="dot" style="background:' + OTHER + '"></span>その他 ' +
+        otherIds.length + '本</span>'
+      : '') + '</div>';
 
   // 面談申し込みの一覧
   const meets = meetingLog_();
@@ -2822,7 +3102,7 @@ function renderAdminPage_(period) {
     '件 ／ これから ' + meetAhead + '件 ／ 全 ' + meets.length + '件）</div>' +
     '<div class="tbox"><table><tr class="thead">' +
     '<td>日時</td><td>お名前</td><td>流入元</td><td>結果</td><td>メモ</td></tr>' +
-    (meetRows || '<tr><td colspan="5" style="color:#98A69E">まだ面談の申し込みがありません</td></tr>') +
+    (meetRows || '<tr><td colspan="5" style="color:var(--ink-3)">まだ面談の申し込みがありません</td></tr>') +
     '</table></div>' +
     (meets.length > 60 ? '<div class="note">新しい60件を表示しています</div>' : '') + '</div>';
 
@@ -2851,7 +3131,7 @@ function renderAdminPage_(period) {
             return '<td class="num"' + (n ? '' : ' style="color:#C6CFC8"') + '>' + (n || '0') + '</td>';
           }).join('') + '</tr>';
       }).join('')
-      : '<tr><td colspan="2" style="color:#98A69E">まだデータがありません</td></tr>') +
+      : '<tr><td colspan="2" style="color:var(--ink-3)">まだデータがありません</td></tr>') +
     '</table></div>' +
     '<div class="note">横にスクロールすると全員ぶん見られます</div></div>';
 
@@ -2860,7 +3140,12 @@ function renderAdminPage_(period) {
     return days.some(function (d) { return ((perDay[x.id] || {})[d] || 0) > 0; });
   });
   const dayRows = days.slice().reverse();
-  const dayTable = '<div class="panel"><div class="ph">日別実績 — 直近' + p + '日（アフィリエイター別）</div>' +
+  const activeDays = dayRows.filter(function (d) {
+    return ids.some(function (id) { return ((perDay[id] || {})[d] || 0) > 0; });
+  }).length;
+  const dayTable = '<div class="panel"><div class="ph">日別実績（アフィリエイター別）</div>' +
+    '<details class="fold"><summary>直近' + p + '日の内訳を開く（動きのあった日 ' +
+    activeDays + '日）</summary>' +
     '<div class="tbox"><table>' +
     '<tr class="thead"><td>日付</td><td class="num">合計</td>' +
     dayCols.map(function (x) { return '<td class="num">' + esc(x.name) + '</td>'; }).join('') +
@@ -2875,7 +3160,7 @@ function renderAdminPage_(period) {
         }).join('') + '</tr>';
     }).join('') +
     '</table></div>' +
-    '<div class="note">0件の日も飛ばさずに並べています</div></div>';
+    '<div class="note">0件の日も飛ばさずに並べています</div></details></div>';
 
   // 全体ファネル（顧客シートにデータがあるときだけ表示）
   let funnelHtml = '';
@@ -2931,13 +3216,15 @@ function renderAdminPage_(period) {
     (useDeals ? '<td class="num">成約今月</td><td class="num">成約率</td>' : '') +
     (useFunnel ? '<td class="num">面談</td><td class="num">面談率</td><td class="num">成約</td><td class="num">面談→成約</td>' : '') +
     '<td></td></tr>' +
-    (tableRows || '<tr><td colspan="18" style="color:#98A69E">QR設定シートが空です</td></tr>') +
+    (tableRows || '<tr><td colspan="18" style="color:var(--ink-3)">QR設定シートが空です</td></tr>') +
     '</table></div></div>' +
     '<div class="panel"><div class="ph">日別登録数 — 直近' + p + '日（アフィリエイター別）</div><div class="chart">' + bars + '</div>' + legend + '</div>' +
     monthTable +
     dayTable +
-    '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
-    '<div class="panel"><div class="ph">曜日別の傾向（全体）</div><div class="chart small">' + wdBars + '</div></div>' +
+    (totalAll > 0
+      ? '<div class="panel"><div class="ph">登録されやすい時間帯（全体）</div><div class="chart small">' + hourBars + '</div></div>' +
+        '<div class="panel"><div class="ph">曜日別の傾向（全体）</div><div class="chart small">' + wdBars + '</div></div>'
+      : '') +
     '<div class="foot">管理者専用ページです。URLは共有しないでください。</div>' +
     '</div></body></html>';
 
