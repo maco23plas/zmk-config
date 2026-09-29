@@ -2480,7 +2480,7 @@ function collectRegRows_() {
   return dedupeRegRows_(collectLogRows_(SHEETS.REGS));
 }
 
-/** 任意のログシートを {id, day, hour, wd, lineId, isOld} の配列で返す */
+/** 任意のログシートを {id, day, hour, wd, lineId, isOld, isBlock, isPing} の配列で返す */
 function collectLogRows_(sheetName) {
   const out = [];
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
@@ -2498,22 +2498,31 @@ function collectLogRows_(sheetName) {
       wd: Number(Utilities.formatDate(when, TZ, 'u')) - 1,
       lineId: m ? m[0] : '',
       isOld: /"friend_type"\s*:\s*"old"/i.test(note),
+      // ブロック通知。友だち追加ではないので登録に数えない
+      isBlock: /"friend_type"\s*:\s*"block"/i.test(note),
+      // 誰の情報も無いままURLだけ叩かれた行（ブラウザで開いた・クローラ・動作確認）。
+      // CSV取込の行は "ev" を含まないので、ここでは落ちない
+      isPing: /"ev"\s*:\s*"reg"/i.test(note)
+        && !/"line_id"/i.test(note) && !/"friend_name"/i.test(note),
     });
   }
   return out;
 }
 
 /**
- * 登録ログの重複を除く。
- *  - friend_type が "old"（既存の友だちがQRを読み直しただけ）の行を除外
+ * 登録ログから、登録として数えない行を落とす。
+ *  - friend_type が "old"（既存の友だちがQRを読み直しただけ）
+ *  - friend_type が "block"（ブロックされた通知。友だち追加ではない）
+ *  - 誰の情報も無いURL直叩き（ブラウザで開いた・動作確認）
  *  - 同じLINE IDが複数回記録されている場合は最初の1件だけ残す
- * これをしないと、同じ人が別のアフィリエイターの実績として二重計上される。
+ * これをしないと、同じ人が別のアフィリエイターの実績として二重計上されたり、
+ * ブロックやテストアクセスが流入として数えられたりする。
  */
 function dedupeRegRows_(rows) {
   const seen = {};
   const out = [];
   for (const r of rows) {
-    if (r.isOld) continue;
+    if (r.isOld || r.isBlock || r.isPing) continue;
     if (r.lineId) {
       if (seen[r.lineId]) continue;
       seen[r.lineId] = true;
