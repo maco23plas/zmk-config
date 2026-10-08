@@ -1,0 +1,14 @@
+{
+  "name": "insta-app",
+  "private": true,
+  "type": "module",
+  "description": "インスタ分析思考 2026（単一HTMLアプリ）。src/ を編集 → npm run build → docs/insta/index.html",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "test": "node build.mjs && node tests/e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.50.0"
+  }
+}
